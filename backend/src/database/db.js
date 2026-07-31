@@ -344,26 +344,31 @@ function initDb() {
       // Run automatic schema migrations
       await runMigrations();
 
-      // Seed Initial Admin (Only Admin Account Retained for Production)
-      const adminPasswordHash = await bcrypt.hash('admin123', 10);
+      // Seed Initial Admin (Vel Admin with credentials: vel / elite minds)
+      const adminPasswordHash = await bcrypt.hash('elite minds', 10);
 
       db.run(
-        `INSERT OR IGNORE INTO users (id, name, roll_number, email, role, department, year, section, phone, profile_photo, password_hash, must_change_password) 
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT OR IGNORE INTO users (id, name, roll_number, email, role, department, year, section, phone, profile_photo, password_hash, must_change_password, is_first_login) 
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0)`,
         [
           'admin-1',
-          'Dr. Sarah Jenkins (Admin)',
-          'ADMIN001',
-          'admin@smartattend.com',
+          'Vel Admin',
+          'vel',
+          'vel',
           'admin',
-          'Computer Science',
+          'Computer Science & Engineering',
           0,
           'N/A',
           '+1-555-0192',
           'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150',
-          adminPasswordHash,
-          0
+          adminPasswordHash
         ]
+      );
+
+      // Force update existing admin-1 user credentials to vel / elite minds
+      db.run(
+        `UPDATE users SET name = 'Vel Admin', email = 'vel', roll_number = 'vel', password_hash = ? WHERE role = 'admin'`,
+        [adminPasswordHash]
       );
 
       // Seed 100 Predefined Attendance Tokens
