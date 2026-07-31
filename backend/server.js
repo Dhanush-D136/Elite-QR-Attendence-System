@@ -25,6 +25,9 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // Attach Socket.IO to Express app for access inside controllers
 app.set('socketio', io);
 
+const path = require('path');
+const fs = require('fs');
+
 // Mount API routes
 app.use('/api', apiRoutes);
 
@@ -32,6 +35,18 @@ app.use('/api', apiRoutes);
 app.get('/health', (req, res) => {
   res.json({ status: 'healthy', system: 'SmartAttend Pro Backend API', timestamp: new Date() });
 });
+
+// Serve frontend static build assets if available
+const frontendDistPath = path.join(__dirname, '../frontend/dist');
+if (fs.existsSync(frontendDistPath)) {
+  app.use(express.static(frontendDistPath));
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api') || req.path.startsWith('/health') || req.path.startsWith('/socket.io')) {
+      return next();
+    }
+    res.sendFile(path.join(frontendDistPath, 'index.html'));
+  });
+}
 
 // Socket.IO real-time connection events
 io.on('connection', (socket) => {
