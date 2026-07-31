@@ -46,14 +46,14 @@ const MainLayout: React.FC = () => {
     );
   }
 
+  // Route Guard: If first login password change is required, force modal overlay blocking dashboard
+  if (mustChangePasswordTempToken || (user && (user.is_first_login === true || user.is_first_login === 1 || user.must_change_password === 1))) {
+    return <FirstLoginModal />;
+  }
+
   // Route Guard: If not authenticated, render Login Page
   if (!user || !token) {
-    return (
-      <>
-        {mustChangePasswordTempToken && <FirstLoginModal />}
-        <Login />
-      </>
-    );
+    return <Login />;
   }
 
   return (

@@ -33,7 +33,9 @@ function runMigrations() {
         const userMigrations = [
           { col: 'institution_name', type: "TEXT DEFAULT 'Elite Institute of Technology'" },
           { col: 'department_name', type: "TEXT DEFAULT 'Computer Science & Engineering'" },
-          { col: 'device_fingerprint', type: 'TEXT' }
+          { col: 'device_fingerprint', type: 'TEXT' },
+          { col: 'is_first_login', type: 'INTEGER DEFAULT 1' },
+          { col: 'password_changed_at', type: 'DATETIME' }
         ];
 
         userMigrations.forEach(({ col, type }) => {

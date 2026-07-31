@@ -11,6 +11,8 @@ export interface User {
   profile_photo?: string;
   device_fingerprint?: string;
   must_change_password?: number;
+  is_first_login?: boolean | number;
+  password_changed_at?: string;
   attendance_percentage?: number;
   status?: string;
 }

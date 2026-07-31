@@ -86,6 +86,7 @@ router.post('/students', verifyToken, requireRole('admin'), studentController.cr
 router.put('/students/:id', verifyToken, requireRole('admin'), studentController.updateStudent);
 router.delete('/students/:id', verifyToken, requireRole('admin'), studentController.deleteStudent);
 router.post('/students/:id/reset-device', verifyToken, requireRole('admin'), studentController.resetStudentDevice);
+router.post('/students/:id/reset-password', verifyToken, requireRole('admin'), studentController.resetStudentPassword);
 router.post('/students/bulk-import', verifyToken, requireRole('admin'), studentController.bulkImportStudents);
 
 // --- Analytics & Dashboard Routes ---
