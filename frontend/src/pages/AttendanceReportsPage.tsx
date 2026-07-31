@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import api from '../services/api';
 import { getSocket } from '../services/socket';
-import { User } from '../types';
+import { User, SubjectItem } from '../types';
+import { useAuth } from '../context/AuthContext';
 import * as XLSX from 'xlsx';
 import {
   BookOpen,
@@ -24,13 +25,15 @@ import {
   Plus,
   Edit,
   Trash2,
-  ListChecks
+  ListChecks,
+  QrCode
 } from 'lucide-react';
 
 interface SubjectStat {
   id: string;
   name: string;
   code: string;
+  type?: string;
   faculty_name: string;
   classesHeld: number;
   avgPercentage: number;
@@ -38,26 +41,6 @@ interface SubjectStat {
   absentCount: number;
   lastClassDate: string;
   studentsBelow75: number;
-}
-
-interface ClassHistoryEntry {
-  id: string;
-  date: string;
-  period: string;
-  timeRange: string;
-  present: number;
-  absent: number;
-  percentage: number;
-  faculty: string;
-  room: string;
-}
-
-interface StudentRecord {
-  roll_number: string;
-  name: string;
-  time_marked?: string;
-  status: string;
-  reason?: string;
 }
 
 interface AttendanceRecordItem {
@@ -77,40 +60,64 @@ interface AttendanceRecordItem {
   notes?: string;
 }
 
-export const AttendanceReportsPage: React.FC = () => {
-  const [selectedSubject, setSelectedSubject] = useState<SubjectStat | null>(null);
-  const [selectedClassHistory, setSelectedClassHistory] = useState<ClassHistoryEntry | null>(null);
-  const [lectureRosterTab, setLectureRosterTab] = useState<'present' | 'absent'>('present');
+interface AttendanceReportsPageProps {
+  onNavigate?: (tab: string, extraData?: any) => void;
+}
 
+export const AttendanceReportsPage: React.FC<AttendanceReportsPageProps> = ({ onNavigate }) => {
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
+  const isFaculty = user?.role === 'student' ? false : !isAdmin;
+
+  const [selectedSubject, setSelectedSubject] = useState<SubjectStat | null>(null);
   const [activeTab, setActiveTab] = useState<'subjects' | 'records' | 'defaulters' | 'monthly'>('subjects');
 
   // Live Data States
   const [subjectsData, setSubjectsData] = useState<SubjectStat[]>([]);
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecordItem[]>([]);
+  const [sessionsList, setSessionsList] = useState<any[]>([]);
   const [students, setStudents] = useState<User[]>([]);
   const [defaultersList, setDefaultersList] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
-  // Filters State for Attendance Log
+  // Filters State
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [deptFilter, setDeptFilter] = useState<string>('');
   const [subjectFilter, setSubjectFilter] = useState<string>('');
+  const [facultyFilter, setFacultyFilter] = useState<string>('');
   const [periodFilter, setPeriodFilter] = useState<string>('');
+  const [semesterFilter, setSemesterFilter] = useState<string>('');
   const [fromDate, setFromDate] = useState<string>('');
   const [toDate, setToDate] = useState<string>('');
 
-  // Modals for Attendance CRUD
+  // Modals for Attendance & Subject CRUD
   const [showMarkModal, setShowMarkModal] = useState<boolean>(false);
   const [showEditRecordModal, setShowEditRecordModal] = useState<boolean>(false);
+  const [showAddSubjectModal, setShowAddSubjectModal] = useState<boolean>(false);
+
+  // New Subject Form
+  const [subjectForm, setSubjectForm] = useState({
+    name: '',
+    code: '',
+    type: 'Theory',
+    department: 'AI & DS',
+    year: '3',
+    semester: '5',
+    section: 'A',
+    faculty_name: user?.name || '',
+    credits: '3',
+    status: 'Active',
+    description: ''
+  });
 
   // New Attendance Record Form State
   const [newAttendance, setNewAttendance] = useState({
     student_id: '',
-    subject: 'Programming Language for AI',
+    subject: '',
     status: 'present',
     attendance_time: new Date().toISOString().slice(0, 16),
-    notes: 'Manually marked by administrator'
+    notes: 'Marked by faculty'
   });
 
   // Edit Attendance Record Form State
@@ -128,12 +135,23 @@ export const AttendanceReportsPage: React.FC = () => {
   const fetchReportsData = async () => {
     try {
       setIsLoading(true);
-      const res = await api.get('/analytics/reports');
-      if (res.data.subjectStats) setSubjectsData(res.data.subjectStats);
-      if (res.data.defaulters) setDefaultersList(res.data.defaulters);
+      const params = new URLSearchParams();
+      if (isFaculty && user?.name) {
+        params.append('faculty_name', user.name);
+      }
 
-      const studentRes = await api.get('/students');
+      const res = await api.get(`/subjects?${params.toString()}`);
+      if (res.data.subjects) setSubjectsData(res.data.subjects);
+
+      const [resReports, studentRes, sessRes] = await Promise.all([
+        api.get('/analytics/reports'),
+        api.get('/students'),
+        api.get('/sessions')
+      ]);
+
+      if (resReports.data.defaulters) setDefaultersList(resReports.data.defaulters);
       if (studentRes.data.students) setStudents(studentRes.data.students);
+      if (sessRes.data.sessions) setSessionsList(sessRes.data.sessions);
     } catch (err) {
       console.error('Failed to load reports data:', err);
     } finally {
@@ -189,6 +207,19 @@ export const AttendanceReportsPage: React.FC = () => {
       socket.off('attendance_deleted', handleUpdate);
     };
   }, [activeTab]);
+
+  // Submit Add Subject Form
+  const handleAddSubjectSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await api.post('/subjects', subjectForm);
+      alert('✅ Subject created and synchronized across all modules!');
+      setShowAddSubjectModal(false);
+      fetchReportsData();
+    } catch (err: any) {
+      alert(`❌ ${err.response?.data?.error || 'Failed to create subject'}`);
+    }
+  };
 
   // Create Manual Attendance Record
   const handleMarkAttendance = async (e: React.FormEvent) => {
@@ -292,6 +323,16 @@ export const AttendanceReportsPage: React.FC = () => {
     XLSX.writeFile(wb, `SmartAttend_Defaulters_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
+  // Filtered Subject Analytics Cards
+  const displayedSubjects = subjectsData.filter((s) => {
+    if (isFaculty && user?.name && s.faculty_name.toLowerCase() !== user.name.toLowerCase()) {
+      return false;
+    }
+    if (subjectFilter && s.name !== subjectFilter && s.code !== subjectFilter) return false;
+    if (facultyFilter && !s.faculty_name.toLowerCase().includes(facultyFilter.toLowerCase())) return false;
+    return true;
+  });
+
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Header Banner */}
@@ -306,16 +347,25 @@ export const AttendanceReportsPage: React.FC = () => {
             </span>
           </div>
           <p className="text-xs text-[#6B7280] font-medium mt-1">
-            Real-Time Attendance Operations, Full Record CRUD, Defaulter Tracking & Academic Analytics
+            Subject-Wise Analytics, Timetable Sync, Attendance Log CRUD, and Defaulters Tracking
           </p>
         </div>
 
         {/* Global Actions */}
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {isAdmin && (
+            <button
+              onClick={() => setShowAddSubjectModal(true)}
+              className="px-4 py-2 rounded-full bg-[#6D5DFC] text-white text-xs font-bold shadow-floating hover:bg-[#5b4be0] transition-all flex items-center gap-1.5"
+            >
+              <Plus className="w-4 h-4" /> Add Subject
+            </button>
+          )}
+
           {activeTab === 'records' && (
             <button
               onClick={() => setShowMarkModal(true)}
-              className="px-4 py-2 rounded-full bg-[#6D5DFC] text-white text-xs font-bold shadow-floating hover:bg-[#5b4be0] transition-all flex items-center gap-1.5"
+              className="px-4 py-2 rounded-full bg-[#12B76A] text-white text-xs font-bold shadow-floating hover:bg-emerald-600 transition-all flex items-center gap-1.5"
             >
               <Plus className="w-4 h-4" /> Insert Attendance
             </button>
@@ -336,7 +386,7 @@ export const AttendanceReportsPage: React.FC = () => {
           {/* Navigation Bar */}
           <div className="flex items-center gap-2 overflow-x-auto pb-1 border-b border-[#E7E7E7]">
             {[
-              { id: 'subjects', label: `Subject Analytics (${subjectsData.length})`, icon: BookOpen },
+              { id: 'subjects', label: `Subject Analytics (${displayedSubjects.length})`, icon: BookOpen },
               { id: 'records', label: `Attendance Log & CRUD (${attendanceRecords.length})`, icon: ListChecks },
               { id: 'defaulters', label: `Defaulters List (${defaultersList.length})`, icon: AlertTriangle },
               { id: 'monthly', label: 'Semester Trends', icon: Calendar }
@@ -362,28 +412,60 @@ export const AttendanceReportsPage: React.FC = () => {
 
           {/* TAB 1: SUBJECT CARDS GRID */}
           {activeTab === 'subjects' && (
-            <div>
-              {subjectsData.length === 0 ? (
+            <div className="space-y-5">
+              {/* Subject Search & Filters */}
+              <div className="bg-white p-4 rounded-[24px] border border-[#E7E7E7] shadow-enterprise flex flex-col md:flex-row items-center gap-3">
+                <div className="relative w-full md:w-80">
+                  <input
+                    type="text"
+                    placeholder="Filter subjects by name or code..."
+                    value={subjectFilter}
+                    onChange={(e) => setSubjectFilter(e.target.value)}
+                    className="w-full px-4 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827] placeholder-[#9CA3AF] pl-9 focus:outline-none focus:border-[#6D5DFC] font-medium"
+                  />
+                  <Search className="w-4 h-4 text-[#9CA3AF] absolute left-3 top-3" />
+                </div>
+
+                {!isFaculty && (
+                  <div className="relative w-full md:w-64">
+                    <input
+                      type="text"
+                      placeholder="Filter by faculty name..."
+                      value={facultyFilter}
+                      onChange={(e) => setFacultyFilter(e.target.value)}
+                      className="w-full px-4 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827] placeholder-[#9CA3AF] pl-9 focus:outline-none focus:border-[#6D5DFC] font-medium"
+                    />
+                    <UserCheck className="w-4 h-4 text-[#9CA3AF] absolute left-3 top-3" />
+                  </div>
+                )}
+              </div>
+
+              {displayedSubjects.length === 0 ? (
                 <div className="bg-white p-12 rounded-[24px] border border-[#E7E7E7] shadow-enterprise text-center space-y-3">
                   <BookOpen className="w-10 h-10 text-[#6D5DFC] mx-auto opacity-70" />
-                  <h4 className="font-display font-extrabold text-base text-[#111827]">No attendance data available yet.</h4>
+                  <h4 className="font-display font-extrabold text-base text-[#111827]">No configured subjects found.</h4>
                   <p className="text-xs text-[#6B7280] max-w-sm mx-auto">
-                    Attendance analytics and subject reports will update as lectures are conducted.
+                    {isAdmin ? 'Click "+ Add Subject" above to create and assign curriculum subjects.' : 'No subjects assigned to your profile.'}
                   </p>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                  {subjectsData.map((sub) => (
+                  {displayedSubjects.map((sub) => (
                     <div
                       key={sub.id}
                       className="bg-white p-6 rounded-[24px] border border-[#E7E7E7] shadow-enterprise space-y-4 flex flex-col justify-between hover:border-[#6D5DFC]/40 transition-all group"
                     >
                       <div>
                         <div className="flex items-center justify-between pb-3 border-b border-[#E7E7E7]">
-                          <span className="text-[10px] font-mono font-extrabold px-2.5 py-0.5 rounded-full bg-[#F3F0FF] text-[#6D5DFC] border border-[#6D5DFC]/20">
-                            {sub.code}
-                          </span>
-                          <span className="text-[11px] text-[#6B7280] font-medium">{sub.classesHeld} Classes Held</span>
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[10px] font-mono font-extrabold px-2.5 py-0.5 rounded-full bg-[#F3F0FF] text-[#6D5DFC] border border-[#6D5DFC]/20">
+                              {sub.code}
+                            </span>
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                              {sub.type || 'Theory'}
+                            </span>
+                          </div>
+                          <span className="text-[11px] text-[#6B7280] font-medium">{sub.classesHeld} Classes Conducted</span>
                         </div>
 
                         <h3 className="font-display font-extrabold text-lg text-[#111827] mt-3 group-hover:text-[#6D5DFC] transition-colors">
@@ -396,28 +478,36 @@ export const AttendanceReportsPage: React.FC = () => {
 
                         <div className="mt-4 p-3.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] grid grid-cols-3 gap-2 text-center text-xs">
                           <div>
-                            <span className="text-[10px] text-[#6B7280] font-bold block">AVG ATTENDANCE</span>
+                            <span className="text-[9px] text-[#6B7280] font-bold block uppercase">AVG ATTENDANCE</span>
                             <strong className="font-mono text-[#6D5DFC] font-extrabold text-sm">{sub.avgPercentage}%</strong>
                           </div>
                           <div>
-                            <span className="text-[10px] text-[#12B76A] font-bold block">PRESENT</span>
+                            <span className="text-[9px] text-[#12B76A] font-bold block uppercase">PRESENT</span>
                             <strong className="font-mono text-[#12B76A] font-extrabold text-sm">{sub.presentCount}</strong>
                           </div>
                           <div>
-                            <span className="text-[10px] text-rose-500 font-bold block">ABSENT</span>
+                            <span className="text-[9px] text-rose-500 font-bold block uppercase">ABSENT</span>
                             <strong className="font-mono text-rose-500 font-extrabold text-sm">{sub.absentCount}</strong>
                           </div>
                         </div>
                       </div>
 
-                      <div className="pt-2 flex items-center justify-between">
-                        <span className="text-[10px] text-[#6B7280] font-medium">Last: {sub.lastClassDate}</span>
+                      {/* Action Buttons inside Card */}
+                      <div className="pt-2 grid grid-cols-2 gap-2 text-xs">
                         <button
                           onClick={() => setSelectedSubject(sub)}
-                          className="px-4 py-2 rounded-full bg-[#6D5DFC] text-xs font-bold text-white shadow-floating hover:bg-[#5b4be0] transition-all flex items-center gap-1"
+                          className="px-3 py-2 rounded-xl bg-[#F3F0FF] text-[#6D5DFC] font-bold hover:bg-[#6D5DFC] hover:text-white transition-all flex items-center justify-center gap-1.5"
                         >
-                          <span>View Details</span>
-                          <ChevronRight className="w-3.5 h-3.5" />
+                          <ListChecks className="w-3.5 h-3.5" />
+                          <span>View Attendance</span>
+                        </button>
+
+                        <button
+                          onClick={() => onNavigate && onNavigate('sessions', { subject: sub.name, faculty: sub.faculty_name })}
+                          className="px-3 py-2 rounded-xl bg-[#ECFDF5] text-[#12B76A] font-bold border border-[#12B76A]/20 hover:bg-[#12B76A] hover:text-white transition-all flex items-center justify-center gap-1.5"
+                        >
+                          <QrCode className="w-3.5 h-3.5" />
+                          <span>Generate QR</span>
                         </button>
                       </div>
                     </div>
@@ -435,7 +525,7 @@ export const AttendanceReportsPage: React.FC = () => {
                 <div className="relative w-full md:w-72">
                   <input
                     type="text"
-                    placeholder="Search by student, roll no, subject..."
+                    placeholder="Search student, roll no, subject..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     className="w-full px-4 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827] placeholder-[#9CA3AF] pl-9 focus:outline-none focus:border-[#6D5DFC] font-medium"
@@ -462,8 +552,8 @@ export const AttendanceReportsPage: React.FC = () => {
                     className="px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-[#111827] font-medium"
                   >
                     <option value="">All Departments</option>
+                    <option value="AI & DS">AI & DS</option>
                     <option value="Computer Science">Computer Science</option>
-                    <option value="AI & Data Science">AI & Data Science</option>
                     <option value="Electronics">Electronics</option>
                     <option value="Mechanical">Mechanical</option>
                   </select>
@@ -653,7 +743,7 @@ export const AttendanceReportsPage: React.FC = () => {
       )}
 
       {/* LEVEL 1: DRILL-DOWN SUBJECT ATTENDANCE DASHBOARD */}
-      {selectedSubject && !selectedClassHistory && (
+      {selectedSubject && (
         <div className="space-y-6">
           <button
             onClick={() => setSelectedSubject(null)}
@@ -679,12 +769,21 @@ export const AttendanceReportsPage: React.FC = () => {
                 </p>
               </div>
 
-              <button
-                onClick={handleExportExcel}
-                className="px-4 py-2 rounded-full bg-[#6D5DFC] text-white text-xs font-bold shadow-floating hover:bg-[#5b4be0] flex items-center gap-1.5"
-              >
-                <Download className="w-3.5 h-3.5" /> Export Subject Matrix
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => onNavigate && onNavigate('sessions', { subject: selectedSubject.name, faculty: selectedSubject.faculty_name })}
+                  className="px-4 py-2 rounded-full bg-[#ECFDF5] text-[#12B76A] text-xs font-bold border border-[#12B76A]/20 hover:bg-[#12B76A] hover:text-white transition-all flex items-center gap-1.5"
+                >
+                  <QrCode className="w-3.5 h-3.5" /> Launch QR Session
+                </button>
+
+                <button
+                  onClick={handleExportExcel}
+                  className="px-4 py-2 rounded-full bg-[#6D5DFC] text-white text-xs font-bold shadow-floating hover:bg-[#5b4be0] flex items-center gap-1.5"
+                >
+                  <Download className="w-3.5 h-3.5" /> Export Matrix
+                </button>
+              </div>
             </div>
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-2">
@@ -708,11 +807,182 @@ export const AttendanceReportsPage: React.FC = () => {
                 <p className="font-display font-extrabold text-xl text-amber-600">{selectedSubject.absentCount} Students</p>
               </div>
             </div>
+
+            {/* Sessions History for Selected Subject */}
+            <div className="pt-4 space-y-3">
+              <h3 className="font-display font-bold text-base text-[#111827]">Lectures & Attendance Sessions History</h3>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-[#FAFAFA] border-b border-[#E7E7E7] text-[#6B7280] font-bold uppercase text-[10px]">
+                    <tr>
+                      <th className="p-3">Session Date & Time</th>
+                      <th className="p-3">Period</th>
+                      <th className="p-3">Attendance Code</th>
+                      <th className="p-3">Status</th>
+                      <th className="p-3 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#E7E7E7]">
+                    {sessionsList
+                      .filter((s) => s.subject.toLowerCase() === selectedSubject.name.toLowerCase() || s.subject.toLowerCase() === selectedSubject.code.toLowerCase())
+                      .map((s) => (
+                        <tr key={s.id} className="hover:bg-[#FAFAFA]">
+                          <td className="p-3 font-semibold text-[#111827]">{new Date(s.start_time).toLocaleString()}</td>
+                          <td className="p-3 font-bold text-[#6D5DFC]">Period {s.period_number || 1}</td>
+                          <td className="p-3 font-mono font-bold text-[#4F7CFF]">{s.attendance_code}</td>
+                          <td className="p-3">
+                            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase bg-[#ECFDF5] text-[#12B76A] border border-[#12B76A]/20">
+                              {s.status}
+                            </span>
+                          </td>
+                          <td className="p-3 text-right">
+                            <button
+                              onClick={() => onNavigate && onNavigate('records', { subject: selectedSubject.name })}
+                              className="px-2.5 py-1 rounded-full bg-[#F3F0FF] text-[#6D5DFC] font-bold text-[10px]"
+                            >
+                              View Logs
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </div>
         </div>
       )}
 
-      {/* MODAL 1: INSERT NEW ATTENDANCE RECORD */}
+      {/* MODAL 1: ADD NEW SUBJECT */}
+      {showAddSubjectModal && (
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-lg rounded-[24px] p-6 border border-[#E7E7E7] shadow-2xl space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-[#E7E7E7]">
+              <h3 className="font-display font-bold text-lg text-[#111827]">+ Add New Curriculum Subject</h3>
+              <button onClick={() => setShowAddSubjectModal(false)} className="text-[#6B7280] hover:text-[#111827]">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleAddSubjectSubmit} className="space-y-3 text-xs">
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-[11px] font-semibold text-[#111827] mb-1">Subject Name *</label>
+                  <input
+                    type="text"
+                    required
+                    value={subjectForm.name}
+                    onChange={(e) => setSubjectForm({ ...subjectForm, name: e.target.value })}
+                    placeholder="e.g. Operating Systems"
+                    className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-[#111827] font-medium"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-[#111827] mb-1">Subject Code *</label>
+                  <input
+                    type="text"
+                    required
+                    value={subjectForm.code}
+                    onChange={(e) => setSubjectForm({ ...subjectForm, code: e.target.value })}
+                    placeholder="e.g. CS301 / AL3501"
+                    className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-[#111827] font-mono uppercase font-bold"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-[11px] font-semibold text-[#111827] mb-1">Subject Type</label>
+                  <select
+                    value={subjectForm.type}
+                    onChange={(e) => setSubjectForm({ ...subjectForm, type: e.target.value })}
+                    className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-[#111827] font-medium"
+                  >
+                    <option value="Theory">Theory</option>
+                    <option value="Laboratory">Laboratory</option>
+                    <option value="Project">Project</option>
+                    <option value="Seminar">Seminar</option>
+                    <option value="Library/Sports">Library/Sports</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-[#111827] mb-1">Credits</label>
+                  <input
+                    type="number"
+                    value={subjectForm.credits}
+                    onChange={(e) => setSubjectForm({ ...subjectForm, credits: e.target.value })}
+                    className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-[#111827] font-medium"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <label className="block text-[11px] font-semibold text-[#111827] mb-1">Department</label>
+                  <select
+                    value={subjectForm.department}
+                    onChange={(e) => setSubjectForm({ ...subjectForm, department: e.target.value })}
+                    className="w-full px-2.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-[#111827] font-medium text-[11px]"
+                  >
+                    <option value="AI & DS">AI & DS</option>
+                    <option value="Computer Science">Computer Science</option>
+                    <option value="Electronics">Electronics</option>
+                    <option value="Mechanical">Mechanical</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-[#111827] mb-1">Semester</label>
+                  <select
+                    value={subjectForm.semester}
+                    onChange={(e) => setSubjectForm({ ...subjectForm, semester: e.target.value })}
+                    className="w-full px-2.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-[#111827] font-medium text-[11px]"
+                  >
+                    {[1, 2, 3, 4, 5, 6, 7, 8].map((s) => (
+                      <option key={s} value={s}>Sem {s}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-[#111827] mb-1">Section</label>
+                  <select
+                    value={subjectForm.section}
+                    onChange={(e) => setSubjectForm({ ...subjectForm, section: e.target.value })}
+                    className="w-full px-2.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-[#111827] font-medium text-[11px]"
+                  >
+                    <option value="A">Sec A</option>
+                    <option value="B">Sec B</option>
+                    <option value="C">Sec C</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-[#111827] mb-1">Assigned Faculty Name</label>
+                <input
+                  type="text"
+                  value={subjectForm.faculty_name}
+                  onChange={(e) => setSubjectForm({ ...subjectForm, faculty_name: e.target.value })}
+                  placeholder="e.g. Dr Rajesh Kumar"
+                  className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-[#111827] font-medium"
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="w-full py-3.5 rounded-full bg-[#6D5DFC] font-bold text-xs text-white shadow-floating hover:bg-[#5b4be0] transition-all mt-2"
+              >
+                Save Subject & Synchronize All Modules
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 2: INSERT NEW ATTENDANCE RECORD */}
       {showMarkModal && (
         <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-md flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-md rounded-[24px] p-6 border border-[#E7E7E7] shadow-2xl space-y-4">
@@ -723,14 +993,14 @@ export const AttendanceReportsPage: React.FC = () => {
               </button>
             </div>
 
-            <form onSubmit={handleMarkAttendance} className="space-y-3">
+            <form onSubmit={handleMarkAttendance} className="space-y-3 text-xs">
               <div>
                 <label className="block text-[11px] font-semibold text-[#111827] mb-1">Select Student</label>
                 <select
                   required
                   value={newAttendance.student_id}
                   onChange={(e) => setNewAttendance({ ...newAttendance, student_id: e.target.value })}
-                  className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827]"
+                  className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-[#111827]"
                 >
                   <option value="">Select a student...</option>
                   {students.map((st) => (
@@ -746,13 +1016,11 @@ export const AttendanceReportsPage: React.FC = () => {
                 <select
                   value={newAttendance.subject}
                   onChange={(e) => setNewAttendance({ ...newAttendance, subject: e.target.value })}
-                  className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827]"
+                  className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-[#111827]"
                 >
-                  <option value="Programming Language for AI">Programming Language for AI</option>
-                  <option value="Data Analytics">Data Analytics</option>
-                  <option value="Web Technology">Web Technology</option>
-                  <option value="Knowledge Engineering">Knowledge Engineering</option>
-                  <option value="Block Chain Technology">Block Chain Technology</option>
+                  {subjectsData.map((s) => (
+                    <option key={s.id} value={s.name}>{s.name} ({s.code})</option>
+                  ))}
                 </select>
               </div>
 
@@ -762,7 +1030,7 @@ export const AttendanceReportsPage: React.FC = () => {
                   <select
                     value={newAttendance.status}
                     onChange={(e) => setNewAttendance({ ...newAttendance, status: e.target.value })}
-                    className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827]"
+                    className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-[#111827]"
                   >
                     <option value="present">Present</option>
                     <option value="absent">Absent</option>
@@ -777,7 +1045,7 @@ export const AttendanceReportsPage: React.FC = () => {
                     type="datetime-local"
                     value={newAttendance.attendance_time}
                     onChange={(e) => setNewAttendance({ ...newAttendance, attendance_time: e.target.value })}
-                    className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827]"
+                    className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-[#111827]"
                   />
                 </div>
               </div>
@@ -789,7 +1057,7 @@ export const AttendanceReportsPage: React.FC = () => {
                   value={newAttendance.notes}
                   onChange={(e) => setNewAttendance({ ...newAttendance, notes: e.target.value })}
                   placeholder="e.g. Manually verified by advisor"
-                  className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827]"
+                  className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-[#111827]"
                 />
               </div>
 
@@ -804,7 +1072,7 @@ export const AttendanceReportsPage: React.FC = () => {
         </div>
       )}
 
-      {/* MODAL 2: EDIT ATTENDANCE RECORD */}
+      {/* MODAL 3: EDIT ATTENDANCE RECORD */}
       {showEditRecordModal && editingRecord && (
         <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-md flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-md rounded-[24px] p-6 border border-[#E7E7E7] shadow-2xl space-y-4">
@@ -818,13 +1086,13 @@ export const AttendanceReportsPage: React.FC = () => {
               </button>
             </div>
 
-            <form onSubmit={handleUpdateRecord} className="space-y-3">
+            <form onSubmit={handleUpdateRecord} className="space-y-3 text-xs">
               <div>
                 <label className="block text-[11px] font-semibold text-[#111827] mb-1">Attendance Status</label>
                 <select
                   value={editingRecord.status}
                   onChange={(e) => setEditingRecord({ ...editingRecord, status: e.target.value })}
-                  className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827]"
+                  className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-[#111827]"
                 >
                   <option value="present">Present</option>
                   <option value="absent">Absent</option>
@@ -839,7 +1107,7 @@ export const AttendanceReportsPage: React.FC = () => {
                   type="datetime-local"
                   value={editingRecord.attendance_time}
                   onChange={(e) => setEditingRecord({ ...editingRecord, attendance_time: e.target.value })}
-                  className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827]"
+                  className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-[#111827]"
                 />
               </div>
 
@@ -850,7 +1118,7 @@ export const AttendanceReportsPage: React.FC = () => {
                   value={editingRecord.notes}
                   onChange={(e) => setEditingRecord({ ...editingRecord, notes: e.target.value })}
                   placeholder="e.g. Updated after leave submission"
-                  className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827]"
+                  className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-[#111827]"
                 />
               </div>
 

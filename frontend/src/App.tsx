@@ -12,9 +12,9 @@ import { AttendanceReportsPage } from './pages/AttendanceReportsPage';
 import { ProfilePage } from './pages/ProfilePage';
 import { StudentDashboard } from './pages/StudentDashboard';
 import { QRScannerView } from './pages/QRScannerView';
-import { StudentTimetablePage } from './pages/StudentTimetablePage';
 import { ClassManagementPage } from './pages/ClassManagementPage';
-
+import { SubjectsPage } from './pages/SubjectsPage';
+import { StudentTimetablePage } from './pages/StudentTimetablePage';
 import { RefreshCw } from 'lucide-react';
 
 const MainLayout: React.FC = () => {
@@ -70,8 +70,9 @@ const MainLayout: React.FC = () => {
           {isAdmin ? (
             <>
               {(activeTab === 'class-management' || activeTab === 'dashboard') && <ClassManagementPage />}
+              {activeTab === 'subjects' && <SubjectsPage onNavigate={(tab) => setActiveTab(tab)} />}
               {activeTab === 'sessions' && <SessionHub />}
-              {activeTab === 'reports' && <AttendanceReportsPage />}
+              {activeTab === 'reports' && <AttendanceReportsPage onNavigate={(tab) => setActiveTab(tab)} />}
               {activeTab === 'security' && <SecurityLogs />}
               {activeTab === 'profile' && <ProfilePage />}
               {activeTab === 'settings' && <ProfilePage />}

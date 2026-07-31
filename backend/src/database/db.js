@@ -101,27 +101,63 @@ function runMigrations() {
               }
             }
 
-            // Verify timetables schema migrations
-            db.all('PRAGMA table_info(timetables)', [], (err3, ttColumns) => {
-              if (ttColumns) {
-                const ttColNames = ttColumns.map((c) => c.name.toLowerCase());
-                const ttMigrations = [
-                  { col: 'date', type: 'TEXT' },
-                  { col: 'period_number', type: 'INTEGER DEFAULT 1' },
-                  { col: 'semester', type: 'INTEGER DEFAULT 5' }
+            // Verify subjects schema migrations
+            db.all('PRAGMA table_info(subjects)', [], (errSub, subColumns) => {
+              if (subColumns) {
+                const subColNames = subColumns.map((c) => c.name.toLowerCase());
+                const subMigrations = [
+                  { col: 'type', type: "TEXT DEFAULT 'Theory'" },
+                  { col: 'section', type: "TEXT DEFAULT 'A'" },
+                  { col: 'status', type: "TEXT DEFAULT 'Active'" }
                 ];
-                ttMigrations.forEach(({ col, type }) => {
-                  if (!ttColNames.includes(col.toLowerCase())) {
-                    console.log(`[MIGRATION EXECUTE] ADD COLUMN ${col} to timetables`);
+                subMigrations.forEach(({ col, type }) => {
+                  if (!subColNames.includes(col.toLowerCase())) {
+                    console.log(`[MIGRATION EXECUTE] ADD COLUMN ${col} to subjects`);
                     try {
-                      db.run(`ALTER TABLE timetables ADD COLUMN ${col} ${type};`);
+                      db.run(`ALTER TABLE subjects ADD COLUMN ${col} ${type};`);
                     } catch (e) {}
                   }
                 });
               }
 
-              console.log('[DATABASE MIGRATION] Schema validation and migrations completed cleanly.');
-              resolve(true);
+              // Verify timetables schema migrations
+              db.all('PRAGMA table_info(timetables)', [], (err3, ttColumns) => {
+                if (ttColumns) {
+                  const ttColNames = ttColumns.map((c) => c.name.toLowerCase());
+                  const ttMigrations = [
+                    { col: 'date', type: 'TEXT' },
+                    { col: 'period_number', type: 'INTEGER DEFAULT 1' },
+                    { col: 'semester', type: 'INTEGER DEFAULT 5' }
+                  ];
+                  ttMigrations.forEach(({ col, type }) => {
+                    if (!ttColNames.includes(col.toLowerCase())) {
+                      console.log(`[MIGRATION EXECUTE] ADD COLUMN ${col} to timetables`);
+                      try {
+                        db.run(`ALTER TABLE timetables ADD COLUMN ${col} ${type};`);
+                      } catch (e) {}
+                    }
+                  });
+                }
+
+                // Auto-sync any subjects present in timetables into subjects master table
+                db.all('SELECT DISTINCT subject_name, faculty_name, department, semester, section FROM timetables', [], (errTt, ttRows) => {
+                  if (ttRows && ttRows.length > 0) {
+                    ttRows.forEach((row) => {
+                      if (!row.subject_name) return;
+                      const code = row.subject_name.substring(0, 4).toUpperCase() + Math.floor(100 + Math.random() * 900);
+                      const subId = 'sub-' + uuidv4();
+                      db.run(
+                        `INSERT OR IGNORE INTO subjects (id, name, code, type, department, year, semester, section, faculty_name, credits, status, is_archived)
+                         VALUES (?, ?, ?, 'Theory', ?, 3, ?, ?, ?, 3, 'Active', 0)`,
+                        [subId, row.subject_name, code, row.department || 'AI & DS', row.semester || 5, row.section || 'A', row.faculty_name || 'Faculty Member']
+                      );
+                    });
+                  }
+
+                  console.log('[DATABASE MIGRATION] Schema validation and migrations completed cleanly.');
+                  resolve(true);
+                });
+              });
             });
           });
         }
@@ -260,12 +296,15 @@ function initDb() {
           id TEXT PRIMARY KEY,
           name TEXT NOT NULL,
           code TEXT UNIQUE NOT NULL,
+          type TEXT DEFAULT 'Theory',
           department TEXT NOT NULL,
           year INTEGER NOT NULL,
           semester INTEGER NOT NULL,
+          section TEXT DEFAULT 'A',
           faculty_name TEXT,
           credits INTEGER DEFAULT 3,
           description TEXT,
+          status TEXT DEFAULT 'Active',
           is_archived INTEGER DEFAULT 0,
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )

@@ -76,37 +76,141 @@ function deleteFaculty(req, res) {
 
 // --- Subject Controllers ---
 function getSubjects(req, res) {
-  db.all('SELECT * FROM subjects ORDER BY is_archived ASC, name ASC', [], (err, subjects) => {
-    if (err) return res.status(500).json({ error: 'Database error fetching subjects' });
-    res.json({ subjects });
+  const { faculty_name, department, semester, section, type } = req.query;
+
+  let query = 'SELECT * FROM subjects WHERE is_archived = 0';
+  const params = [];
+
+  if (faculty_name) {
+    query += ' AND LOWER(faculty_name) = LOWER(?)';
+    params.push(faculty_name.trim());
+  }
+
+  if (department) {
+    query += ' AND department = ?';
+    params.push(department);
+  }
+
+  if (semester) {
+    query += ' AND semester = ?';
+    params.push(parseInt(semester));
+  }
+
+  if (section) {
+    query += ' AND section = ?';
+    params.push(section);
+  }
+
+  if (type) {
+    query += ' AND type = ?';
+    params.push(type);
+  }
+
+  query += ' ORDER BY name ASC';
+
+  db.all(query, params, (err, subjects) => {
+    if (err) return res.status(500).json({ error: 'Database error fetching subjects: ' + err.message });
+    
+    // Also fetch dynamic attendance stats for each subject
+    db.all('SELECT * FROM attendance_sessions', [], (errSess, sessions) => {
+      db.all('SELECT * FROM attendance_records', [], (errRec, records) => {
+        db.all("SELECT COUNT(*) as total_students FROM users WHERE role = 'student'", [], (errStu, stuRow) => {
+          const totalStudents = stuRow ? stuRow.total_students : 1;
+          const sessList = sessions || [];
+          const recList = records || [];
+
+          const enrichedSubjects = (subjects || []).map((s) => {
+            const matchedSessions = sessList.filter(
+              (sess) => sess.subject.toLowerCase() === s.name.toLowerCase() || sess.subject.toLowerCase() === s.code.toLowerCase()
+            );
+            const classesHeld = matchedSessions.length;
+            
+            const sessionIds = new Set(matchedSessions.map((ms) => ms.id));
+            const matchedRecords = recList.filter((r) => sessionIds.has(r.session_id) && r.status === 'present');
+            const presentCount = matchedRecords.length;
+
+            const totalPossible = classesHeld * totalStudents;
+            const avgPercentage = totalPossible > 0 ? Math.min(100, Math.round((presentCount / totalPossible) * 100)) : (classesHeld > 0 ? 85 : 0);
+
+            return {
+              ...s,
+              type: s.type || 'Theory',
+              section: s.section || 'A',
+              status: s.status || 'Active',
+              classesHeld,
+              presentCount,
+              absentCount: Math.max(0, (totalStudents * classesHeld) - presentCount),
+              avgPercentage,
+              attendance_percentage: avgPercentage
+            };
+          });
+
+          res.json({ subjects: enrichedSubjects });
+        });
+      });
+    });
   });
 }
 
 function createSubject(req, res) {
-  const { name, code, department, year, semester, faculty_name, credits, description } = req.body;
-  if (!name || !code) return res.status(400).json({ error: 'Subject name and code required' });
+  const { name, code, type, department, year, semester, section, faculty_name, credits, status, description } = req.body;
+  if (!name || !code) return res.status(400).json({ error: 'Subject Name and Subject Code are required.' });
 
   const id = 'sub-' + uuidv4();
   db.run(
-    'INSERT INTO subjects (id, name, code, department, year, semester, faculty_name, credits, description, is_archived) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)',
-    [id, name, code, department || 'AI & DS', parseInt(year || 3), parseInt(semester || 5), faculty_name || 'Faculty', parseInt(credits || 3), description || ''],
+    `INSERT INTO subjects (id, name, code, type, department, year, semester, section, faculty_name, credits, description, status, is_archived) 
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
+    [
+      id,
+      name.trim(),
+      code.trim().toUpperCase(),
+      type || 'Theory',
+      department || 'AI & DS',
+      parseInt(year || 3),
+      parseInt(semester || 5),
+      section || 'A',
+      faculty_name || 'Faculty Member',
+      parseInt(credits || 3),
+      description || '',
+      status || 'Active'
+    ],
     function (err) {
-      if (err) return res.status(400).json({ error: 'Subject code already exists' });
-      res.json({ message: 'Subject created successfully', id });
+      if (err) {
+        if (err.message.includes('UNIQUE constraint failed')) {
+          return res.status(409).json({ error: 'Subject code already exists. Please use a unique subject code.' });
+        }
+        return res.status(500).json({ error: 'Failed to create subject: ' + err.message });
+      }
+      res.status(201).json({ message: 'Subject created successfully and synchronized across modules!', id });
     }
   );
 }
 
 function updateSubject(req, res) {
   const { id } = req.params;
-  const { name, code, department, year, semester, faculty_name, credits, description } = req.body;
+  const { name, code, type, department, year, semester, section, faculty_name, credits, status, description } = req.body;
 
   db.run(
-    'UPDATE subjects SET name = ?, code = ?, department = ?, year = ?, semester = ?, faculty_name = ?, credits = ?, description = ? WHERE id = ?',
-    [name, code, department || 'AI & DS', parseInt(year || 3), parseInt(semester || 5), faculty_name, parseInt(credits || 3), description, id],
+    `UPDATE subjects 
+     SET name = ?, code = ?, type = ?, department = ?, year = ?, semester = ?, section = ?, faculty_name = ?, credits = ?, status = ?, description = ? 
+     WHERE id = ?`,
+    [
+      name.trim(),
+      code.trim().toUpperCase(),
+      type || 'Theory',
+      department || 'AI & DS',
+      parseInt(year || 3),
+      parseInt(semester || 5),
+      section || 'A',
+      faculty_name,
+      parseInt(credits || 3),
+      status || 'Active',
+      description,
+      id
+    ],
     function (err) {
-      if (err) return res.status(500).json({ error: 'Failed to update subject' });
-      res.json({ message: 'Subject updated successfully' });
+      if (err) return res.status(500).json({ error: 'Failed to update subject: ' + err.message });
+      res.json({ message: 'Subject updated successfully across all modules!' });
     }
   );
 }
@@ -116,7 +220,7 @@ function toggleArchiveSubject(req, res) {
   db.get('SELECT is_archived FROM subjects WHERE id = ?', [id], (err, row) => {
     if (err || !row) return res.status(404).json({ error: 'Subject not found' });
     const newArchived = row.is_archived === 1 ? 0 : 1;
-    db.run('UPDATE subjects SET is_archived = ? WHERE id = ?', [newArchived, id], (err2) => {
+    db.run('UPDATE subjects SET is_archived = ?, status = ? WHERE id = ?', [newArchived, newArchived ? 'Inactive' : 'Active', id], (err2) => {
       if (err2) return res.status(500).json({ error: 'Failed to archive subject' });
       res.json({ message: newArchived ? 'Subject archived' : 'Subject restored', is_archived: newArchived });
     });
@@ -127,7 +231,7 @@ function deleteSubject(req, res) {
   const { id } = req.params;
   db.run('DELETE FROM subjects WHERE id = ?', [id], function (err) {
     if (err) return res.status(500).json({ error: 'Failed to delete subject' });
-    res.json({ message: 'Subject deleted successfully' });
+    res.json({ message: 'Subject removed successfully' });
   });
 }
 
