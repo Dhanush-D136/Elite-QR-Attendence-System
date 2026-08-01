@@ -5,6 +5,8 @@ import { getSocket } from '../services/socket';
 import { AttendanceRecord, TimetableItem, SubjectItem } from '../types';
 import { MapPin, ShieldCheck, History, Flame, CheckCircle2, XCircle, Award, Sparkles, BookOpen, Calendar, Clock, AlertTriangle, Bell, Calculator, TrendingUp } from 'lucide-react';
 
+import { HeroBanner } from '../components/HeroBanner';
+
 export const StudentDashboard: React.FC = () => {
   const { user } = useAuth();
   const [history, setHistory] = useState<AttendanceRecord[]>([]);
@@ -91,8 +93,28 @@ export const StudentDashboard: React.FC = () => {
     }
   }
 
+  // Parse time to minutes for active period calculation
+  const nowMins = new Date().getHours() * 60 + new Date().getMinutes();
+  const parseTime = (t: string) => {
+    if (!t) return 0;
+    const isPM = t.toUpperCase().includes('PM');
+    const isAM = t.toUpperCase().includes('AM');
+    const clean = t.replace(/AM|PM/i, '').trim();
+    const parts = clean.split(':');
+    let h = parseInt(parts[0] || '0', 10);
+    const m = parseInt(parts[1] || '0', 10);
+    if (isPM && h < 12) h += 12;
+    if (isAM && h === 12) h = 0;
+    return h * 60 + m;
+  };
+
+  const todaysClassesSorted = [...todaysClasses].sort((a, b) => (a.period_number || 0) - (b.period_number || 0));
+
   return (
     <div className="space-y-6 animate-fade-in">
+      {/* Hero Banner Section */}
+      <HeroBanner />
+
       {/* Student Profile Header Card */}
       <div className="bg-white p-6 lg:p-8 rounded-[24px] border border-[#E7E7E7] shadow-enterprise flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
         <div className="flex items-center gap-4">
@@ -212,7 +234,7 @@ export const StudentDashboard: React.FC = () => {
         </div>
       )}
 
-      {/* Grid for Today's Schedule & Notifications */}
+      {/* Grid for Today's Schedule (All 8 Periods) & Notifications */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Today's Schedule Card */}
         <div className="bg-white p-6 rounded-[24px] border border-[#E7E7E7] shadow-enterprise space-y-4 lg:col-span-2">
@@ -220,38 +242,63 @@ export const StudentDashboard: React.FC = () => {
             <div>
               <h3 className="font-display font-bold text-base text-[#111827] flex items-center gap-2">
                 <Calendar className="w-5 h-5 text-[#6D5DFC]" />
-                Today's Schedule ({todayName})
+                Today's Master Schedule — {todayName} (Periods 1 to 8)
               </h3>
-              <p className="text-xs text-[#6B7280] font-medium">Your assigned lecture slots for today</p>
+              <p className="text-xs text-[#6B7280] font-medium">Automatic daily schedule order with live active period tracking</p>
             </div>
-            <span className="px-2.5 py-1 rounded-full bg-[#F3F0FF] text-[#6D5DFC] font-bold text-xs">
-              {todaysClasses.length} Lectures
+            <span className="px-3 py-1 rounded-full bg-[#F3F0FF] text-[#6D5DFC] font-bold text-xs border border-[#6D5DFC]/20">
+              {todaysClassesSorted.length} Periods Configured
             </span>
           </div>
 
-          {todaysClasses.length === 0 ? (
+          {todaysClassesSorted.length === 0 ? (
             <div className="text-center py-8 text-[#6B7280] text-xs">
-              <p className="font-medium">No scheduled classes found for today.</p>
+              <p className="font-medium">No scheduled classes found for today ({todayName}).</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {todaysClasses.map((item, idx) => (
-                <div key={idx} className="p-4 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] space-y-2 hover:border-[#6D5DFC]/40 transition-all">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-bold text-[#6D5DFC] px-2 py-0.5 rounded-full bg-[#F3F0FF]">
-                      Period {item.period_number || idx + 1}
-                    </span>
-                    <span className="text-[11px] font-mono text-[#6B7280] font-medium flex items-center gap-1">
-                      <Clock className="w-3 h-3 text-[#6D5DFC]" /> {item.start_time} - {item.end_time}
-                    </span>
+              {todaysClassesSorted.map((item, idx) => {
+                const sMins = parseTime(item.start_time);
+                const eMins = parseTime(item.end_time);
+                const isActive = nowMins >= sMins && nowMins <= eMins;
+
+                return (
+                  <div
+                    key={idx}
+                    className={`p-4 rounded-2xl border transition-all space-y-2 relative overflow-hidden ${
+                      isActive
+                        ? 'bg-[#ECFDF5]/60 border-[#12B76A]/40 shadow-sm'
+                        : 'bg-[#FAFAFA] border-[#E7E7E7] hover:border-[#6D5DFC]/40'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] font-mono font-extrabold text-[#6D5DFC] px-2.5 py-0.5 rounded-full bg-[#F3F0FF] border border-[#6D5DFC]/20">
+                          P{item.period_number || idx + 1}
+                        </span>
+                        {isActive && (
+                          <span className="px-2 py-0.5 rounded-full bg-[#12B76A] text-white font-mono font-extrabold text-[9px] uppercase tracking-wider animate-pulse">
+                            ● ACTIVE NOW
+                          </span>
+                        )}
+                      </div>
+
+                      <span className="text-[11px] font-mono text-[#6B7280] font-bold flex items-center gap-1">
+                        <Clock className="w-3.5 h-3.5 text-[#6D5DFC]" /> {item.start_time} - {item.end_time}
+                      </span>
+                    </div>
+
+                    <h4 className="font-display font-extrabold text-sm text-[#111827]">{item.subject_name}</h4>
+
+                    <div className="flex items-center justify-between text-[11px] text-[#6B7280] pt-1 border-t border-[#E7E7E7]">
+                      <span>Faculty: <strong className="text-[#4F7CFF]">{item.faculty_name}</strong></span>
+                      <span className="px-2 py-0.5 rounded-full bg-white border border-[#E7E7E7] font-mono text-[#111827] font-bold text-[10px]">
+                        Room {item.room_number || 'F305'}
+                      </span>
+                    </div>
                   </div>
-                  <h4 className="font-display font-extrabold text-sm text-[#111827]">{item.subject_name}</h4>
-                  <div className="flex items-center justify-between text-[11px] text-[#6B7280]">
-                    <span>Faculty: <strong className="text-[#4F7CFF]">{item.faculty_name}</strong></span>
-                    <span>Room: <strong className="text-[#111827]">{item.room_number || 'F305'}</strong></span>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

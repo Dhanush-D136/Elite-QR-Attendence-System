@@ -70,6 +70,9 @@ export const AdminDashboard: React.FC = () => {
         </div>
       </div>
 
+      {/* Hero Banner Section */}
+      <HeroBanner />
+
       {/* Admin Telemetry Debug Panel */}
       <AdminDebugPanel />
 

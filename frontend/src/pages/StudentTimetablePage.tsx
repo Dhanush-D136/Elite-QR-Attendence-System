@@ -4,6 +4,8 @@ import { useAuth } from '../context/AuthContext';
 import { TimetableItem } from '../types';
 import { Calendar, Clock, MapPin, UserCheck, Sparkles, BookOpen, Layers } from 'lucide-react';
 
+import { HeroBanner } from '../components/HeroBanner';
+
 export const StudentTimetablePage: React.FC = () => {
   const { user } = useAuth();
   const [timetables, setTimetables] = useState<TimetableItem[]>([]);
@@ -23,14 +25,17 @@ export const StudentTimetablePage: React.FC = () => {
     }
   }, [user?.department, user?.year, user?.section]);
 
-  const todayClasses = timetables.filter((t) => t.day === todayName);
-  const activeDayClasses = timetables.filter((t) => t.day === activeDay);
+  const todayClasses = timetables.filter((t) => (t.day || '').toLowerCase() === todayName.toLowerCase()).sort((a, b) => (a.period_number || 0) - (b.period_number || 0));
+  const activeDayClasses = timetables.filter((t) => (t.day || '').toLowerCase() === activeDay.toLowerCase()).sort((a, b) => (a.period_number || 0) - (b.period_number || 0));
 
   const currentClass = todayClasses[0] || null;
   const nextClass = todayClasses[1] || null;
 
   return (
     <div className="space-y-6 animate-fade-in">
+      {/* Hero Banner Section */}
+      <HeroBanner />
+
       {/* Header Banner */}
       <div className="bg-white p-6 rounded-[24px] border border-[#E7E7E7] shadow-enterprise flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
