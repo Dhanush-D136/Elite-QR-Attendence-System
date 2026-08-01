@@ -92,6 +92,8 @@ router.post('/students/bulk-import', verifyToken, requireRole('admin'), studentC
 // --- Analytics & Dashboard Routes ---
 router.get('/analytics/dashboard', verifyToken, requireRole('admin'), analyticsController.getDashboardMetrics);
 router.get('/analytics/reports', verifyToken, requireRole('admin'), analyticsController.getReportsData);
+router.get('/analytics/audit-integrity', verifyToken, requireRole('admin'), analyticsController.auditDataIntegrity);
+router.post('/analytics/repair-integrity', verifyToken, requireRole('admin'), analyticsController.repairDataIntegrity);
 
 // --- Violations & Security Logs ---
 router.get('/violations', verifyToken, requireRole('admin'), violationController.getViolationLogs);

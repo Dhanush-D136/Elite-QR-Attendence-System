@@ -313,4 +313,99 @@ function getReportsData(req, res) {
   });
 }
 
-module.exports = { getDashboardMetrics, getReportsData };
+// Data Integrity Audit Tool (Auto Scan for corrupted/orphan/duplicate records)
+function auditDataIntegrity(req, res) {
+  db.get("SELECT COUNT(*) as orphan_students FROM attendance_records WHERE student_id NOT IN (SELECT id FROM users)", [], (err, r1) => {
+    db.get("SELECT COUNT(*) as orphan_sessions FROM attendance_records WHERE session_id NOT IN (SELECT id FROM attendance_sessions)", [], (err, r2) => {
+      db.get(
+        `SELECT COUNT(*) as duplicate_scans FROM (
+          SELECT student_id, session_id, COUNT(*) as cnt 
+          FROM attendance_records 
+          GROUP BY student_id, session_id 
+          HAVING cnt > 1
+        )`,
+        [],
+        (err, r3) => {
+          db.get("SELECT COUNT(*) as invalid_sessions FROM attendance_sessions WHERE subject IS NULL OR subject = ''", [], (err, r4) => {
+            db.get("SELECT COUNT(*) as total_records FROM attendance_records", [], (err, r5) => {
+              const orphanStudents = r1 ? r1.orphan_students : 0;
+              const orphanSessions = r2 ? r2.orphan_sessions : 0;
+              const duplicateScans = r3 ? r3.duplicate_scans : 0;
+              const invalidSessions = r4 ? r4.invalid_sessions : 0;
+              const totalRecords = r5 ? r5.total_records : 0;
+
+              const totalIssues = orphanStudents + orphanSessions + duplicateScans + invalidSessions;
+              const healthScore = totalRecords > 0 
+                ? Math.max(0, Math.round(((Math.max(1, totalRecords) - totalIssues) / Math.max(1, totalRecords)) * 100)) 
+                : 100;
+
+              res.json({
+                healthScore,
+                totalIssues,
+                totalRecords,
+                metrics: {
+                  orphanStudents,
+                  orphanSessions,
+                  duplicateScans,
+                  invalidSessions
+                },
+                status: totalIssues === 0 ? 'Healthy' : 'Action Required'
+              });
+            });
+          });
+        }
+      );
+    });
+  });
+}
+
+// One-Click Data Integrity Repair Mechanism
+function repairDataIntegrity(req, res) {
+  let repairedOrphansNoStudent = 0;
+  let repairedOrphansNoSession = 0;
+  let repairedDuplicates = 0;
+  let repairedSessions = 0;
+
+  // 1. Delete orphan attendance records without valid student
+  db.run("DELETE FROM attendance_records WHERE student_id NOT IN (SELECT id FROM users)", function (err1) {
+    repairedOrphansNoStudent = this ? this.changes || 0 : 0;
+
+    // 2. Delete orphan attendance records without valid session
+    db.run("DELETE FROM attendance_records WHERE session_id NOT IN (SELECT id FROM attendance_sessions)", function (err2) {
+      repairedOrphansNoSession = this ? this.changes || 0 : 0;
+
+      // 3. Deduplicate attendance records (keep earliest id/timestamp per student per session)
+      db.run(
+        `DELETE FROM attendance_records 
+         WHERE id NOT IN (
+           SELECT MIN(id) 
+           FROM attendance_records 
+           GROUP BY student_id, session_id
+         )`,
+        function (err3) {
+          repairedDuplicates = this ? this.changes || 0 : 0;
+
+          // 4. Delete corrupted sessions with empty subjects
+          db.run("DELETE FROM attendance_sessions WHERE subject IS NULL OR subject = ''", function (err4) {
+            repairedSessions = this ? this.changes || 0 : 0;
+
+            const totalRepaired = repairedOrphansNoStudent + repairedOrphansNoSession + repairedDuplicates + repairedSessions;
+
+            res.json({
+              message: `Data Integrity Repair Completed successfully! Cleaned ${totalRepaired} issue(s).`,
+              totalRepaired,
+              details: {
+                repairedOrphansNoStudent,
+                repairedOrphansNoSession,
+                repairedDuplicates,
+                repairedSessions
+              }
+            });
+          });
+        }
+      );
+    });
+  });
+}
+
+module.exports = { getDashboardMetrics, getReportsData, auditDataIntegrity, repairDataIntegrity };

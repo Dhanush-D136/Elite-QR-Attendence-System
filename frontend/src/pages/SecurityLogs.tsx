@@ -4,6 +4,8 @@ import { getSocket } from '../services/socket';
 import { ViolationLog } from '../types';
 import { ShieldAlert, AlertTriangle, Smartphone, MapPin, RefreshCw, Trash2 } from 'lucide-react';
 
+import { DataIntegrityAuditPanel } from '../components/DataIntegrityAuditPanel';
+
 export const SecurityLogs: React.FC = () => {
   const [violations, setViolations] = useState<ViolationLog[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -78,6 +80,9 @@ export const SecurityLogs: React.FC = () => {
           <span>Clear Violation Audit Logs</span>
         </button>
       </div>
+
+      {/* Data Integrity Audit & Auto-Repair Panel */}
+      <DataIntegrityAuditPanel />
 
       <div className="bg-white rounded-[24px] border border-[#E7E7E7] shadow-enterprise overflow-hidden">
         <div className="overflow-x-auto">

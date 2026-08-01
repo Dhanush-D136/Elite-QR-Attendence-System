@@ -6,6 +6,8 @@ import { AdminDebugPanel } from '../components/AdminDebugPanel';
 import { Users, CheckCircle2, XCircle, Percent, QrCode, TrendingUp, Radio, Activity, Sparkles, ArrowUpRight } from 'lucide-react';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, BarChart, Bar, CartesianGrid } from 'recharts';
 
+import { DataIntegrityAuditPanel } from '../components/DataIntegrityAuditPanel';
+
 export const AdminDashboard: React.FC = () => {
   const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
   const [liveScans, setLiveScans] = useState<AttendanceRecord[]>([]);
@@ -70,6 +72,9 @@ export const AdminDashboard: React.FC = () => {
 
       {/* Admin Telemetry Debug Panel */}
       <AdminDebugPanel />
+
+      {/* Data Integrity Audit & One-Click Repair Tool */}
+      <DataIntegrityAuditPanel />
 
       {/* Executive Metric Cards Grid (Stripe / Ramp Style) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
