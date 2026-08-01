@@ -13,7 +13,7 @@ export const TimetablePage: React.FC<TimetablePageProps> = ({ onNavigate }) => {
   const [subjects, setSubjects] = useState<SubjectItem[]>([]);
 
   // Filter & Sorting State
-  const [department, setDepartment] = useState('Computer Science');
+  const [department, setDepartment] = useState('AI & DS');
   const [year, setYear] = useState('3');
   const [section, setSection] = useState('A');
   const [selectedDay, setSelectedDay] = useState('Monday');
@@ -24,7 +24,7 @@ export const TimetablePage: React.FC<TimetablePageProps> = ({ onNavigate }) => {
   const [editingTt, setEditingTt] = useState<TimetableItem | null>(null);
 
   const [formData, setFormData] = useState({
-    department: 'Computer Science',
+    department: 'AI & DS',
     year: '3',
     section: 'A',
     semester: '5',
