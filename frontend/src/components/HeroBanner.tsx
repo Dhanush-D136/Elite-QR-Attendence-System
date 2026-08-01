@@ -23,27 +23,21 @@ export const HeroBanner: React.FC = () => {
 
   return (
     <div className="relative w-full rounded-[28px] overflow-hidden shadow-enterprise border border-[#E7E7E7] group transition-all duration-500 animate-fade-in my-2">
-      {/* Smart Responsive Container with Full Image Visibility */}
+      {/* Smart Responsive Container with Full-Width Cinematic Cover & Rich Shading */}
       <div className="relative w-full h-[220px] sm:h-[280px] md:h-[360px] bg-[#0B0F19] overflow-hidden flex items-center justify-center">
-        {/* Background Blurred Fill Layer */}
-        <img
-          src={bannerUrl}
-          alt=""
-          className="absolute inset-0 w-full h-full object-cover blur-md opacity-40 scale-110"
-        />
-        {/* Main Foreground Full-Visibility Image (No Cropping) */}
+        {/* Main Cover Image */}
         <img
           src={bannerUrl}
           alt="Elite Minds Family Hero Cover"
-          className="relative max-w-full max-h-full object-contain object-center z-0 transition-transform duration-700 ease-out"
+          className="w-full h-full object-cover object-center transform group-hover:scale-105 transition-transform duration-700 ease-out filter contrast-105 z-0"
           onError={(e) => {
             (e.target as HTMLImageElement).src = '/family.jpg';
           }}
         />
 
         {/* Soft Premium Gradient & Glass Overlays */}
-        <div className="absolute inset-0 bg-gradient-to-t from-[#0B0F19]/90 via-[#0B0F19]/40 to-transparent" />
-        <div className="absolute inset-0 bg-gradient-to-r from-[#0B0F19]/80 via-transparent to-transparent hidden sm:block" />
+        <div className="absolute inset-0 bg-gradient-to-t from-[#0B0F19]/90 via-[#0B0F19]/35 to-transparent z-0" />
+        <div className="absolute inset-0 bg-gradient-to-r from-[#0B0F19]/80 via-[#0B0F19]/30 to-transparent hidden sm:block z-0" />
 
         {/* Top-Right Badge */}
         <div className="absolute top-4 right-4 flex items-center gap-2">

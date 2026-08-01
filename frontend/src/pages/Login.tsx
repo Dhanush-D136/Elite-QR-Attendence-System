@@ -63,25 +63,20 @@ export const Login: React.FC = () => {
 
       {/* LEFT SIDE: 65% BRAND EXPERIENCE & CINEMATIC FAMILY HERO COVER */}
       <div className="lg:w-[65%] w-full relative min-h-[340px] sm:min-h-[420px] lg:min-h-screen bg-[#0B0F19] flex flex-col justify-between p-6 sm:p-10 lg:p-14 overflow-hidden">
-        {/* Full-Height Background Cover Image with Dual Layer Contain */}
-        <img
-          src="/family.jpg"
-          alt=""
-          className="absolute inset-0 w-full h-full object-cover blur-sm opacity-50 scale-105"
-        />
+        {/* Full-Height Background Cover Image */}
         <img
           src="/family.jpg"
           alt="Elite Minds Family Hero Cover"
-          className="absolute inset-0 w-full h-full object-contain object-center z-0 transition-transform duration-1000 ease-out filter contrast-105"
+          className="absolute inset-0 w-full h-full object-cover object-center transform hover:scale-105 transition-transform duration-1000 ease-out filter contrast-105 z-0"
           onError={(e) => {
             (e.target as HTMLImageElement).src = '/hero_banner.png';
           }}
         />
 
-        {/* Cinematic Multi-Layer Overlays */}
-        <div className="absolute inset-0 bg-gradient-to-t from-[#0B0F19] via-[#0B0F19]/40 to-[#0B0F19]/80" />
-        <div className="absolute inset-0 bg-gradient-to-r from-[#0B0F19]/90 via-[#0B0F19]/40 to-transparent hidden lg:block" />
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_50%,rgba(109,93,252,0.25),transparent_70%)]" />
+        {/* Cinematic Multi-Layer Overlays & Shading */}
+        <div className="absolute inset-0 bg-gradient-to-t from-[#0B0F19] via-[#0B0F19]/35 to-[#0B0F19]/70 z-0" />
+        <div className="absolute inset-0 bg-gradient-to-r from-[#0B0F19]/85 via-[#0B0F19]/35 to-transparent hidden lg:block z-0" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_50%,rgba(109,93,252,0.25),transparent_70%)] z-0" />
 
         {/* TOP BRANDING BAR */}
         <div className="relative z-10 flex items-center justify-between">
