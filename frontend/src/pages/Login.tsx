@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import {
   Shield,
   User,
+  BookOpen,
   Lock,
   Mail,
   ArrowRight,
