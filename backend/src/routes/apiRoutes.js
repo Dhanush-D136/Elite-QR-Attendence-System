@@ -68,8 +68,8 @@ router.post('/sessions', verifyToken, requireRole('admin'), sessionController.cr
 router.get('/sessions', verifyToken, sessionController.getSessions);
 router.get('/sessions/:id', verifyToken, sessionController.getSessionById);
 router.get('/sessions/:id/qr', verifyToken, sessionController.getSessionQR);
-router.post('/sessions/:id/rotate', verifyToken, requireRole('admin'), sessionController.rotateSessionQR);
 router.put('/sessions/:id/end', verifyToken, requireRole('admin'), sessionController.endSession);
+router.post('/sessions/:id/end', verifyToken, requireRole('admin'), sessionController.endSession);
 
 // --- Attendance Routes ---
 router.post('/attendance/mark', verifyToken, requireRole('student'), attendanceController.markAttendance);

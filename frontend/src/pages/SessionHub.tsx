@@ -250,10 +250,14 @@ export const SessionHub: React.FC<SessionHubProps> = ({
     if (!confirm('End and close this attendance session? Students will no longer be able to scan.')) return;
     try {
       await api.post(`/sessions/${sessionId}/end`);
+      if (selectedSession && selectedSession.id === sessionId) {
+        setSelectedSession((prev: any) => (prev ? { ...prev, status: 'completed' } : null));
+      }
       fetchSessions();
-      alert('Attendance Session closed.');
-    } catch (err) {
-      alert('Failed to end session');
+      alert('✅ Attendance Session closed successfully.');
+    } catch (err: any) {
+      console.error('Failed to end session:', err);
+      alert(`❌ ${err.response?.data?.error || err.message || 'Failed to end session'}`);
     }
   };
 
