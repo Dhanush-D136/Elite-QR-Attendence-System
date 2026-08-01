@@ -5,6 +5,7 @@ import {
   Building2,
   Calendar,
   Users,
+  UserCheck,
   QrCode,
   FileSpreadsheet,
   ShieldAlert,
