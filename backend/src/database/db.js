@@ -38,7 +38,14 @@ function runMigrations() {
           { col: 'first_login', type: 'INTEGER DEFAULT 1' },
           { col: 'password_changed', type: 'INTEGER DEFAULT 0' },
           { col: 'must_change_password', type: 'INTEGER DEFAULT 0' },
-          { col: 'password_changed_at', type: 'DATETIME' }
+          { col: 'password_changed_at', type: 'DATETIME' },
+          { col: 'dob', type: 'TEXT' },
+          { col: 'gender', type: 'TEXT' },
+          { col: 'blood_group', type: 'TEXT' },
+          { col: 'address', type: 'TEXT' },
+          { col: 'parent_name', type: 'TEXT' },
+          { col: 'parent_phone', type: 'TEXT' },
+          { col: 'bio', type: 'TEXT' }
         ];
 
         userMigrations.forEach(({ col, type }) => {
@@ -279,6 +286,13 @@ function initDb() {
           first_login INTEGER DEFAULT 1,
           password_changed INTEGER DEFAULT 0,
           password_changed_at DATETIME,
+          dob TEXT,
+          gender TEXT,
+          blood_group TEXT,
+          address TEXT,
+          parent_name TEXT,
+          parent_phone TEXT,
+          bio TEXT,
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )
       `);

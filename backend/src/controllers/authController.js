@@ -228,7 +228,7 @@ async function changePassword(req, res) {
 // Get current profile
 function getMe(req, res) {
   db.get(
-    'SELECT id, name, roll_number, email, role, department, year, section, phone, profile_photo, institution_name, department_name, device_fingerprint, is_first_login, first_login, must_change_password, password_changed, password_changed_at FROM users WHERE id = ?',
+    'SELECT id, name, roll_number, email, role, department, year, section, phone, profile_photo, institution_name, department_name, device_fingerprint, is_first_login, first_login, must_change_password, password_changed, password_changed_at, dob, gender, blood_group, address, parent_name, parent_phone, bio FROM users WHERE id = ?',
     [req.user.id],
     (err, user) => {
       if (err || !user) return res.status(404).json({ error: 'User not found' });
@@ -285,7 +285,7 @@ async function updateAdminProfile(req, res) {
 
 // Update Student Profile
 async function updateStudentProfile(req, res) {
-  const { phone, profile_photo, new_password } = req.body;
+  const { phone, profile_photo, dob, gender, blood_group, address, parent_name, parent_phone, bio, new_password } = req.body;
   const studentId = req.user.id;
 
   try {
@@ -294,11 +294,11 @@ async function updateStudentProfile(req, res) {
       passwordHash = await bcrypt.hash(new_password, 10);
     }
 
-    let query = `UPDATE users SET phone = ?, profile_photo = ?`;
-    const params = [phone, profile_photo];
+    let query = `UPDATE users SET phone = ?, profile_photo = ?, dob = ?, gender = ?, blood_group = ?, address = ?, parent_name = ?, parent_phone = ?, bio = ?`;
+    const params = [phone || '', profile_photo, dob || null, gender || null, blood_group || null, address || null, parent_name || null, parent_phone || null, bio || null];
 
     if (passwordHash) {
-      query += `, password_hash = ?`;
+      query += `, password_hash = ?, must_change_password = 0, is_first_login = 0, first_login = 0, password_changed = 1`;
       params.push(passwordHash);
     }
 
@@ -308,7 +308,7 @@ async function updateStudentProfile(req, res) {
     db.run(query, params, function (err) {
       if (err) return res.status(500).json({ error: 'Failed to update student profile: ' + err.message });
 
-      db.get('SELECT id, name, roll_number, email, role, department, year, section, phone, profile_photo, device_fingerprint FROM users WHERE id = ?', [studentId], (err, user) => {
+      db.get('SELECT id, name, roll_number, email, role, department, year, section, phone, profile_photo, device_fingerprint, dob, gender, blood_group, address, parent_name, parent_phone, bio FROM users WHERE id = ?', [studentId], (err, user) => {
         res.json({ message: 'Student profile updated successfully', user });
       });
     });

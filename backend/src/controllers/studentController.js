@@ -8,7 +8,7 @@ function getStudents(req, res) {
   const { search, department, year, section, page = 1, limit = 50 } = req.query;
 
   let query = `
-    SELECT u.id, u.name, u.roll_number, u.email, u.department, u.year, u.section, u.phone, u.profile_photo, u.device_fingerprint, u.must_change_password, u.created_at,
+    SELECT u.id, u.name, u.roll_number, u.email, u.department, u.year, u.section, u.phone, u.profile_photo, u.device_fingerprint, u.must_change_password, u.dob, u.gender, u.blood_group, u.address, u.parent_name, u.parent_phone, u.bio, u.created_at,
            COUNT(DISTINCT ar.id) as attended_count,
            (SELECT COUNT(*) FROM attendance_sessions s WHERE s.department = u.department AND s.year = u.year AND s.section = u.section) as total_sessions
     FROM users u
@@ -63,7 +63,7 @@ function getStudents(req, res) {
 
 // Add Single Student
 async function createStudent(req, res) {
-  const { name, roll_number, email, department, year, section, phone, profile_photo } = req.body;
+  const { name, roll_number, email, department, year, section, phone, profile_photo, dob, gender, blood_group, address, parent_name, parent_phone, bio } = req.body;
 
   if (!name || !roll_number || !email || !department || !year || !section) {
     return res.status(400).json({ error: 'Name, Roll Number, Email, Department, Year, and Section are required' });
@@ -74,9 +74,9 @@ async function createStudent(req, res) {
   const photo = profile_photo || `https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150`;
 
   db.run(
-    `INSERT INTO users (id, name, roll_number, email, role, department, year, section, phone, profile_photo, password_hash, must_change_password, is_first_login, first_login, password_changed)
-     VALUES (?, ?, ?, ?, 'student', ?, ?, ?, ?, ?, ?, 1, 1, 1, 0)`,
-    [id, name, roll_number, email, department, parseInt(year), section, phone || '', photo, defaultPasswordHash],
+    `INSERT INTO users (id, name, roll_number, email, role, department, year, section, phone, profile_photo, dob, gender, blood_group, address, parent_name, parent_phone, bio, password_hash, must_change_password, is_first_login, first_login, password_changed)
+     VALUES (?, ?, ?, ?, 'student', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 1, 1, 0)`,
+    [id, name, roll_number, email, department, parseInt(year), section, phone || '', photo, dob || null, gender || null, blood_group || null, address || null, parent_name || null, parent_phone || null, bio || null, defaultPasswordHash],
     function (err) {
       if (err) {
         if (err.message.includes('UNIQUE constraint failed')) {
@@ -87,7 +87,7 @@ async function createStudent(req, res) {
 
       res.status(201).json({
         message: 'Student account created successfully with default password "1234". Student must change password on first login.',
-        student: { id, name, roll_number, email, department, year, section, phone, profile_photo: photo }
+        student: { id, name, roll_number, email, department, year, section, phone, profile_photo: photo, dob, gender, blood_group, address, parent_name, parent_phone, bio }
       });
     }
   );
@@ -96,16 +96,16 @@ async function createStudent(req, res) {
 // Edit Student
 async function updateStudent(req, res) {
   const { id } = req.params;
-  const { name, roll_number, email, department, year, section, phone, profile_photo, new_password } = req.body;
+  const { name, roll_number, email, department, year, section, phone, profile_photo, dob, gender, blood_group, address, parent_name, parent_phone, bio, new_password } = req.body;
 
   try {
     if (new_password && new_password.trim() !== '') {
       const passwordHash = await bcrypt.hash(new_password.trim(), 10);
       db.run(
         `UPDATE users 
-         SET name = ?, roll_number = ?, email = ?, department = ?, year = ?, section = ?, phone = ?, profile_photo = COALESCE(?, profile_photo), password_hash = ?, must_change_password = 0, is_first_login = 0, first_login = 0, password_changed = 1
+         SET name = ?, roll_number = ?, email = ?, department = ?, year = ?, section = ?, phone = ?, profile_photo = COALESCE(?, profile_photo), dob = ?, gender = ?, blood_group = ?, address = ?, parent_name = ?, parent_phone = ?, bio = ?, password_hash = ?, must_change_password = 0, is_first_login = 0, first_login = 0, password_changed = 1
          WHERE id = ? AND role = 'student'`,
-        [name, roll_number, email, department, parseInt(year), section, phone || '', profile_photo, passwordHash, id],
+        [name, roll_number, email, department, parseInt(year), section, phone || '', profile_photo, dob || null, gender || null, blood_group || null, address || null, parent_name || null, parent_phone || null, bio || null, passwordHash, id],
         function (err) {
           if (err) {
             if (err.message.includes('UNIQUE constraint failed')) {
@@ -119,9 +119,9 @@ async function updateStudent(req, res) {
     } else {
       db.run(
         `UPDATE users 
-         SET name = ?, roll_number = ?, email = ?, department = ?, year = ?, section = ?, phone = ?, profile_photo = COALESCE(?, profile_photo)
+         SET name = ?, roll_number = ?, email = ?, department = ?, year = ?, section = ?, phone = ?, profile_photo = COALESCE(?, profile_photo), dob = ?, gender = ?, blood_group = ?, address = ?, parent_name = ?, parent_phone = ?, bio = ?
          WHERE id = ? AND role = 'student'`,
-        [name, roll_number, email, department, parseInt(year), section, phone || '', profile_photo, id],
+        [name, roll_number, email, department, parseInt(year), section, phone || '', profile_photo, dob || null, gender || null, blood_group || null, address || null, parent_name || null, parent_phone || null, bio || null, id],
         function (err) {
           if (err) {
             if (err.message.includes('UNIQUE constraint failed')) {

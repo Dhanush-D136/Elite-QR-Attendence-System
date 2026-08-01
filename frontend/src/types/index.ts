@@ -15,6 +15,13 @@ export interface User {
   password_changed_at?: string;
   attendance_percentage?: number;
   status?: string;
+  dob?: string;
+  gender?: string;
+  blood_group?: string;
+  address?: string;
+  parent_name?: string;
+  parent_phone?: string;
+  bio?: string;
 }
 
 export interface Department {

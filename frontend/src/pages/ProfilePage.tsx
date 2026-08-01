@@ -16,6 +16,13 @@ export const ProfilePage: React.FC = () => {
   const [profilePhoto, setProfilePhoto] = useState(user?.profile_photo || '');
   const [institutionName, setInstitutionName] = useState((user as any)?.institution_name || 'Elite Institute of Technology');
   const [departmentName, setDepartmentName] = useState((user as any)?.department_name || 'Computer Science & Engineering');
+  const [dob, setDob] = useState(user?.dob || '');
+  const [gender, setGender] = useState(user?.gender || 'Male');
+  const [bloodGroup, setBloodGroup] = useState(user?.blood_group || 'O+');
+  const [address, setAddress] = useState(user?.address || '');
+  const [parentName, setParentName] = useState(user?.parent_name || '');
+  const [parentPhone, setParentPhone] = useState(user?.parent_phone || '');
+  const [bio, setBio] = useState(user?.bio || '');
   const [newPassword, setNewPassword] = useState('');
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -62,12 +69,19 @@ export const ProfilePage: React.FC = () => {
         const res = await api.put('/auth/student/profile', {
           phone,
           profile_photo: profilePhoto,
+          dob,
+          gender,
+          blood_group: bloodGroup,
+          address,
+          parent_name: parentName,
+          parent_phone: parentPhone,
+          bio,
           new_password: newPassword
         });
         if (res.data.user) {
           updateUser(res.data.user);
         }
-        setMessage({ type: 'success', text: 'Profile Updated Successfully' });
+        setMessage({ type: 'success', text: 'Profile Details Updated Successfully!' });
       }
       setNewPassword('');
     } catch (err: any) {
@@ -199,13 +213,100 @@ export const ProfilePage: React.FC = () => {
               </div>
             </div>
 
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-xs font-semibold text-[#111827] mb-1.5">Phone Number</label>
+                <input
+                  type="text"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="+1-555-1001"
+                  className="w-full px-4 py-3 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-[#111827] mb-1.5">Date of Birth</label>
+                <input
+                  type="date"
+                  value={dob}
+                  onChange={(e) => setDob(e.target.value)}
+                  className="w-full px-4 py-3 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-[#111827] mb-1.5">Blood Group</label>
+                <select
+                  value={bloodGroup}
+                  onChange={(e) => setBloodGroup(e.target.value)}
+                  className="w-full px-4 py-3 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827]"
+                >
+                  <option value="A+">A+</option>
+                  <option value="A-">A-</option>
+                  <option value="B+">B+</option>
+                  <option value="B-">B-</option>
+                  <option value="O+">O+</option>
+                  <option value="O-">O-</option>
+                  <option value="AB+">AB+</option>
+                  <option value="AB-">AB-</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-semibold text-[#111827] mb-1.5">Parent / Guardian Name</label>
+                <input
+                  type="text"
+                  value={parentName}
+                  onChange={(e) => setParentName(e.target.value)}
+                  placeholder="Parent or Guardian Name"
+                  className="w-full px-4 py-3 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-[#111827] mb-1.5">Parent Contact Number</label>
+                <input
+                  type="text"
+                  value={parentPhone}
+                  onChange={(e) => setParentPhone(e.target.value)}
+                  placeholder="+1-555-0999"
+                  className="w-full px-4 py-3 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827]"
+                />
+              </div>
+            </div>
+
             <div>
-              <label className="block text-xs font-semibold text-[#111827] mb-1.5">Phone Number</label>
+              <label className="block text-xs font-semibold text-[#111827] mb-1.5">Home Address</label>
               <input
                 type="text"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                placeholder="+1-555-1001"
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+                placeholder="Full Residential Address"
+                className="w-full px-4 py-3 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827]"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-[#111827] mb-1.5">Bio / Notes</label>
+              <textarea
+                rows={2}
+                value={bio}
+                onChange={(e) => setBio(e.target.value)}
+                placeholder="Short bio or personal notes..."
+                className="w-full px-4 py-3 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827]"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-[#111827] mb-1.5">New Password (Optional)</label>
+              <input
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="Leave empty to keep current password"
                 className="w-full px-4 py-3 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827]"
               />
             </div>
