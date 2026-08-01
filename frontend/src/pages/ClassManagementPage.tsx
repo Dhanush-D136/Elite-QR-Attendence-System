@@ -24,6 +24,7 @@ import {
   CheckCircle2
 } from 'lucide-react';
 import { DynamicQRDisplay } from '../components/DynamicQRDisplay';
+import { StudentManagement } from './StudentManagement';
 
 interface ClassDetails {
   department: string;
@@ -461,63 +462,7 @@ export const ClassManagementPage: React.FC = () => {
 
       {/* TAB 2: STUDENTS */}
       {activeTab === 'students' && (
-        <div className="bg-white p-6 rounded-[24px] border border-[#E7E7E7] shadow-enterprise space-y-4">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-            <h3 className="font-display font-bold text-lg text-[#111827]">Elite Minds Student Roster ({students.length})</h3>
-            <div className="relative w-full sm:w-72">
-              <input
-                type="text"
-                placeholder="Search student or register no..."
-                value={searchStudent}
-                onChange={(e) => setSearchStudent(e.target.value)}
-                className="w-full px-4 py-2 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827] pl-9"
-              />
-              <Search className="w-4 h-4 text-[#9CA3AF] absolute left-3 top-2.5" />
-            </div>
-          </div>
-
-          {students.length === 0 ? (
-            <div className="py-12 px-6 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-center space-y-3">
-              <Users className="w-10 h-10 text-[#6D5DFC] mx-auto opacity-70" />
-              <h4 className="font-display font-extrabold text-base text-[#111827]">No students have been added yet.</h4>
-              <p className="text-xs text-[#6B7280] max-w-sm mx-auto">
-                Add students manually or import via Excel file to populate the class roster.
-              </p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead>
-                  <tr className="border-b border-[#E7E7E7] text-[#6B7280] font-bold uppercase tracking-wider">
-                    <th className="pb-3 px-3">Student Name</th>
-                    <th className="pb-3 px-3">Register Number</th>
-                    <th className="pb-3 px-3">Email Address</th>
-                    <th className="pb-3 px-3">Phone</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[#E7E7E7]">
-                  {students
-                    .filter((s) => s.name.toLowerCase().includes(searchStudent.toLowerCase()) || (s.roll_number && s.roll_number.includes(searchStudent)))
-                    .map((st) => (
-                      <tr key={st.id} className="hover:bg-[#FAFAFA] transition-colors">
-                        <td className="py-3 px-3 font-bold text-[#111827] flex items-center gap-2.5">
-                          <img
-                            src={st.profile_photo || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80'}
-                            className="w-7 h-7 rounded-full object-cover border border-[#E7E7E7]"
-                            alt={st.name}
-                          />
-                          <span>{st.name}</span>
-                        </td>
-                        <td className="py-3 px-3 font-mono text-[#6D5DFC] font-bold">{st.roll_number || 'N/A'}</td>
-                        <td className="py-3 px-3 text-[#6B7280]">{st.email}</td>
-                        <td className="py-3 px-3 text-[#6B7280]">{st.phone || '+91 9876543210'}</td>
-                      </tr>
-                    ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
+        <StudentManagement />
       )}
 
       {/* TAB 3: SUBJECTS */}
