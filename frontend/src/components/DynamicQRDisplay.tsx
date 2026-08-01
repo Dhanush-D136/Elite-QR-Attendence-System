@@ -7,6 +7,11 @@ import { RefreshCw, ShieldCheck, Clock, Users, Sparkles, Key, Eye } from 'lucide
 interface DynamicQRDisplayProps {
   sessionId: string;
   subjectName: string;
+  subjectCode?: string;
+  facultyName?: string;
+  periodNumber?: string | number;
+  sessionDate?: string;
+  timeRange?: string;
   department: string;
   section: string;
   liveRecordsCount: number;
@@ -15,6 +20,11 @@ interface DynamicQRDisplayProps {
 export const DynamicQRDisplay: React.FC<DynamicQRDisplayProps> = ({
   sessionId,
   subjectName,
+  subjectCode,
+  facultyName,
+  periodNumber,
+  sessionDate,
+  timeRange,
   department,
   section,
   liveRecordsCount
@@ -99,18 +109,40 @@ export const DynamicQRDisplay: React.FC<DynamicQRDisplayProps> = ({
   return (
     <div className="bg-white rounded-[24px] p-6 lg:p-8 border border-[#E7E7E7] shadow-enterprise relative overflow-hidden text-center max-w-md mx-auto space-y-6 animate-fade-in">
       {/* Header Info */}
-      <div>
-        <div className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-[#F3F0FF] border border-[#6D5DFC]/20 text-[#6D5DFC] text-xs font-bold uppercase tracking-wider mb-2">
+      <div className="space-y-2">
+        <div className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-[#F3F0FF] border border-[#6D5DFC]/20 text-[#6D5DFC] text-xs font-bold uppercase tracking-wider">
           <Sparkles className="w-3.5 h-3.5" />
           25s Dynamic Rotating QR
         </div>
-        <h3 className="font-display font-extrabold text-xl text-[#111827]">{subjectName}</h3>
-        <p className="text-xs text-[#6B7280] font-medium mt-0.5">
-          {department} • Section {section}
-        </p>
+        
+        <div className="pt-1">
+          {subjectCode && (
+            <span className="px-2.5 py-0.5 rounded-full bg-[#F3F0FF] text-[#6D5DFC] font-mono text-[10px] font-extrabold border border-[#6D5DFC]/20 mr-1.5">
+              {subjectCode}
+            </span>
+          )}
+          <h3 className="font-display font-extrabold text-2xl text-[#111827] inline">{subjectName}</h3>
+        </div>
+
+        {facultyName && (
+          <p className="text-xs text-[#4F7CFF] font-bold">
+            Faculty: {facultyName}
+          </p>
+        )}
+
+        <div className="p-3 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] grid grid-cols-2 gap-2 text-xs text-[#6B7280]">
+          <div>
+            <span className="text-[10px] font-bold text-[#6D5DFC] block uppercase">Date & Period</span>
+            <strong className="text-[#111827]">{sessionDate || new Date().toLocaleDateString()} • Period {periodNumber || 1}</strong>
+          </div>
+          <div>
+            <span className="text-[10px] font-bold text-[#6D5DFC] block uppercase">Dept & Section</span>
+            <strong className="text-[#111827]">{department} (Sec {section})</strong>
+          </div>
+        </div>
 
         {/* Active Code Badge */}
-        <div className="mt-3 inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-[#F7F3EE] border border-[#E7E7E7] text-[#111827] font-mono text-sm font-bold shadow-sm">
+        <div className="mt-2 inline-flex items-center gap-2 px-5 py-2 rounded-2xl bg-[#F7F3EE] border border-[#E7E7E7] text-[#111827] font-mono text-sm font-bold shadow-sm">
           <Key className="w-4 h-4 text-[#6D5DFC] animate-pulse" />
           <span>Active Code: <strong className="text-[#6D5DFC] text-2xl tracking-widest font-extrabold ml-1">{attendanceCode}</strong></span>
         </div>

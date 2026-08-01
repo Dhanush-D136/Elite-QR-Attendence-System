@@ -18,7 +18,19 @@ import {
   Edit
 } from 'lucide-react';
 
-export const SessionHub: React.FC = () => {
+interface SessionHubProps {
+  initialSubject?: string;
+  initialFaculty?: string;
+  initialSubjectCode?: string;
+  initialPeriod?: string;
+}
+
+export const SessionHub: React.FC<SessionHubProps> = ({
+  initialSubject,
+  initialFaculty,
+  initialSubjectCode,
+  initialPeriod
+}) => {
   const [sessions, setSessions] = useState<AttendanceSession[]>([]);
   const [selectedSession, setSelectedSession] = useState<AttendanceSession | null>(null);
   const [timetables, setTimetables] = useState<TimetableItem[]>([]);
@@ -30,9 +42,10 @@ export const SessionHub: React.FC = () => {
 
   // Selected Timetable Slot for QR Generation
   const [selectedTimetableId, setSelectedTimetableId] = useState<string>('');
-  const [subject, setSubject] = useState('Programming Language for AI');
-  const [facultyName, setFacultyName] = useState('Mrs Nivetha P');
-  const [periodNumber, setPeriodNumber] = useState('1');
+  const [subject, setSubject] = useState<string>(initialSubject || 'Programming Language for AI');
+  const [facultyName, setFacultyName] = useState<string>(initialFaculty || 'Mrs Nivetha P');
+  const [periodNumber, setPeriodNumber] = useState<string>(initialPeriod || '1');
+  const [subjectCode, setSubjectCode] = useState<string>(initialSubjectCode || '');
   const [sessionDate, setSessionDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [department, setDepartment] = useState('AI & Data Science');
   const [year, setYear] = useState('3');
@@ -41,16 +54,48 @@ export const SessionHub: React.FC = () => {
 
   const [isCreating, setIsCreating] = useState(false);
 
+  // Sync initial props when passed dynamically
+  useEffect(() => {
+    if (initialSubject) {
+      setSubject(initialSubject);
+    }
+    if (initialFaculty) {
+      setFacultyName(initialFaculty);
+    }
+    if (initialSubjectCode) {
+      setSubjectCode(initialSubjectCode);
+    }
+    if (initialPeriod) {
+      setPeriodNumber(initialPeriod);
+    }
+  }, [initialSubject, initialFaculty, initialSubjectCode, initialPeriod]);
+
   const fetchTimetables = async () => {
     try {
       const res = await api.get('/timetables');
-      setTimetables(res.data.timetables || []);
-      if (res.data.timetables && res.data.timetables.length > 0) {
-        const first = res.data.timetables[0];
-        setSelectedTimetableId(first.id);
-        setSubject(first.subject_name);
-        setFacultyName(first.faculty_name);
-        setPeriodNumber(String(first.period_number || 1));
+      const fetchedTt = res.data.timetables || [];
+      setTimetables(fetchedTt);
+
+      if (fetchedTt.length > 0) {
+        if (initialSubject) {
+          const match = fetchedTt.find(
+            (t: TimetableItem) =>
+              t.subject_name.toLowerCase().includes(initialSubject.toLowerCase()) ||
+              initialSubject.toLowerCase().includes(t.subject_name.toLowerCase())
+          );
+          if (match) {
+            setSelectedTimetableId(match.id);
+            setSubject(match.subject_name);
+            setFacultyName(match.faculty_name);
+            setPeriodNumber(String(match.period_number || 1));
+          }
+        } else {
+          const first = fetchedTt[0];
+          setSelectedTimetableId(first.id);
+          setSubject(first.subject_name);
+          setFacultyName(first.faculty_name);
+          setPeriodNumber(String(first.period_number || 1));
+        }
       }
     } catch (err) {
       console.error('Failed to fetch timetables:', err);
@@ -60,13 +105,24 @@ export const SessionHub: React.FC = () => {
   const fetchSessions = async () => {
     try {
       const res = await api.get('/sessions');
-      setSessions(res.data.sessions || []);
-      if (res.data.sessions && res.data.sessions.length > 0 && !selectedSession) {
-        const active = res.data.sessions.find((s: AttendanceSession) => s.status === 'active');
-        if (active) {
-          selectSession(active);
-        } else {
-          selectSession(res.data.sessions[0]);
+      const fetchedSessions = res.data.sessions || [];
+      setSessions(fetchedSessions);
+
+      if (fetchedSessions.length > 0 && !selectedSession) {
+        let targetSession = null;
+        if (initialSubject) {
+          targetSession = fetchedSessions.find(
+            (s: AttendanceSession) =>
+              s.status === 'active' &&
+              (s.subject.toLowerCase().includes(initialSubject.toLowerCase()) ||
+                initialSubject.toLowerCase().includes(s.subject.toLowerCase()))
+          );
+        }
+        if (!targetSession) {
+          targetSession = fetchedSessions.find((s: AttendanceSession) => s.status === 'active') || fetchedSessions[0];
+        }
+        if (targetSession) {
+          selectSession(targetSession);
         }
       }
     } catch (err) {
@@ -123,11 +179,21 @@ export const SessionHub: React.FC = () => {
   // Launch Session directly linked to Timetable Entry
   const handleCreateSession = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!subject || subject.trim() === '') {
+      alert('❌ Validation Error: Subject Name is required to generate a session QR code.');
+      return;
+    }
+    if (!facultyName || facultyName.trim() === '') {
+      alert('❌ Validation Error: Faculty assignment is required before generating session QR code.');
+      return;
+    }
+
     try {
       setIsCreating(true);
       const res = await api.post('/sessions', {
-        subject,
-        faculty_name: facultyName,
+        subject: subject.trim(),
+        subject_code: subjectCode.trim(),
+        faculty_name: facultyName.trim(),
         period_number: periodNumber,
         date: sessionDate,
         department,
@@ -139,7 +205,7 @@ export const SessionHub: React.FC = () => {
       const newSession = res.data.session;
       setSessions((prev) => [newSession, ...prev]);
       selectSession(newSession);
-      alert(`✅ Attendance Session launched for ${subject} (Period ${periodNumber})!`);
+      alert(`✅ Attendance Session launched exclusively for ${subject} (Period ${periodNumber})!`);
     } catch (err: any) {
       alert(err.response?.data?.error || 'Failed to launch attendance session');
     } finally {
@@ -177,12 +243,14 @@ export const SessionHub: React.FC = () => {
     }
   };
 
-  const handleEndSession = async (id: string) => {
+  const handleEndSession = async (sessionId: string) => {
+    if (!confirm('End and close this attendance session? Students will no longer be able to scan.')) return;
     try {
-      await api.put(`/sessions/${id}/end`);
+      await api.post(`/sessions/${sessionId}/end`);
       fetchSessions();
+      alert('Attendance Session closed.');
     } catch (err) {
-      console.error('Failed to end session:', err);
+      alert('Failed to end session');
     }
   };
 
@@ -191,9 +259,9 @@ export const SessionHub: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="font-display font-extrabold text-2xl text-[#111827]">Faculty Attendance Session Hub</h1>
+          <h1 className="font-display font-extrabold text-2xl text-[#111827]">Live Dynamic QR Attendance Hub</h1>
           <p className="text-xs text-[#6B7280] font-medium mt-1">
-            Generate timetable-linked QR codes, view real-time present/absent rosters, and manage student attendance
+            Real-time anti-fraud attendance session manager for AI&DS III-A
           </p>
         </div>
       </div>
@@ -227,7 +295,7 @@ export const SessionHub: React.FC = () => {
               )}
 
               <div>
-                <label className="block text-[11px] font-semibold text-[#111827] mb-1">Subject Name</label>
+                <label className="block text-[11px] font-semibold text-[#111827] mb-1">Subject Name *</label>
                 <input
                   type="text"
                   required
@@ -238,7 +306,7 @@ export const SessionHub: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-[11px] font-semibold text-[#111827] mb-1">Faculty Name</label>
+                <label className="block text-[11px] font-semibold text-[#111827] mb-1">Faculty Name *</label>
                 <input
                   type="text"
                   required
@@ -261,51 +329,41 @@ export const SessionHub: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-semibold text-[#111827] mb-1">Period Number</label>
+                  <label className="block text-[11px] font-semibold text-[#111827] mb-1">Duration</label>
                   <select
-                    value={periodNumber}
-                    onChange={(e) => setPeriodNumber(e.target.value)}
-                    className="w-full px-3 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-[#111827] text-xs font-bold"
+                    value={duration}
+                    onChange={(e) => setDuration(e.target.value)}
+                    className="w-full px-3 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-[#111827] text-xs font-medium"
                   >
-                    <option value="1">Period 1 (P1)</option>
-                    <option value="2">Period 2 (P2)</option>
-                    <option value="3">Period 3 (P3)</option>
-                    <option value="4">Period 4 (P4)</option>
-                    <option value="5">Period 5 (P5)</option>
+                    <option value="15">15 Mins</option>
+                    <option value="25">25 Mins</option>
+                    <option value="45">45 Mins</option>
+                    <option value="60">60 Mins</option>
                   </select>
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block text-[11px] font-semibold text-[#111827] mb-1">Dept</label>
+                  <label className="block text-[11px] font-semibold text-[#111827] mb-1">Period Number</label>
                   <select
-                    value={department}
-                    onChange={(e) => setDepartment(e.target.value)}
+                    value={periodNumber}
+                    onChange={(e) => setPeriodNumber(e.target.value)}
                     className="w-full px-2 py-2 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-[#111827] text-xs"
                   >
-                    <option value="AI & Data Science">AI & DS</option>
-                    <option value="Computer Science">CSE</option>
-                    <option value="Electronics">ECE</option>
+                    <option value="1">Period 1</option>
+                    <option value="2">Period 2</option>
+                    <option value="3">Period 3</option>
+                    <option value="4">Period 4</option>
+                    <option value="5">Period 5</option>
+                    <option value="6">Period 6</option>
+                    <option value="7">Period 7</option>
+                    <option value="8">Period 8</option>
                   </select>
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-semibold text-[#111827] mb-1">Year</label>
-                  <select
-                    value={year}
-                    onChange={(e) => setYear(e.target.value)}
-                    className="w-full px-2 py-2 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-[#111827] text-xs"
-                  >
-                    <option value="1">1</option>
-                    <option value="2">2</option>
-                    <option value="3">3</option>
-                    <option value="4">4</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-[11px] font-semibold text-[#111827] mb-1">Sec</label>
+                  <label className="block text-[11px] font-semibold text-[#111827] mb-1">Section</label>
                   <select
                     value={section}
                     onChange={(e) => setSection(e.target.value)}
@@ -313,6 +371,7 @@ export const SessionHub: React.FC = () => {
                   >
                     <option value="A">Sec A</option>
                     <option value="B">Sec B</option>
+                    <option value="C">Sec C</option>
                   </select>
                 </div>
               </div>
@@ -378,6 +437,10 @@ export const SessionHub: React.FC = () => {
               <DynamicQRDisplay
                 sessionId={selectedSession.id}
                 subjectName={selectedSession.subject}
+                subjectCode={subjectCode || (selectedSession as any).subject_code}
+                facultyName={selectedSession.faculty_name}
+                periodNumber={selectedSession.period_number}
+                sessionDate={selectedSession.date || sessionDate}
                 department={selectedSession.department}
                 section={selectedSession.section}
                 liveRecordsCount={presentStudents.length}

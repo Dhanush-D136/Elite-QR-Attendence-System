@@ -97,14 +97,18 @@ function getCurrentTimetableSlot(req, res) {
 
 // Create Attendance Session (Linked directly to Timetable Entry)
 function createSession(req, res) {
-  let { subject, department, year, section, duration_minutes, period_number, faculty_name, date, room_number } = req.body;
+  let { subject, subject_code, department, year, section, duration_minutes, period_number, faculty_name, date, room_number } = req.body;
 
+  if (!subject || typeof subject !== 'string' || subject.trim() === '') {
+    return res.status(400).json({ error: 'Subject Name is required to generate a subject-specific QR code.' });
+  }
+
+  subject = subject.trim();
   department = department || 'AI & DS';
   year = parseInt(year || 3);
   section = section || 'A';
-  subject = subject || 'Programming Language for AI';
   faculty_name = faculty_name || 'Faculty Member';
-  period_number = period_number ? String(period_number) : 'P1';
+  period_number = period_number ? String(period_number) : '1';
   date = date || new Date().toISOString().split('T')[0];
 
   const id = uuidv4();

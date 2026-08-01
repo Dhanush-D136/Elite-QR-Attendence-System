@@ -22,6 +22,14 @@ const MainLayout: React.FC = () => {
   const { user, token, isLoading, mustChangePasswordTempToken } = useAuth();
   const isAdmin = user?.role === 'admin';
   const [activeTab, setActiveTab] = useState<string>(() => (isAdmin ? 'class-management' : 'student-dashboard'));
+  const [sessionParams, setSessionParams] = useState<{ subject?: string; code?: string; faculty?: string; period?: string } | null>(null);
+
+  const handleNavigate = (tab: string, extraData?: any) => {
+    setActiveTab(tab);
+    if (extraData) {
+      setSessionParams(extraData);
+    }
+  };
 
   // Sync active tab whenever user or role changes
   useEffect(() => {
@@ -71,10 +79,17 @@ const MainLayout: React.FC = () => {
           {isAdmin ? (
             <>
               {(activeTab === 'class-management' || activeTab === 'dashboard') && <ClassManagementPage />}
-              {activeTab === 'timetable' && <TimetablePage onNavigate={(tab) => setActiveTab(tab)} />}
-              {activeTab === 'subjects' && <SubjectsPage onNavigate={(tab) => setActiveTab(tab)} />}
-              {activeTab === 'sessions' && <SessionHub />}
-              {activeTab === 'reports' && <AttendanceReportsPage onNavigate={(tab) => setActiveTab(tab)} />}
+              {activeTab === 'timetable' && <TimetablePage onNavigate={handleNavigate} />}
+              {activeTab === 'subjects' && <SubjectsPage onNavigate={handleNavigate} />}
+              {activeTab === 'sessions' && (
+                <SessionHub
+                  initialSubject={sessionParams?.subject}
+                  initialFaculty={sessionParams?.faculty}
+                  initialSubjectCode={sessionParams?.code}
+                  initialPeriod={sessionParams?.period}
+                />
+              )}
+              {activeTab === 'reports' && <AttendanceReportsPage onNavigate={handleNavigate} />}
               {activeTab === 'security' && <SecurityLogs />}
               {activeTab === 'profile' && <ProfilePage />}
               {activeTab === 'settings' && <ProfilePage />}

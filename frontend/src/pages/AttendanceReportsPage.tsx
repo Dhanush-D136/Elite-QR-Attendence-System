@@ -813,11 +813,11 @@ export const AttendanceReportsPage: React.FC<AttendanceReportsPageProps> = ({ on
                           className="px-3 py-2 rounded-xl bg-[#F3F0FF] text-[#6D5DFC] font-bold hover:bg-[#6D5DFC] hover:text-white transition-all flex items-center justify-center gap-1.5"
                         >
                           <ListChecks className="w-3.5 h-3.5" />
-                          <span>Subject Details</span>
+                          <span>View Attendance</span>
                         </button>
 
                         <button
-                          onClick={() => onNavigate && onNavigate('sessions', { subject: sub.name, faculty: sub.faculty_name })}
+                          onClick={() => onNavigate && onNavigate('sessions', { subject: sub.name, code: sub.code, faculty: sub.faculty_name, period: '1' })}
                           className="px-3 py-2 rounded-xl bg-[#ECFDF5] text-[#12B76A] font-bold border border-[#12B76A]/20 hover:bg-[#12B76A] hover:text-white transition-all flex items-center justify-center gap-1.5"
                         >
                           <QrCode className="w-3.5 h-3.5" />
@@ -869,12 +869,22 @@ export const AttendanceReportsPage: React.FC<AttendanceReportsPageProps> = ({ on
                             </td>
                             <td className="p-4 text-[#6B7280] text-[11px]">{sub.lastClassDate}</td>
                             <td className="p-4 text-right">
-                              <button
-                                onClick={() => setSelectedSubject(sub)}
-                                className="px-3 py-1.5 rounded-full bg-[#F3F0FF] text-[#6D5DFC] font-bold text-[11px] hover:bg-[#6D5DFC] hover:text-white transition-all"
-                              >
-                                View Details
-                              </button>
+                              <div className="flex items-center justify-end gap-1.5">
+                                <button
+                                  onClick={() => setSelectedSubject(sub)}
+                                  className="px-3 py-1.5 rounded-full bg-[#F3F0FF] text-[#6D5DFC] font-bold text-[11px] hover:bg-[#6D5DFC] hover:text-white transition-all flex items-center gap-1"
+                                >
+                                  <ListChecks className="w-3.5 h-3.5" />
+                                  <span>View Attendance</span>
+                                </button>
+                                <button
+                                  onClick={() => onNavigate && onNavigate('sessions', { subject: sub.name, code: sub.code, faculty: sub.faculty_name, period: '1' })}
+                                  className="px-3 py-1.5 rounded-full bg-[#ECFDF5] text-[#12B76A] font-bold text-[11px] border border-[#12B76A]/20 hover:bg-[#12B76A] hover:text-white transition-all flex items-center gap-1"
+                                >
+                                  <QrCode className="w-3.5 h-3.5" />
+                                  <span>Generate QR</span>
+                                </button>
+                              </div>
                             </td>
                           </tr>
                         ))}
