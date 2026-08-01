@@ -85,11 +85,19 @@ export const AttendanceReportsPage: React.FC<AttendanceReportsPageProps> = ({ on
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [deptFilter, setDeptFilter] = useState<string>('');
   const [subjectFilter, setSubjectFilter] = useState<string>('');
+  const [subjectCodeFilter, setSubjectCodeFilter] = useState<string>('');
   const [facultyFilter, setFacultyFilter] = useState<string>('');
   const [periodFilter, setPeriodFilter] = useState<string>('');
   const [semesterFilter, setSemesterFilter] = useState<string>('');
+  const [sectionFilter, setSectionFilter] = useState<string>('');
   const [fromDate, setFromDate] = useState<string>('');
   const [toDate, setToDate] = useState<string>('');
+  const [fromTime, setFromTime] = useState<string>('');
+  const [toTime, setToTime] = useState<string>('');
+
+  // View & Subject Student Filters
+  const [viewMode, setViewMode] = useState<'card' | 'table'>('card');
+  const [subjectStudentFilter, setSubjectStudentFilter] = useState<'all' | 'above75' | 'below75' | 'defaulter' | 'presentToday' | 'absentToday'>('all');
 
   // Modals for Attendance & Subject CRUD
   const [showMarkModal, setShowMarkModal] = useState<boolean>(false);
@@ -131,7 +139,7 @@ export const AttendanceReportsPage: React.FC<AttendanceReportsPageProps> = ({ on
     attendance_time: string;
   } | null>(null);
 
-  // Fetch Reports and Roster Data
+  // Fetch Reports and Roster Data with Advanced Search Params
   const fetchReportsData = async () => {
     try {
       setIsLoading(true);
@@ -139,15 +147,29 @@ export const AttendanceReportsPage: React.FC<AttendanceReportsPageProps> = ({ on
       if (isFaculty && user?.name) {
         params.append('faculty_name', user.name);
       }
+      if (subjectFilter) params.append('subject_name', subjectFilter);
+      if (subjectCodeFilter) params.append('subject_code', subjectCodeFilter);
+      if (facultyFilter) params.append('faculty_name', facultyFilter);
+      if (fromDate) params.append('from_date', fromDate);
+      if (toDate) params.append('to_date', toDate);
+      if (fromTime) params.append('from_time', fromTime);
+      if (toTime) params.append('to_time', toTime);
+      if (periodFilter) params.append('period_number', periodFilter);
+      if (semesterFilter) params.append('semester', semesterFilter);
+      if (sectionFilter) params.append('section', sectionFilter);
 
-      const res = await api.get(`/subjects?${params.toString()}`);
-      if (res.data.subjects) setSubjectsData(res.data.subjects);
-
-      const [resReports, studentRes, sessRes] = await Promise.all([
-        api.get('/analytics/reports'),
+      const [resReports, resSub, studentRes, sessRes] = await Promise.all([
+        api.get(`/analytics/reports?${params.toString()}`),
+        api.get(`/subjects?${params.toString()}`),
         api.get('/students'),
         api.get('/sessions')
       ]);
+
+      if (resReports.data.subjectStats) {
+        setSubjectsData(resReports.data.subjectStats);
+      } else if (resSub.data.subjects) {
+        setSubjectsData(resSub.data.subjects);
+      }
 
       if (resReports.data.defaulters) setDefaultersList(resReports.data.defaulters);
       if (studentRes.data.students) setStudents(studentRes.data.students);
@@ -323,12 +345,153 @@ export const AttendanceReportsPage: React.FC<AttendanceReportsPageProps> = ({ on
     XLSX.writeFile(wb, `SmartAttend_Defaulters_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
+  // Export Subject Analytics to Excel
+  const handleExportSubjectExcel = () => {
+    const exportData = displayedSubjects.map((s) => ({
+      'Subject Code': s.code,
+      'Subject Name': s.name,
+      'Faculty Name': s.faculty_name,
+      'Total Classes Conducted': s.classesHeld,
+      'Present Count': s.presentCount,
+      'Absent Count': s.absentCount,
+      'Attendance %': `${s.avgPercentage}%`,
+      'Defaulters (<75%)': s.studentsBelow75 || 0,
+      'Last Session Date': s.lastClassDate
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(exportData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Subject Analytics');
+    XLSX.writeFile(wb, `SmartAttend_Subject_Analytics_${new Date().toISOString().split('T')[0]}.xlsx`);
+  };
+
+  // Export Subject Analytics / Student Details to PDF
+  const handleExportPDF = (subject?: SubjectStat) => {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+
+    const dataToPrint = subject ? [subject] : displayedSubjects;
+    const title = subject ? `Subject Attendance Details: ${subject.name} (${subject.code})` : 'Advanced Subject-Wise Attendance Analytics Report';
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>${title}</title>
+        <style>
+          body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; padding: 24px; color: #111827; }
+          h1 { color: #6D5DFC; margin-bottom: 4px; font-size: 22px; font-weight: 800; }
+          h3 { color: #6B7280; margin-top: 0; font-size: 13px; font-weight: 600; }
+          .meta { margin: 16px 0 24px 0; font-size: 12px; color: #4B5563; background: #FAFAFA; border: 1px solid #E7E7E7; border-radius: 12px; padding: 12px; }
+          table { width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 12px; }
+          th, td { border: 1px solid #E7E7E7; padding: 10px; text-align: left; }
+          th { background-color: #F3F0FF; color: #6D5DFC; font-weight: 700; text-transform: uppercase; font-size: 10px; }
+          tr:nth-child(even) { background-color: #FAFAFA; }
+          .badge { padding: 3px 8px; border-radius: 12px; font-size: 10px; font-weight: 800; text-transform: uppercase; }
+          .badge-green { background: #ECFDF5; color: #12B76A; }
+          .badge-red { background: #FEF2F2; color: #EF4444; }
+          .footer { margin-top: 40px; text-align: center; font-size: 11px; color: #9CA3AF; border-top: 1px solid #E7E7E7; padding-top: 16px; }
+        </style>
+      </head>
+      <body>
+        <h1>${title}</h1>
+        <h3>Elite Institute of Technology • AI&DS III-A Attendance Hub</h3>
+        <div class="meta">
+          <strong>Date Generated:</strong> ${new Date().toLocaleString()}<br/>
+          <strong>Date Range Filter:</strong> ${fromDate || 'All'} to ${toDate || 'Present'} &nbsp;&nbsp;|&nbsp;&nbsp; 
+          <strong>Time Filter:</strong> ${fromTime || '00:00'} - ${toTime || '23:59'}
+        </div>
+        ${
+          subject && subject.students
+            ? `
+          <h2>Student Roster & Attendance Breakdown (${subject.students.length} Enrolled)</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>Register / Roll Number</th>
+                <th>Student Name</th>
+                <th>Present Count</th>
+                <th>Absent Count</th>
+                <th>Attendance %</th>
+                <th>Last Attended Date</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${subject.students
+                .map(
+                  (st: any) => `
+                <tr>
+                  <td><strong>${st.roll_number}</strong></td>
+                  <td>${st.name}</td>
+                  <td>${st.presentCount}</td>
+                  <td>${st.absentCount}</td>
+                  <td><strong>${st.percentage}%</strong></td>
+                  <td>${st.lastAttendedDate}</td>
+                  <td><span class="badge ${st.percentage >= 75 ? 'badge-green' : 'badge-red'}">${st.percentage >= 75 ? 'Above 75%' : 'Defaulter'}</span></td>
+                </tr>
+              `
+                )
+                .join('')}
+            </tbody>
+          </table>
+        `
+            : `
+          <table>
+            <thead>
+              <tr>
+                <th>Subject Code</th>
+                <th>Subject Name</th>
+                <th>Faculty Name</th>
+                <th>Classes Conducted</th>
+                <th>Present Count</th>
+                <th>Absent Count</th>
+                <th>Avg Attendance %</th>
+                <th>Defaulter Count (<75%)</th>
+                <th>Last Attendance Session</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${dataToPrint
+                .map(
+                  (s) => `
+                <tr>
+                  <td><strong>${s.code}</strong></td>
+                  <td>${s.name}</td>
+                  <td>${s.faculty_name}</td>
+                  <td>${s.classesHeld}</td>
+                  <td>${s.presentCount}</td>
+                  <td>${s.absentCount}</td>
+                  <td><strong>${s.avgPercentage}%</strong></td>
+                  <td>${s.studentsBelow75 || 0}</td>
+                  <td>${s.lastClassDate}</td>
+                </tr>
+              `
+                )
+                .join('')}
+            </tbody>
+          </table>
+        `
+        }
+        <div class="footer">SmartAttend Academic Analytics System • Confidential Report</div>
+        <script>
+          window.onload = function() { window.print(); }
+        </script>
+      </body>
+      </html>
+    `;
+
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
+  };
+
   // Filtered Subject Analytics Cards
   const displayedSubjects = subjectsData.filter((s) => {
     if (isFaculty && user?.name && s.faculty_name.toLowerCase() !== user.name.toLowerCase()) {
       return false;
     }
-    if (subjectFilter && s.name !== subjectFilter && s.code !== subjectFilter) return false;
+    if (subjectFilter && !s.name.toLowerCase().includes(subjectFilter.toLowerCase()) && !s.code.toLowerCase().includes(subjectFilter.toLowerCase())) return false;
+    if (subjectCodeFilter && !s.code.toLowerCase().includes(subjectCodeFilter.toLowerCase())) return false;
     if (facultyFilter && !s.faculty_name.toLowerCase().includes(facultyFilter.toLowerCase())) return false;
     return true;
   });
@@ -410,45 +573,191 @@ export const AttendanceReportsPage: React.FC<AttendanceReportsPageProps> = ({ on
             })}
           </div>
 
-          {/* TAB 1: SUBJECT CARDS GRID */}
+          {/* TAB 1: ADVANCED SUBJECT ANALYTICS GRID & TABLE VIEW */}
           {activeTab === 'subjects' && (
             <div className="space-y-5">
-              {/* Subject Search & Filters */}
-              <div className="bg-white p-4 rounded-[24px] border border-[#E7E7E7] shadow-enterprise flex flex-col md:flex-row items-center gap-3">
-                <div className="relative w-full md:w-80">
-                  <input
-                    type="text"
-                    placeholder="Filter subjects by name or code..."
-                    value={subjectFilter}
-                    onChange={(e) => setSubjectFilter(e.target.value)}
-                    className="w-full px-4 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827] placeholder-[#9CA3AF] pl-9 focus:outline-none focus:border-[#6D5DFC] font-medium"
-                  />
-                  <Search className="w-4 h-4 text-[#9CA3AF] absolute left-3 top-3" />
+              {/* Advanced Subject Analytics Search Filter Bar */}
+              <div className="bg-white p-5 rounded-[24px] border border-[#E7E7E7] shadow-enterprise space-y-4">
+                <div className="flex items-center justify-between pb-2 border-b border-[#E7E7E7]">
+                  <div className="flex items-center gap-2">
+                    <Filter className="w-4 h-4 text-[#6D5DFC]" />
+                    <h3 className="font-display font-extrabold text-sm text-[#111827]">
+                      Advanced Subject-Wise Analytics Search & Filters
+                    </h3>
+                  </div>
+                  
+                  {/* View Switcher & Exporters */}
+                  <div className="flex items-center gap-2">
+                    <div className="bg-[#FAFAFA] p-1 rounded-2xl border border-[#E7E7E7] flex items-center gap-1">
+                      <button
+                        onClick={() => setViewMode('card')}
+                        className={`px-3 py-1 rounded-xl text-xs font-bold transition-all ${
+                          viewMode === 'card' ? 'bg-[#6D5DFC] text-white shadow-sm' : 'text-[#6B7280] hover:text-[#111827]'
+                        }`}
+                      >
+                        Card View
+                      </button>
+                      <button
+                        onClick={() => setViewMode('table')}
+                        className={`px-3 py-1 rounded-xl text-xs font-bold transition-all ${
+                          viewMode === 'table' ? 'bg-[#6D5DFC] text-white shadow-sm' : 'text-[#6B7280] hover:text-[#111827]'
+                        }`}
+                      >
+                        Table View
+                      </button>
+                    </div>
+
+                    <button
+                      onClick={handleExportSubjectExcel}
+                      className="px-3.5 py-1.5 rounded-full bg-[#ECFDF5] text-[#12B76A] text-xs font-bold border border-[#12B76A]/20 hover:bg-[#12B76A]/10 flex items-center gap-1"
+                    >
+                      <FileSpreadsheet className="w-3.5 h-3.5" /> Excel
+                    </button>
+                    <button
+                      onClick={() => handleExportPDF()}
+                      className="px-3.5 py-1.5 rounded-full bg-rose-50 text-rose-600 text-xs font-bold border border-rose-200 hover:bg-rose-100 flex items-center gap-1"
+                    >
+                      <Download className="w-3.5 h-3.5" /> Export PDF
+                    </button>
+                  </div>
                 </div>
 
-                {!isFaculty && (
-                  <div className="relative w-full md:w-64">
+                {/* Filter Inputs Grid */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+                  {/* Subject Name / Keyword */}
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase text-[#6B7280] mb-1">Subject Name</label>
                     <input
                       type="text"
-                      placeholder="Filter by faculty name..."
+                      placeholder="e.g. Machine Learning"
+                      value={subjectFilter}
+                      onChange={(e) => setSubjectFilter(e.target.value)}
+                      className="w-full px-3.5 py-2 rounded-xl bg-[#FAFAFA] border border-[#E7E7E7] text-[#111827] placeholder-[#9CA3AF] focus:outline-none focus:border-[#6D5DFC] font-medium"
+                    />
+                  </div>
+
+                  {/* Subject Code */}
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase text-[#6B7280] mb-1">Subject Code</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. CS301"
+                      value={subjectCodeFilter}
+                      onChange={(e) => setSubjectCodeFilter(e.target.value)}
+                      className="w-full px-3.5 py-2 rounded-xl bg-[#FAFAFA] border border-[#E7E7E7] text-[#111827] placeholder-[#9CA3AF] focus:outline-none focus:border-[#6D5DFC] font-mono uppercase font-bold"
+                    />
+                  </div>
+
+                  {/* Faculty Name */}
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase text-[#6B7280] mb-1">Faculty Name</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Dr. Rajesh Kumar"
                       value={facultyFilter}
                       onChange={(e) => setFacultyFilter(e.target.value)}
-                      className="w-full px-4 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827] placeholder-[#9CA3AF] pl-9 focus:outline-none focus:border-[#6D5DFC] font-medium"
+                      className="w-full px-3.5 py-2 rounded-xl bg-[#FAFAFA] border border-[#E7E7E7] text-[#111827] placeholder-[#9CA3AF] focus:outline-none focus:border-[#6D5DFC] font-medium"
                     />
-                    <UserCheck className="w-4 h-4 text-[#9CA3AF] absolute left-3 top-3" />
                   </div>
-                )}
+
+                  {/* Period Number */}
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase text-[#6B7280] mb-1">Period Number</label>
+                    <select
+                      value={periodFilter}
+                      onChange={(e) => setPeriodFilter(e.target.value)}
+                      className="w-full px-3.5 py-2 rounded-xl bg-[#FAFAFA] border border-[#E7E7E7] text-[#111827] font-medium"
+                    >
+                      <option value="">All Periods</option>
+                      {[1, 2, 3, 4, 5, 6, 7, 8].map((p) => (
+                        <option key={p} value={p}>Period {p}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Date Range: From Date */}
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase text-[#6B7280] mb-1">From Date</label>
+                    <input
+                      type="date"
+                      value={fromDate}
+                      onChange={(e) => setFromDate(e.target.value)}
+                      className="w-full px-3.5 py-2 rounded-xl bg-[#FAFAFA] border border-[#E7E7E7] text-[#111827] font-medium"
+                    />
+                  </div>
+
+                  {/* Date Range: To Date */}
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase text-[#6B7280] mb-1">To Date</label>
+                    <input
+                      type="date"
+                      value={toDate}
+                      onChange={(e) => setToDate(e.target.value)}
+                      className="w-full px-3.5 py-2 rounded-xl bg-[#FAFAFA] border border-[#E7E7E7] text-[#111827] font-medium"
+                    />
+                  </div>
+
+                  {/* Time Range: From Time */}
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase text-[#6B7280] mb-1">From Time</label>
+                    <input
+                      type="time"
+                      value={fromTime}
+                      onChange={(e) => setFromTime(e.target.value)}
+                      className="w-full px-3.5 py-2 rounded-xl bg-[#FAFAFA] border border-[#E7E7E7] text-[#111827] font-medium"
+                    />
+                  </div>
+
+                  {/* Time Range: To Time */}
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase text-[#6B7280] mb-1">To Time</label>
+                    <input
+                      type="time"
+                      value={toTime}
+                      onChange={(e) => setToTime(e.target.value)}
+                      className="w-full px-3.5 py-2 rounded-xl bg-[#FAFAFA] border border-[#E7E7E7] text-[#111827] font-medium"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#E7E7E7]">
+                  <button
+                    onClick={() => {
+                      setSubjectFilter('');
+                      setSubjectCodeFilter('');
+                      setFacultyFilter('');
+                      setPeriodFilter('');
+                      setSemesterFilter('');
+                      setSectionFilter('');
+                      setFromDate('');
+                      setToDate('');
+                      setFromTime('');
+                      setToTime('');
+                      fetchReportsData();
+                    }}
+                    className="px-3.5 py-1.5 rounded-full bg-[#FAFAFA] text-[#6B7280] hover:text-[#111827] border border-[#E7E7E7] text-xs font-bold"
+                  >
+                    Reset Filters
+                  </button>
+                  <button
+                    onClick={fetchReportsData}
+                    className="px-4 py-1.5 rounded-full bg-[#6D5DFC] text-white text-xs font-bold shadow-floating hover:bg-[#5b4be0] flex items-center gap-1.5"
+                  >
+                    <Search className="w-3.5 h-3.5" /> Apply Search
+                  </button>
+                </div>
               </div>
 
               {displayedSubjects.length === 0 ? (
                 <div className="bg-white p-12 rounded-[24px] border border-[#E7E7E7] shadow-enterprise text-center space-y-3">
                   <BookOpen className="w-10 h-10 text-[#6D5DFC] mx-auto opacity-70" />
-                  <h4 className="font-display font-extrabold text-base text-[#111827]">No configured subjects found.</h4>
+                  <h4 className="font-display font-extrabold text-base text-[#111827]">No subject analytics match your search filter.</h4>
                   <p className="text-xs text-[#6B7280] max-w-sm mx-auto">
-                    {isAdmin ? 'Click "+ Add Subject" above to create and assign curriculum subjects.' : 'No subjects assigned to your profile.'}
+                    Try clearing date/time filters or updating keyword queries.
                   </p>
                 </div>
-              ) : (
+              ) : viewMode === 'card' ? (
+                /* CARD VIEW MODE */
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
                   {displayedSubjects.map((sub) => (
                     <div
@@ -465,7 +774,7 @@ export const AttendanceReportsPage: React.FC<AttendanceReportsPageProps> = ({ on
                               {sub.type || 'Theory'}
                             </span>
                           </div>
-                          <span className="text-[11px] text-[#6B7280] font-medium">{sub.classesHeld} Classes Conducted</span>
+                          <span className="text-[11px] text-[#6B7280] font-medium">{sub.classesHeld} Sessions Held</span>
                         </div>
 
                         <h3 className="font-display font-extrabold text-lg text-[#111827] mt-3 group-hover:text-[#6D5DFC] transition-colors">
@@ -486,20 +795,25 @@ export const AttendanceReportsPage: React.FC<AttendanceReportsPageProps> = ({ on
                             <strong className="font-mono text-[#12B76A] font-extrabold text-sm">{sub.presentCount}</strong>
                           </div>
                           <div>
-                            <span className="text-[9px] text-rose-500 font-bold block uppercase">ABSENT</span>
+                            <span className="text-[9px] text-rose-500 font-bold block uppercase font-bold">ABSENT</span>
                             <strong className="font-mono text-rose-500 font-extrabold text-sm">{sub.absentCount}</strong>
                           </div>
                         </div>
+
+                        <div className="mt-3 flex items-center justify-between text-[11px] text-[#6B7280]">
+                          <span>Defaulters (&lt;75%): <strong className="text-rose-600 font-bold">{sub.studentsBelow75 || 0}</strong></span>
+                          <span className="font-mono text-[10px] text-[#9CA3AF]">{sub.lastClassDate}</span>
+                        </div>
                       </div>
 
-                      {/* Action Buttons inside Card */}
+                      {/* Card Action Buttons */}
                       <div className="pt-2 grid grid-cols-2 gap-2 text-xs">
                         <button
                           onClick={() => setSelectedSubject(sub)}
                           className="px-3 py-2 rounded-xl bg-[#F3F0FF] text-[#6D5DFC] font-bold hover:bg-[#6D5DFC] hover:text-white transition-all flex items-center justify-center gap-1.5"
                         >
                           <ListChecks className="w-3.5 h-3.5" />
-                          <span>View Attendance</span>
+                          <span>Subject Details</span>
                         </button>
 
                         <button
@@ -512,6 +826,61 @@ export const AttendanceReportsPage: React.FC<AttendanceReportsPageProps> = ({ on
                       </div>
                     </div>
                   ))}
+                </div>
+              ) : (
+                /* TABLE VIEW MODE */
+                <div className="bg-white rounded-[24px] border border-[#E7E7E7] shadow-enterprise overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-[#FAFAFA] border-b border-[#E7E7E7] text-[#6B7280] uppercase text-[10px] tracking-wider font-bold">
+                        <tr>
+                          <th className="p-4">Subject Code</th>
+                          <th className="p-4">Subject Name</th>
+                          <th className="p-4">Faculty Name</th>
+                          <th className="p-4 text-center">Classes Conducted</th>
+                          <th className="p-4 text-center">Present</th>
+                          <th className="p-4 text-center">Absent</th>
+                          <th className="p-4 text-center">Avg Attendance %</th>
+                          <th className="p-4 text-center">Defaulters (&lt;75%)</th>
+                          <th className="p-4">Last Session</th>
+                          <th className="p-4 text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-[#E7E7E7]">
+                        {displayedSubjects.map((sub) => (
+                          <tr key={sub.id} className="hover:bg-[#FAFAFA] transition-colors">
+                            <td className="p-4 font-mono font-bold text-[#6D5DFC]">{sub.code}</td>
+                            <td className="p-4 font-bold text-[#111827]">{sub.name}</td>
+                            <td className="p-4 font-medium text-[#4B5563]">{sub.faculty_name}</td>
+                            <td className="p-4 text-center font-mono font-bold">{sub.classesHeld}</td>
+                            <td className="p-4 text-center font-mono text-[#12B76A] font-bold">{sub.presentCount}</td>
+                            <td className="p-4 text-center font-mono text-rose-500 font-bold">{sub.absentCount}</td>
+                            <td className="p-4 text-center">
+                              <span className={`px-2.5 py-0.5 rounded-full font-mono font-extrabold text-[11px] border ${
+                                sub.avgPercentage >= 75
+                                  ? 'bg-[#ECFDF5] text-[#12B76A] border-[#12B76A]/20'
+                                  : 'bg-rose-50 text-rose-600 border-rose-200'
+                              }`}>
+                                {sub.avgPercentage}%
+                              </span>
+                            </td>
+                            <td className="p-4 text-center font-mono text-rose-600 font-bold">
+                              {sub.studentsBelow75 || 0}
+                            </td>
+                            <td className="p-4 text-[#6B7280] text-[11px]">{sub.lastClassDate}</td>
+                            <td className="p-4 text-right">
+                              <button
+                                onClick={() => setSelectedSubject(sub)}
+                                className="px-3 py-1.5 rounded-full bg-[#F3F0FF] text-[#6D5DFC] font-bold text-[11px] hover:bg-[#6D5DFC] hover:text-white transition-all"
+                              >
+                                View Details
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               )}
             </div>
@@ -805,6 +1174,119 @@ export const AttendanceReportsPage: React.FC<AttendanceReportsPageProps> = ({ on
               <div className="p-4 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] space-y-1">
                 <span className="text-[10px] font-bold text-amber-600 uppercase">Average Absent</span>
                 <p className="font-display font-extrabold text-xl text-amber-600">{selectedSubject.absentCount} Students</p>
+              </div>
+            </div>
+
+            {/* Student Roster Breakdown for Selected Subject */}
+            <div className="pt-4 space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-[#E7E7E7]">
+                <div>
+                  <h3 className="font-display font-extrabold text-base text-[#111827]">
+                    Subject Student Details & Attendance Breakdown
+                  </h3>
+                  <p className="text-xs text-[#6B7280]">
+                    Showing all students mapped to {selectedSubject.name} ({selectedSubject.code})
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => handleExportPDF(selectedSubject)}
+                    className="px-3.5 py-1.5 rounded-full bg-rose-50 text-rose-600 text-xs font-bold border border-rose-200 hover:bg-rose-100 flex items-center gap-1.5"
+                  >
+                    <Download className="w-3.5 h-3.5" /> Export PDF
+                  </button>
+                </div>
+              </div>
+
+              {/* Subject Student Detail Filters */}
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+                {[
+                  { id: 'all', label: 'All Students' },
+                  { id: 'above75', label: 'Above 75%' },
+                  { id: 'below75', label: 'Below 75%' },
+                  { id: 'defaulter', label: 'Defaulters' },
+                  { id: 'presentToday', label: 'Present Today' },
+                  { id: 'absentToday', label: 'Absent Today' }
+                ].map((f) => (
+                  <button
+                    key={f.id}
+                    onClick={() => setSubjectStudentFilter(f.id as any)}
+                    className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all shrink-0 ${
+                      subjectStudentFilter === f.id
+                        ? 'bg-[#6D5DFC] text-white shadow-sm'
+                        : 'bg-[#FAFAFA] text-[#6B7280] border border-[#E7E7E7] hover:bg-[#F3F0FF]'
+                    }`}
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Student Roster Table */}
+              <div className="overflow-x-auto rounded-2xl border border-[#E7E7E7]">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-[#FAFAFA] border-b border-[#E7E7E7] text-[#6B7280] font-bold uppercase text-[10px]">
+                    <tr>
+                      <th className="p-3">Register Number</th>
+                      <th className="p-3">Student Name</th>
+                      <th className="p-3 text-center">Present Count</th>
+                      <th className="p-3 text-center">Absent Count</th>
+                      <th className="p-3 text-center">Attendance %</th>
+                      <th className="p-3">Last Attended Date</th>
+                      <th className="p-3 text-right">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#E7E7E7]">
+                    {((selectedSubject.students || []).filter((st: any) => {
+                      if (subjectStudentFilter === 'above75') return st.percentage >= 75;
+                      if (subjectStudentFilter === 'below75' || subjectStudentFilter === 'defaulter') return st.percentage < 75;
+                      if (subjectStudentFilter === 'presentToday') return st.isPresentToday;
+                      if (subjectStudentFilter === 'absentToday') return st.isAbsentToday;
+                      return true;
+                    })).length === 0 ? (
+                      <tr>
+                        <td colSpan={7} className="p-6 text-center text-[#6B7280]">
+                          No student records match the selected filter pill.
+                        </td>
+                      </tr>
+                    ) : (
+                      (selectedSubject.students || []).filter((st: any) => {
+                        if (subjectStudentFilter === 'above75') return st.percentage >= 75;
+                        if (subjectStudentFilter === 'below75' || subjectStudentFilter === 'defaulter') return st.percentage < 75;
+                        if (subjectStudentFilter === 'presentToday') return st.isPresentToday;
+                        if (subjectStudentFilter === 'absentToday') return st.isAbsentToday;
+                        return true;
+                      }).map((st: any) => (
+                        <tr key={st.id || st.roll_number} className="hover:bg-[#FAFAFA] transition-colors">
+                          <td className="p-3 font-mono font-bold text-[#6D5DFC]">{st.roll_number}</td>
+                          <td className="p-3 font-bold text-[#111827]">{st.name}</td>
+                          <td className="p-3 text-center font-mono text-[#12B76A] font-bold">{st.presentCount}</td>
+                          <td className="p-3 text-center font-mono text-rose-500 font-bold">{st.absentCount}</td>
+                          <td className="p-3 text-center">
+                            <span className={`px-2.5 py-0.5 rounded-full font-mono font-extrabold text-[11px] border ${
+                              st.percentage >= 75
+                                ? 'bg-[#ECFDF5] text-[#12B76A] border-[#12B76A]/20'
+                                : 'bg-rose-50 text-rose-600 border-rose-200'
+                            }`}>
+                              {st.percentage}%
+                            </span>
+                          </td>
+                          <td className="p-3 font-mono text-[#6B7280] text-[11px]">{st.lastAttendedDate}</td>
+                          <td className="p-3 text-right">
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                              st.percentage >= 75
+                                ? 'bg-[#ECFDF5] text-[#12B76A] border-[#12B76A]/20'
+                                : 'bg-rose-50 text-rose-600 border-rose-200'
+                            }`}>
+                              {st.percentage >= 75 ? 'Above 75%' : 'Defaulter'}
+                            </span>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
               </div>
             </div>
 

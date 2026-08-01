@@ -67,12 +67,8 @@ function adminLogin(req, res) {
 }
 
 function isValidPasswordComplexity(pwd) {
-  if (!pwd || pwd.length < 8) return false;
-  const hasUpper = /[A-Z]/.test(pwd);
-  const hasLower = /[a-z]/.test(pwd);
-  const hasNumber = /[0-9]/.test(pwd);
-  const hasSpecial = /[!@#$%^&*(),.?":{}|<>]/.test(pwd);
-  return hasUpper && hasLower && hasNumber && hasSpecial;
+  if (!pwd || pwd.trim().length < 6) return false;
+  return true;
 }
 
 // Flexible Student Login
@@ -151,7 +147,7 @@ async function firstTimePasswordChange(req, res) {
 
   if (!isValidPasswordComplexity(new_password)) {
     return res.status(400).json({
-      error: 'Password must be at least 8 characters long and contain an uppercase letter, lowercase letter, number, and special character (e.g. Student@123).'
+      error: 'Password must be at least 6 characters long.'
     });
   }
 
@@ -203,7 +199,7 @@ async function changePassword(req, res) {
 
   if (!isValidPasswordComplexity(new_password)) {
     return res.status(400).json({
-      error: 'Password must be at least 8 characters long and contain an uppercase letter, lowercase letter, number, and special character (e.g. Student@123).'
+      error: 'Password must be at least 6 characters long.'
     });
   }
 

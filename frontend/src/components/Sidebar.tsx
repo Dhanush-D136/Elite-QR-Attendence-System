@@ -26,6 +26,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => 
 
   const adminNavItems = [
     { id: 'class-management', label: 'Class ERP (AI&DS III-A)', icon: Building2 },
+    { id: 'timetable', label: 'Timetable Management', icon: Calendar },
     { id: 'subjects', label: 'Subject Management', icon: BookOpen },
     { id: 'sessions', label: 'Live QR Session', icon: QrCode },
     { id: 'reports', label: 'Reports & Analytics', icon: FileSpreadsheet },

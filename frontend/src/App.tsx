@@ -15,6 +15,7 @@ import { QRScannerView } from './pages/QRScannerView';
 import { ClassManagementPage } from './pages/ClassManagementPage';
 import { SubjectsPage } from './pages/SubjectsPage';
 import { StudentTimetablePage } from './pages/StudentTimetablePage';
+import { TimetablePage } from './pages/TimetablePage';
 import { RefreshCw } from 'lucide-react';
 
 const MainLayout: React.FC = () => {
@@ -27,7 +28,7 @@ const MainLayout: React.FC = () => {
     if (user) {
       if (user.role === 'admin' && (activeTab === 'student-dashboard' || activeTab === 'qr-scanner' || activeTab === 'student-timetable')) {
         setActiveTab('class-management');
-      } else if (user.role === 'student' && (activeTab === 'class-management' || activeTab === 'sessions' || activeTab === 'dashboard')) {
+      } else if (user.role === 'student' && (activeTab === 'class-management' || activeTab === 'sessions' || activeTab === 'dashboard' || activeTab === 'timetable')) {
         setActiveTab('student-dashboard');
       }
     }
@@ -70,6 +71,7 @@ const MainLayout: React.FC = () => {
           {isAdmin ? (
             <>
               {(activeTab === 'class-management' || activeTab === 'dashboard') && <ClassManagementPage />}
+              {activeTab === 'timetable' && <TimetablePage onNavigate={(tab) => setActiveTab(tab)} />}
               {activeTab === 'subjects' && <SubjectsPage onNavigate={(tab) => setActiveTab(tab)} />}
               {activeTab === 'sessions' && <SessionHub />}
               {activeTab === 'reports' && <AttendanceReportsPage onNavigate={(tab) => setActiveTab(tab)} />}

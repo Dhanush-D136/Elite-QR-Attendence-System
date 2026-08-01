@@ -1,9 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import api from '../services/api';
 import { TimetableItem, Department, SubjectItem } from '../types';
-import { Calendar, Plus, Trash2, Edit3, X, Clock, MapPin, UserCheck, ArrowUpDown, Filter, Sparkles } from 'lucide-react';
+import { Calendar, Plus, Trash2, Edit3, X, Clock, MapPin, UserCheck, ArrowUpDown, Filter, Sparkles, QrCode, ListChecks } from 'lucide-react';
 
-export const TimetablePage: React.FC = () => {
+interface TimetablePageProps {
+  onNavigate?: (tab: string, extraData?: any) => void;
+}
+
+export const TimetablePage: React.FC<TimetablePageProps> = ({ onNavigate }) => {
   const [timetables, setTimetables] = useState<TimetableItem[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [subjects, setSubjects] = useState<SubjectItem[]>([]);
@@ -296,6 +300,24 @@ export const TimetablePage: React.FC = () => {
                         Specific Date: <strong>{tt.date}</strong>
                       </p>
                     )}
+                  </div>
+
+                  {/* Card Quick Action Buttons */}
+                  <div className="pt-3 grid grid-cols-2 gap-2 text-xs border-t border-[#E7E7E7]">
+                    <button
+                      onClick={() => onNavigate && onNavigate('reports', { subject: tt.subject_name })}
+                      className="px-2.5 py-1.5 rounded-xl bg-[#F3F0FF] text-[#6D5DFC] font-bold hover:bg-[#6D5DFC] hover:text-white transition-all flex items-center justify-center gap-1 text-[11px]"
+                    >
+                      <ListChecks className="w-3.5 h-3.5" />
+                      <span>Mark Attendance</span>
+                    </button>
+                    <button
+                      onClick={() => onNavigate && onNavigate('sessions', { subject: tt.subject_name, faculty: tt.faculty_name })}
+                      className="px-2.5 py-1.5 rounded-xl bg-[#ECFDF5] text-[#12B76A] font-bold border border-[#12B76A]/20 hover:bg-[#12B76A] hover:text-white transition-all flex items-center justify-center gap-1 text-[11px]"
+                    >
+                      <QrCode className="w-3.5 h-3.5" />
+                      <span>Generate QR</span>
+                    </button>
                   </div>
                 </div>
               </div>
