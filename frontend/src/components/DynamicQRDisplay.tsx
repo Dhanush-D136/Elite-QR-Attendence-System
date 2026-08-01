@@ -31,15 +31,25 @@ export const DynamicQRDisplay: React.FC<DynamicQRDisplayProps> = ({
 }) => {
   const [attendanceCode, setAttendanceCode] = useState<string>('4821');
   const [timestamp, setTimestamp] = useState<number>(Date.now());
+  const [parsedPayloadObj, setParsedPayloadObj] = useState<any>(null);
   const [qrSvg, setQrSvg] = useState<string>('');
   const [rawPayload, setRawPayload] = useState<string>('');
   const [showPayloadModal, setShowPayloadModal] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [timeLeft, setTimeLeft] = useState<number>(5);
+  const [timeLeft, setTimeLeft] = useState<number>(1);
 
   const renderQRCode = async (payloadObj: any) => {
     const payloadStr = typeof payloadObj === 'string' ? payloadObj : JSON.stringify(payloadObj);
     setRawPayload(payloadStr);
+    if (typeof payloadObj === 'object' && payloadObj !== null) {
+      setParsedPayloadObj(payloadObj);
+    } else {
+      try {
+        setParsedPayloadObj(JSON.parse(payloadStr));
+      } catch (e) {
+        setParsedPayloadObj(null);
+      }
+    }
 
     try {
       const svg = await QRCode.toString(payloadStr, {
@@ -67,7 +77,7 @@ export const DynamicQRDisplay: React.FC<DynamicQRDisplayProps> = ({
 
       setAttendanceCode(newCode);
       setTimestamp(payload.timestamp || Date.now());
-      setTimeLeft(5);
+      setTimeLeft(1);
       await renderQRCode(payload);
     } catch (err) {
       console.error('Failed to rotate QR', err);
@@ -83,7 +93,7 @@ export const DynamicQRDisplay: React.FC<DynamicQRDisplayProps> = ({
       setTimeLeft((prev) => {
         if (prev <= 1) {
           rotateQR();
-          return 5;
+          return 1;
         }
         return prev - 1;
       });
@@ -95,7 +105,7 @@ export const DynamicQRDisplay: React.FC<DynamicQRDisplayProps> = ({
         const payload = data.qrPayload || data;
         setAttendanceCode(payload.nonce || data.attendanceCode);
         setTimestamp(payload.timestamp || Date.now());
-        setTimeLeft(5);
+        setTimeLeft(1);
         renderQRCode(payload);
       }
     });
@@ -110,9 +120,9 @@ export const DynamicQRDisplay: React.FC<DynamicQRDisplayProps> = ({
     <div className="bg-white rounded-[24px] p-6 lg:p-8 border border-[#E7E7E7] shadow-enterprise relative overflow-hidden text-center max-w-md mx-auto space-y-6 animate-fade-in">
       {/* Header Info */}
       <div className="space-y-2">
-        <div className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-[#F3F0FF] border border-[#6D5DFC]/20 text-[#6D5DFC] text-xs font-bold uppercase tracking-wider">
-          <Sparkles className="w-3.5 h-3.5" />
-          5s Dynamic Rotating QR
+        <div className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-[#ECFDF5] border border-[#12B76A]/30 text-[#12B76A] text-xs font-bold uppercase tracking-wider">
+          <Sparkles className="w-3.5 h-3.5 animate-spin text-[#12B76A]" />
+          1s Dynamic Real-Time Rotating QR
         </div>
         
         <div className="pt-1">
@@ -144,31 +154,61 @@ export const DynamicQRDisplay: React.FC<DynamicQRDisplayProps> = ({
         {/* Active Code Badge */}
         <div className="mt-2 inline-flex items-center gap-2 px-5 py-2 rounded-2xl bg-[#F7F3EE] border border-[#E7E7E7] text-[#111827] font-mono text-sm font-bold shadow-sm">
           <Key className="w-4 h-4 text-[#6D5DFC] animate-pulse" />
-          <span>Active Code: <strong className="text-[#6D5DFC] text-2xl tracking-widest font-extrabold ml-1">{attendanceCode}</strong></span>
+          <span>Active Nonce Token: <strong className="text-[#6D5DFC] text-xl tracking-wider font-extrabold ml-1">{attendanceCode}</strong></span>
         </div>
       </div>
 
-      {/* QR Code Container */}
+      {/* QR Code Container with Force Key Re-render */}
       <div className="relative p-5 rounded-2xl bg-white border-2 border-[#E7E7E7] shadow-sm flex flex-col items-center justify-center min-h-[280px]">
         {isLoading && !qrSvg ? (
           <div className="flex flex-col items-center gap-3 text-[#6B7280]">
             <RefreshCw className="w-8 h-8 animate-spin text-[#6D5DFC]" />
-            <p className="text-xs font-bold">Generating Dynamic QR...</p>
+            <p className="text-xs font-bold">Generating 1s Dynamic QR...</p>
           </div>
         ) : (
           <>
             <div
-              className="w-full max-w-[260px] mx-auto filter drop-shadow-sm"
+              key={rawPayload}
+              className="w-full max-w-[260px] mx-auto filter drop-shadow-sm transition-all duration-300"
               dangerouslySetInnerHTML={{ __html: qrSvg }}
             />
 
             {/* Countdown Badge */}
-            <div className="mt-3 flex items-center justify-center gap-2 text-xs font-mono text-[#111827] bg-[#F3F0FF] px-4 py-1.5 rounded-full border border-[#6D5DFC]/20 font-bold">
-              <Clock className="w-3.5 h-3.5 text-[#6D5DFC] animate-spin" />
-              <span>Rotation in: <strong className="text-[#6D5DFC] text-sm font-extrabold">{timeLeft}s</strong></span>
+            <div className="mt-3 flex items-center justify-center gap-2 text-xs font-mono text-[#111827] bg-[#ECFDF5] px-4 py-1.5 rounded-full border border-[#12B76A]/30 font-bold">
+              <Clock className="w-3.5 h-3.5 text-[#12B76A] animate-spin" />
+              <span>1s Real-Time Server Sync: <strong className="text-[#12B76A] text-sm font-extrabold">{timeLeft}s</strong></span>
             </div>
           </>
         )}
+      </div>
+
+      {/* ADMIN REAL-TIME SECURITY DEBUG PANEL */}
+      <div className="p-4 rounded-2xl bg-[#FAFAFA] border border-[#6D5DFC]/20 text-left text-xs space-y-2 font-mono shadow-sm">
+        <div className="flex items-center justify-between pb-2 border-b border-[#E7E7E7]">
+          <span className="font-bold text-[#6D5DFC] flex items-center gap-1.5">
+            <ShieldCheck className="w-4 h-4 text-[#12B76A]" /> Admin Live Security Debug Panel
+          </span>
+          <span className="text-[10px] bg-[#ECFDF5] text-[#12B76A] px-2 py-0.5 rounded-full font-bold">1s Live Nonce</span>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2 text-[11px]">
+          <div>
+            <span className="text-[#6B7280] block text-[10px]">Active Nonce:</span>
+            <strong className="text-[#6D5DFC] font-bold">{attendanceCode}</strong>
+          </div>
+          <div>
+            <span className="text-[#6B7280] block text-[10px]">Timestamp (ms):</span>
+            <strong className="text-[#111827] font-bold">{timestamp}</strong>
+          </div>
+          <div>
+            <span className="text-[#6B7280] block text-[10px]">Expires At:</span>
+            <strong className="text-[#12B76A] font-bold">{timestamp + 1000}</strong>
+          </div>
+          <div>
+            <span className="text-[#6B7280] block text-[10px]">HMAC Sig:</span>
+            <strong className="text-purple-600 font-bold truncate block">{parsedPayloadObj?.signature ? parsedPayloadObj.signature.slice(0, 10) + '...' : 'Signed'}</strong>
+          </div>
+        </div>
       </div>
 
       {/* Payload Modal Toggle */}
@@ -177,12 +217,12 @@ export const DynamicQRDisplay: React.FC<DynamicQRDisplayProps> = ({
         className="px-4 py-2 rounded-full bg-white border border-[#E7E7E7] text-[#111827] hover:bg-[#FAFAFA] text-xs font-bold flex items-center justify-center gap-2 mx-auto shadow-sm"
       >
         <Eye className="w-3.5 h-3.5 text-[#6D5DFC]" />
-        <span>{showPayloadModal ? 'Hide QR Payload' : 'Show Current QR Payload'}</span>
+        <span>{showPayloadModal ? 'Hide Full QR Payload JSON' : 'Show Full QR Payload JSON'}</span>
       </button>
 
       {showPayloadModal && (
         <div className="p-4 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-left text-xs font-mono space-y-2 text-[#111827]">
-          <p className="text-[10px] text-[#6D5DFC] font-bold uppercase">Dynamic QR Payload:</p>
+          <p className="text-[10px] text-[#6D5DFC] font-bold uppercase">Dynamic 1s QR Payload (JSON):</p>
           <pre className="text-[11px] bg-white p-3 rounded-xl border border-[#E7E7E7] text-[#12B76A] font-bold overflow-x-auto">
             {rawPayload}
           </pre>
@@ -196,7 +236,7 @@ export const DynamicQRDisplay: React.FC<DynamicQRDisplayProps> = ({
             <ShieldCheck className="w-3.5 h-3.5" />
             Instant Scan
           </div>
-          <p className="text-[10px] text-[#6B7280] font-medium mt-0.5">Anti-tamper HMAC token signed.</p>
+          <p className="text-[10px] text-[#6B7280] font-medium mt-0.5">Anti-tamper HMAC SHA256 signed.</p>
         </div>
 
         <div className="p-3 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7]">

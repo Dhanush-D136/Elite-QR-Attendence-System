@@ -1,7 +1,7 @@
 const crypto = require('crypto');
 
 const SECRET_KEY = process.env.QR_SECRET || 'smartattend_super_secret_qr_key_2026';
-const WINDOW_SECONDS = 5; // 5-second dynamic rotation interval
+const WINDOW_SECONDS = 1; // 1-second dynamic rotation interval
 
 /**
  * Generates standardized real-time dynamic QR payload containing:
@@ -9,8 +9,8 @@ const WINDOW_SECONDS = 5; // 5-second dynamic rotation interval
  */
 function generateDynamicToken(sessionId, subjectId = 'SUB-101', facultyId = 'FAC-001') {
   const nowMs = Date.now();
-  const expiresAt = nowMs + WINDOW_SECONDS * 1000;
-  const nonce = crypto.randomBytes(8).toString('hex');
+  const expiresAt = nowMs + 1000;
+  const nonce = crypto.randomBytes(6).toString('hex').toUpperCase();
 
   const rawData = `${sessionId}:${subjectId}:${facultyId}:${nowMs}:${nonce}:${expiresAt}`;
   const signature = crypto

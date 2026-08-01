@@ -11,17 +11,29 @@ function generateAndCacheLatestQR(sessionId, subject = 'Subject', faculty = 'Fac
   return { token, payload };
 }
 
-// Background 5-second dynamic QR rotation for active sessions
+// Background 1-second dynamic QR rotation for active sessions
 setInterval(() => {
   db.all("SELECT id, subject, faculty_name FROM attendance_sessions WHERE status = 'active'", [], (err, activeSessions) => {
     if (!err && activeSessions && activeSessions.length > 0) {
       activeSessions.forEach((sess) => {
         const { token, payload } = generateAndCacheLatestQR(sess.id, sess.subject, sess.faculty_name);
         db.run("UPDATE attendance_sessions SET attendance_code = ?, active_token = ?, token = ? WHERE id = ?", [payload.nonce, payload.nonce, token, sess.id]);
+
+        if (global.io) {
+          global.io.emit('qr_rotated', {
+            sessionId: sess.id,
+            attendanceCode: payload.nonce,
+            qrPayload: payload,
+            token,
+            timestamp: payload.timestamp,
+            expiresAt: payload.expiresAt,
+            subject: sess.subject
+          });
+        }
       });
     }
   });
-}, 5000);
+}, 1000);
 
 // Helper to generate a random 4-digit attendance code (e.g. 4821, 7194, 3058)
 function generate4DigitCode() {
