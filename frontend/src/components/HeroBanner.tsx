@@ -23,15 +23,20 @@ export const HeroBanner: React.FC = () => {
 
   return (
     <div className="relative w-full rounded-[28px] overflow-hidden shadow-enterprise border border-[#E7E7E7] group transition-all duration-500 animate-fade-in my-2">
-      {/* Smart Responsive Container */}
-      <div className="relative w-full h-[220px] sm:h-[280px] md:h-[340px] bg-[#111827] overflow-hidden flex items-center justify-center">
-        {/* Background Cover Image with Micro-Zoom */}
+      {/* Smart Responsive Container with Full Image Visibility */}
+      <div className="relative w-full h-[220px] sm:h-[280px] md:h-[360px] bg-[#0B0F19] overflow-hidden flex items-center justify-center">
+        {/* Background Blurred Fill Layer */}
+        <img
+          src={bannerUrl}
+          alt=""
+          className="absolute inset-0 w-full h-full object-cover blur-md opacity-40 scale-110"
+        />
+        {/* Main Foreground Full-Visibility Image (No Cropping) */}
         <img
           src={bannerUrl}
           alt="Elite Minds Family Hero Cover"
-          className="w-full h-full object-cover object-center transform group-hover:scale-105 transition-transform duration-700 ease-out"
+          className="relative max-w-full max-h-full object-contain object-center z-0 transition-transform duration-700 ease-out"
           onError={(e) => {
-            // Fallback if custom image fails to load
             (e.target as HTMLImageElement).src = '/family.jpg';
           }}
         />

@@ -54,11 +54,9 @@ function getStudents(req, res) {
     const formattedStudents = rows.map((st) => {
       const total = st.total_sessions || 0;
       const attended = st.attended_count || 0;
-      let rate = 100;
+      let rate = 0;
       if (total > 0) {
         rate = Math.min(100, Math.round((attended / total) * 100));
-      } else if (attended > 0) {
-        rate = 100;
       } else {
         rate = 0;
       }
@@ -393,9 +391,9 @@ function getStudentProfileDetails(req, res) {
           [student.department || 'AI & Data Science', student.year || 3, student.section || 'A'],
           (err3, totalRow) => {
             const presentCount = (records || []).filter((r) => r.status === 'present').length;
-            const totalSessions = totalRow ? totalRow.total_sessions : presentCount;
+            const totalSessions = totalRow ? totalRow.total_sessions : 0;
             const absentCount = Math.max(0, totalSessions - presentCount);
-            const overallRate = totalSessions > 0 ? Math.min(100, Math.round((presentCount / totalSessions) * 100)) : 100;
+            const overallRate = totalSessions > 0 ? Math.min(100, Math.round((presentCount / totalSessions) * 100)) : 0;
             const lastAttendanceDate = records && records.length > 0 ? records[0].attendance_time : null;
 
             // Login History

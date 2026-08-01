@@ -108,9 +108,8 @@ function getFacultyStudents(req, res) {
       const students = (rows || []).map((st) => {
         const total = st.total_sessions || 0;
         const attended = st.attended_count || 0;
-        let rate = 100;
+        let rate = 0;
         if (total > 0) rate = Math.min(100, Math.round((attended / total) * 100));
-        else if (attended > 0) rate = 100;
         else rate = 0;
 
         return {

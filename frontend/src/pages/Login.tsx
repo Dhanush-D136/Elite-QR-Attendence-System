@@ -63,11 +63,16 @@ export const Login: React.FC = () => {
 
       {/* LEFT SIDE: 65% BRAND EXPERIENCE & CINEMATIC FAMILY HERO COVER */}
       <div className="lg:w-[65%] w-full relative min-h-[340px] sm:min-h-[420px] lg:min-h-screen bg-[#0B0F19] flex flex-col justify-between p-6 sm:p-10 lg:p-14 overflow-hidden">
-        {/* Full-Height Background Cover Image */}
+        {/* Full-Height Background Cover Image with Dual Layer Contain */}
+        <img
+          src="/family.jpg"
+          alt=""
+          className="absolute inset-0 w-full h-full object-cover blur-sm opacity-50 scale-105"
+        />
         <img
           src="/family.jpg"
           alt="Elite Minds Family Hero Cover"
-          className="absolute inset-0 w-full h-full object-cover object-center transform hover:scale-105 transition-transform duration-1000 ease-out filter contrast-105"
+          className="absolute inset-0 w-full h-full object-contain object-center z-0 transition-transform duration-1000 ease-out filter contrast-105"
           onError={(e) => {
             (e.target as HTMLImageElement).src = '/hero_banner.png';
           }}
