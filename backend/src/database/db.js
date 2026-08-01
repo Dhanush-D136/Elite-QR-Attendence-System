@@ -61,6 +61,29 @@ function runMigrations() {
           }
         });
 
+        // Migrate faculty table columns if missing
+        db.all('PRAGMA table_info(faculty)', [], (errFac, facColumns) => {
+          if (facColumns) {
+            const facColNames = facColumns.map((c) => c.name.toLowerCase());
+            const facMigrations = [
+              { col: 'status', type: "TEXT DEFAULT 'Active'" },
+              { col: 'password_changed', type: 'INTEGER DEFAULT 0' },
+              { col: 'must_change_password', type: 'INTEGER DEFAULT 0' },
+              { col: 'last_login', type: 'DATETIME' },
+              { col: 'login_count', type: 'INTEGER DEFAULT 0' },
+              { col: 'failed_login_attempts', type: 'INTEGER DEFAULT 0' },
+              { col: 'updated_at', type: 'DATETIME' }
+            ];
+            facMigrations.forEach(({ col, type }) => {
+              if (!facColNames.includes(col.toLowerCase())) {
+                try {
+                  db.run(`ALTER TABLE faculty ADD COLUMN ${col} ${type};`);
+                } catch (e) {}
+              }
+            });
+          }
+        });
+
         // Mandatory Student Email Standardization Migration: Purge all fake email domains
         db.run(`
           UPDATE users 
@@ -193,16 +216,16 @@ function runMigrations() {
                 );
 
                 const SEMESTER_5_SUBJECTS = [
-                  { code: '21AI55T', name: 'Knowledge Engineering', faculty_name: 'Mrs Nivetha P', type: 'Theory', credits: 3 },
-                  { code: '21AI51T', name: 'Programming Language for AI', faculty_name: 'Dr Rajesh Kumar', type: 'Theory', credits: 3 },
+                  { code: '21AI51T', name: 'Programming Language for AI', faculty_name: 'Mrs Nivetha P', type: 'Theory', credits: 3 },
+                  { code: '21AI55T', name: 'Knowledge Engineering', faculty_name: 'Mrs Krithiga', type: 'Theory', credits: 3 },
                   { code: '21HI52T', name: 'Data Analytics', faculty_name: 'Mrs Gowthami K', type: 'Theory', credits: 3 },
-                  { code: '21EE01P', name: 'Mini Project - I', faculty_name: 'Mr Arun Kumar', type: 'Project', credits: 2 },
                   { code: '21HI53IT', name: 'Web Technology', faculty_name: 'Mrs Vasanthapriya M J T', type: 'Theory', credits: 3 },
-                  { code: '21MB03OT', name: 'Open Elective Subject', faculty_name: 'Faculty Member', type: 'Theory', credits: 3 },
-                  { code: '21HC54T', name: 'Block Chain Technology', faculty_name: 'Mrs Deepa R', type: 'Theory', credits: 3 },
-                  { code: '21AI57P', name: 'Data Analytics Laboratory', faculty_name: 'Mrs Gowthami K', type: 'Lab', credits: 2 },
-                  { code: '21EE03P', name: 'Technical Seminar', faculty_name: 'Mr Arun Kumar', type: 'Seminar', credits: 1 },
-                  { code: 'SPORTS_HOUR', name: 'Sports', faculty_name: 'Physical Director', type: 'Sports', credits: 0 }
+                  { code: '21HC54T', name: 'Blockchain Technology', faculty_name: 'Mr Ramajayam', type: 'Theory', credits: 3 },
+                  { code: '21AI57P', name: 'Data Analytics Laboratory', faculty_name: 'Mrs Gowthami K / Mr Balaji M', type: 'Lab', credits: 2 },
+                  { code: '21EE01P', name: 'Mini Project - I', faculty_name: 'Mr Balaarunesh G', type: 'Project', credits: 2 },
+                  { code: '21EE03P', name: 'Technical Seminar', faculty_name: 'Mr Balaarunesh G', type: 'Seminar', credits: 1 },
+                  { code: '21MB03OT', name: 'Entrepreneurship Development', faculty_name: 'Open Elective', type: 'Theory', credits: 3 },
+                  { code: 'SPORTS_HOUR', name: 'Sports', faculty_name: 'Sports Department', type: 'Sports', credits: 0 }
                 ];
 
                 SEMESTER_5_SUBJECTS.forEach((sub) => {
@@ -218,54 +241,54 @@ function runMigrations() {
                 db.run("DELETE FROM timetables WHERE department = 'AI & DS' AND year = 3 AND section = 'A'", () => {
                   const MASTER_TIMETABLE_SLOTS = [
                     // Monday
-                    { day: 'Monday', period_number: 1, code: '21AI55T', name: 'Knowledge Engineering', faculty: 'Mrs Nivetha P', start: '08:15 AM', end: '09:05 AM', room: 'F305' },
-                    { day: 'Monday', period_number: 2, code: '21AI51T', name: 'Programming Language for AI', faculty: 'Dr Rajesh Kumar', start: '09:05 AM', end: '09:55 AM', room: 'F305' },
+                    { day: 'Monday', period_number: 1, code: '21AI55T', name: 'Knowledge Engineering', faculty: 'Mrs Krithiga', start: '08:15 AM', end: '09:05 AM', room: 'F305' },
+                    { day: 'Monday', period_number: 2, code: '21AI51T', name: 'Programming Language for AI', faculty: 'Mrs Nivetha P', start: '09:05 AM', end: '09:55 AM', room: 'F305' },
                     { day: 'Monday', period_number: 3, code: '21HI52T', name: 'Data Analytics', faculty: 'Mrs Gowthami K', start: '10:10 AM', end: '11:00 AM', room: 'F305' },
-                    { day: 'Monday', period_number: 4, code: '21EE01P', name: 'Mini Project - I', faculty: 'Mr Arun Kumar', start: '11:00 AM', end: '11:50 AM', room: 'F305' },
+                    { day: 'Monday', period_number: 4, code: '21EE01P', name: 'Mini Project - I', faculty: 'Mr Balaarunesh G', start: '11:00 AM', end: '11:50 AM', room: 'F305' },
                     { day: 'Monday', period_number: 5, code: '21HI53IT', name: 'Web Technology', faculty: 'Mrs Vasanthapriya M J T', start: '11:50 AM', end: '12:35 PM', room: 'F305' },
                     { day: 'Monday', period_number: 6, code: '21HI53IT', name: 'Web Technology', faculty: 'Mrs Vasanthapriya M J T', start: '01:15 PM', end: '02:00 PM', room: 'F305' },
                     { day: 'Monday', period_number: 7, code: '21HI53IT', name: 'Web Technology', faculty: 'Mrs Vasanthapriya M J T', start: '02:00 PM', end: '02:45 PM', room: 'F305' },
                     { day: 'Monday', period_number: 8, code: '21HI53IT', name: 'Web Technology', faculty: 'Mrs Vasanthapriya M J T', start: '02:45 PM', end: '03:30 PM', room: 'F305' },
 
                     // Tuesday
-                    { day: 'Tuesday', period_number: 1, code: '21MB03OT', name: 'Open Elective Subject', faculty: 'Faculty Member', start: '08:15 AM', end: '09:05 AM', room: 'F305' },
-                    { day: 'Tuesday', period_number: 2, code: '21MB03OT', name: 'Open Elective Subject', faculty: 'Faculty Member', start: '09:05 AM', end: '09:55 AM', room: 'F305' },
+                    { day: 'Tuesday', period_number: 1, code: '21MB03OT', name: 'Entrepreneurship Development', faculty: 'Open Elective', start: '08:15 AM', end: '09:05 AM', room: 'F305' },
+                    { day: 'Tuesday', period_number: 2, code: '21MB03OT', name: 'Entrepreneurship Development', faculty: 'Open Elective', start: '09:05 AM', end: '09:55 AM', room: 'F305' },
                     { day: 'Tuesday', period_number: 3, code: '21HI52T', name: 'Data Analytics', faculty: 'Mrs Gowthami K', start: '10:10 AM', end: '11:00 AM', room: 'F305' },
-                    { day: 'Tuesday', period_number: 4, code: '21AI55T', name: 'Knowledge Engineering', faculty: 'Mrs Nivetha P', start: '11:00 AM', end: '11:50 AM', room: 'F305' },
-                    { day: 'Tuesday', period_number: 5, code: '21HC54T', name: 'Block Chain Technology', faculty: 'Mrs Deepa R', start: '11:50 AM', end: '12:35 PM', room: 'F305' },
+                    { day: 'Tuesday', period_number: 4, code: '21AI55T', name: 'Knowledge Engineering', faculty: 'Mrs Krithiga', start: '11:00 AM', end: '11:50 AM', room: 'F305' },
+                    { day: 'Tuesday', period_number: 5, code: '21HC54T', name: 'Blockchain Technology', faculty: 'Mr Ramajayam', start: '11:50 AM', end: '12:35 PM', room: 'F305' },
                     { day: 'Tuesday', period_number: 6, code: '21HI52T', name: 'Data Analytics', faculty: 'Mrs Gowthami K', start: '01:15 PM', end: '02:00 PM', room: 'F305' },
                     { day: 'Tuesday', period_number: 7, code: '21HI53IT', name: 'Web Technology', faculty: 'Mrs Vasanthapriya M J T', start: '02:00 PM', end: '02:45 PM', room: 'F305' },
-                    { day: 'Tuesday', period_number: 8, code: '21HC54T', name: 'Block Chain Technology', faculty: 'Mrs Deepa R', start: '02:45 PM', end: '03:30 PM', room: 'F305' },
+                    { day: 'Tuesday', period_number: 8, code: '21HC54T', name: 'Blockchain Technology', faculty: 'Mr Ramajayam', start: '02:45 PM', end: '03:30 PM', room: 'F305' },
 
                     // Wednesday
                     { day: 'Wednesday', period_number: 1, code: '21HI53IT', name: 'Web Technology', faculty: 'Mrs Vasanthapriya M J T', start: '08:15 AM', end: '09:05 AM', room: 'F305' },
-                    { day: 'Wednesday', period_number: 2, code: '21AI57P', name: 'Data Analytics Laboratory', faculty: 'Mrs Gowthami K', start: '09:05 AM', end: '09:55 AM', room: 'Lab 2' },
-                    { day: 'Wednesday', period_number: 3, code: '21AI57P', name: 'Data Analytics Laboratory', faculty: 'Mrs Gowthami K', start: '10:10 AM', end: '11:00 AM', room: 'Lab 2' },
-                    { day: 'Wednesday', period_number: 4, code: '21AI57P', name: 'Data Analytics Laboratory', faculty: 'Mrs Gowthami K', start: '11:00 AM', end: '11:50 AM', room: 'Lab 2' },
-                    { day: 'Wednesday', period_number: 5, code: '21AI57P', name: 'Data Analytics Laboratory', faculty: 'Mrs Gowthami K', start: '11:50 AM', end: '12:35 PM', room: 'Lab 2' },
-                    { day: 'Wednesday', period_number: 6, code: '21AI51T', name: 'Programming Language for AI', faculty: 'Dr Rajesh Kumar', start: '01:15 PM', end: '02:00 PM', room: 'F305' },
-                    { day: 'Wednesday', period_number: 7, code: '21AI55T', name: 'Knowledge Engineering', faculty: 'Mrs Nivetha P', start: '02:00 PM', end: '02:45 PM', room: 'F305' },
-                    { day: 'Wednesday', period_number: 8, code: 'SPORTS_HOUR', name: 'Sports', faculty: 'Physical Director', start: '02:45 PM', end: '03:30 PM', room: 'Ground' },
+                    { day: 'Wednesday', period_number: 2, code: '21AI57P', name: 'Data Analytics Laboratory', faculty: 'Mrs Gowthami K / Mr Balaji M', start: '09:05 AM', end: '09:55 AM', room: 'Lab 2' },
+                    { day: 'Wednesday', period_number: 3, code: '21AI57P', name: 'Data Analytics Laboratory', faculty: 'Mrs Gowthami K / Mr Balaji M', start: '10:10 AM', end: '11:00 AM', room: 'Lab 2' },
+                    { day: 'Wednesday', period_number: 4, code: '21AI57P', name: 'Data Analytics Laboratory', faculty: 'Mrs Gowthami K / Mr Balaji M', start: '11:00 AM', end: '11:50 AM', room: 'Lab 2' },
+                    { day: 'Wednesday', period_number: 5, code: '21AI57P', name: 'Data Analytics Laboratory', faculty: 'Mrs Gowthami K / Mr Balaji M', start: '11:50 AM', end: '12:35 PM', room: 'Lab 2' },
+                    { day: 'Wednesday', period_number: 6, code: '21AI51T', name: 'Programming Language for AI', faculty: 'Mrs Nivetha P', start: '01:15 PM', end: '02:00 PM', room: 'F305' },
+                    { day: 'Wednesday', period_number: 7, code: '21AI55T', name: 'Knowledge Engineering', faculty: 'Mrs Krithiga', start: '02:00 PM', end: '02:45 PM', room: 'F305' },
+                    { day: 'Wednesday', period_number: 8, code: 'SPORTS_HOUR', name: 'Sports', faculty: 'Sports Department', start: '02:45 PM', end: '03:30 PM', room: 'Ground' },
 
                     // Thursday
-                    { day: 'Thursday', period_number: 1, code: '21MB03OT', name: 'Open Elective Subject', faculty: 'Faculty Member', start: '08:15 AM', end: '09:05 AM', room: 'F305' },
-                    { day: 'Thursday', period_number: 2, code: '21MB03OT', name: 'Open Elective Subject', faculty: 'Faculty Member', start: '09:05 AM', end: '09:55 AM', room: 'F305' },
-                    { day: 'Thursday', period_number: 3, code: '21AI51T', name: 'Programming Language for AI', faculty: 'Dr Rajesh Kumar', start: '10:10 AM', end: '11:00 AM', room: 'F305' },
+                    { day: 'Thursday', period_number: 1, code: '21MB03OT', name: 'Entrepreneurship Development', faculty: 'Open Elective', start: '08:15 AM', end: '09:05 AM', room: 'F305' },
+                    { day: 'Thursday', period_number: 2, code: '21MB03OT', name: 'Entrepreneurship Development', faculty: 'Open Elective', start: '09:05 AM', end: '09:55 AM', room: 'F305' },
+                    { day: 'Thursday', period_number: 3, code: '21AI51T', name: 'Programming Language for AI', faculty: 'Mrs Nivetha P', start: '10:10 AM', end: '11:00 AM', room: 'F305' },
                     { day: 'Thursday', period_number: 4, code: '21HI52T', name: 'Data Analytics', faculty: 'Mrs Gowthami K', start: '11:00 AM', end: '11:50 AM', room: 'F305' },
-                    { day: 'Thursday', period_number: 5, code: '21HC54T', name: 'Block Chain Technology', faculty: 'Mrs Deepa R', start: '11:50 AM', end: '12:35 PM', room: 'F305' },
-                    { day: 'Thursday', period_number: 6, code: '21AI55T', name: 'Knowledge Engineering', faculty: 'Mrs Nivetha P', start: '01:15 PM', end: '02:00 PM', room: 'F305' },
-                    { day: 'Thursday', period_number: 7, code: '21HC54T', name: 'Block Chain Technology', faculty: 'Mrs Deepa R', start: '02:00 PM', end: '02:45 PM', room: 'F305' },
-                    { day: 'Thursday', period_number: 8, code: '21AI51T', name: 'Programming Language for AI', faculty: 'Dr Rajesh Kumar', start: '02:45 PM', end: '03:30 PM', room: 'F305' },
+                    { day: 'Thursday', period_number: 5, code: '21HC54T', name: 'Blockchain Technology', faculty: 'Mr Ramajayam', start: '11:50 AM', end: '12:35 PM', room: 'F305' },
+                    { day: 'Thursday', period_number: 6, code: '21AI55T', name: 'Knowledge Engineering', faculty: 'Mrs Krithiga', start: '01:15 PM', end: '02:00 PM', room: 'F305' },
+                    { day: 'Thursday', period_number: 7, code: '21HC54T', name: 'Blockchain Technology', faculty: 'Mr Ramajayam', start: '02:00 PM', end: '02:45 PM', room: 'F305' },
+                    { day: 'Thursday', period_number: 8, code: '21AI51T', name: 'Programming Language for AI', faculty: 'Mrs Nivetha P', start: '02:45 PM', end: '03:30 PM', room: 'F305' },
 
                     // Friday
-                    { day: 'Friday', period_number: 1, code: '21EE01P', name: 'Mini Project - I', faculty: 'Mr Arun Kumar', start: '08:15 AM', end: '09:05 AM', room: 'F305' },
-                    { day: 'Friday', period_number: 2, code: '21EE01P', name: 'Mini Project - I', faculty: 'Mr Arun Kumar', start: '09:05 AM', end: '09:55 AM', room: 'F305' },
+                    { day: 'Friday', period_number: 1, code: '21EE01P', name: 'Mini Project - I', faculty: 'Mr Balaarunesh G', start: '08:15 AM', end: '09:05 AM', room: 'F305' },
+                    { day: 'Friday', period_number: 2, code: '21EE01P', name: 'Mini Project - I', faculty: 'Mr Balaarunesh G', start: '09:05 AM', end: '09:55 AM', room: 'F305' },
                     { day: 'Friday', period_number: 3, code: '21HI52T', name: 'Data Analytics', faculty: 'Mrs Gowthami K', start: '10:10 AM', end: '11:00 AM', room: 'F305' },
-                    { day: 'Friday', period_number: 4, code: '21EE03P', name: 'Technical Seminar', faculty: 'Mr Arun Kumar', start: '11:00 AM', end: '11:50 AM', room: 'F305' },
-                    { day: 'Friday', period_number: 5, code: '21AI51T', name: 'Programming Language for AI', faculty: 'Dr Rajesh Kumar', start: '11:50 AM', end: '12:35 PM', room: 'F305' },
+                    { day: 'Friday', period_number: 4, code: '21EE03P', name: 'Technical Seminar', faculty: 'Mr Balaarunesh G', start: '11:00 AM', end: '11:50 AM', room: 'F305' },
+                    { day: 'Friday', period_number: 5, code: '21AI51T', name: 'Programming Language for AI', faculty: 'Mrs Nivetha P', start: '11:50 AM', end: '12:35 PM', room: 'F305' },
                     { day: 'Friday', period_number: 6, code: '21HI52T', name: 'Data Analytics', faculty: 'Mrs Gowthami K', start: '01:15 PM', end: '02:00 PM', room: 'F305' },
-                    { day: 'Friday', period_number: 7, code: '21AI55T', name: 'Knowledge Engineering', faculty: 'Mrs Nivetha P', start: '02:00 PM', end: '02:45 PM', room: 'F305' },
-                    { day: 'Friday', period_number: 8, code: '21HC54T', name: 'Block Chain Technology', faculty: 'Mrs Deepa R', start: '02:45 PM', end: '03:30 PM', room: 'F305' }
+                    { day: 'Friday', period_number: 7, code: '21AI55T', name: 'Knowledge Engineering', faculty: 'Mrs Krithiga', start: '02:00 PM', end: '02:45 PM', room: 'F305' },
+                    { day: 'Friday', period_number: 8, code: 'RESERVED', name: 'Reserved Hour', faculty: 'Admin Configured', start: '02:45 PM', end: '03:30 PM', room: 'F305' }
                   ];
 
                   MASTER_TIMETABLE_SLOTS.forEach((slot) => {
@@ -618,32 +641,37 @@ function initDb() {
         const defaultHash = await bcrypt.hash('1234', 10);
         db.run(
           `INSERT OR IGNORE INTO faculty (id, faculty_code, name, department, designation, email, phone, qualification, experience, specialization, profile_photo, status, password_hash)
-           VALUES ('FAC-001-ID', 'FAC001', 'Mrs Nivetha P', 'AI & Data Science', 'Assistant Professor', 'nivetha@velhightech.com', '+91 9876501234', 'M.Tech (AI & DS), Ph.D (Pursuing)', '6 Years Teaching', 'Artificial Intelligence & Web Security', 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150', 'Active', ?)`,
+           VALUES ('FAC-001-ID', 'FAC001', 'Mrs Nivetha P', 'AI & Data Science', 'Assistant Professor', 'nivetha@velhightech.com', '+91 9876501234', 'M.Tech (AI & DS)', '6 Years Teaching', 'Programming Language for AI', 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150', 'Active', ?)`,
           [defaultHash]
         );
         db.run(
           `INSERT OR IGNORE INTO faculty (id, faculty_code, name, department, designation, email, phone, qualification, experience, specialization, profile_photo, status, password_hash)
-           VALUES ('FAC-002-ID', 'FAC002', 'Mr Abaskar N', 'AI & Data Science', 'Associate Professor', 'abaskarn@velhightech.com', '+91 9876505678', 'M.E. (Computer Science)', '9 Years Teaching', 'Machine Learning & Knowledge Engineering', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150', 'Active', ?)`,
+           VALUES ('FAC-003-ID', 'FAC003', 'Mrs Vasanthapriya M J T', 'AI & Data Science', 'Assistant Professor', 'vasanthapriya@velhightech.com', '+91 9876509012', 'M.Tech (Computer Science)', '7 Years Teaching', 'Web Technology', 'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=150', 'Active', ?)`,
           [defaultHash]
         );
         db.run(
           `INSERT OR IGNORE INTO faculty (id, faculty_code, name, department, designation, email, phone, qualification, experience, specialization, profile_photo, status, password_hash)
-           VALUES ('FAC-003-ID', 'FAC003', 'Mrs Vasanthapriya M J T', 'AI & Data Science', 'Assistant Professor', 'vasanthapriya@velhightech.com', '+91 9876509012', 'M.Tech (Computer Science)', '7 Years Teaching', 'Database Systems & Analytics', 'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=150', 'Active', ?)`,
+           VALUES ('FAC-007-ID', 'FAC007', 'Mrs Krithiga', 'AI & Data Science', 'Assistant Professor', 'krithiga@velhightech.com', '+91 9876501111', 'M.Tech (AI)', '5 Years Teaching', 'Knowledge Engineering', 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150', 'Active', ?)`,
           [defaultHash]
         );
         db.run(
           `INSERT OR IGNORE INTO faculty (id, faculty_code, name, department, designation, email, phone, qualification, experience, specialization, profile_photo, status, password_hash)
-           VALUES ('FAC-004-ID', 'FAC004', 'Dr K Ramesh', 'Computer Science', 'Professor & HOD', 'rameshk@velhightech.com', '+91 9876503456', 'Ph.D (Computer Science)', '15 Years Teaching', 'Distributed Computing & Cloud Architecture', 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150', 'Active', ?)`,
+           VALUES ('FAC-008-ID', 'FAC008', 'Mrs Gowthami K', 'AI & Data Science', 'Assistant Professor', 'gowthami@velhightech.com', '+91 9876502222', 'M.E. (Data Science)', '6 Years Teaching', 'Data Analytics & Laboratory', 'https://images.unsplash.com/photo-1573497019940-1c28c88b4f3e?w=150', 'Active', ?)`,
           [defaultHash]
         );
         db.run(
           `INSERT OR IGNORE INTO faculty (id, faculty_code, name, department, designation, email, phone, qualification, experience, specialization, profile_photo, status, password_hash)
-           VALUES ('FAC-005-ID', 'FAC005', 'Mrs S Deepa', 'Computer Science', 'Assistant Professor', 'deepas@velhightech.com', '+91 9876507890', 'M.E. (Software Engineering)', '5 Years Teaching', 'Full Stack Web Development', 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150', 'Active', ?)`,
+           VALUES ('FAC-009-ID', 'FAC009', 'Mr Ramajayam', 'AI & Data Science', 'Associate Professor', 'ramajayam@velhightech.com', '+91 9876503333', 'M.Tech (CS)', '8 Years Teaching', 'Blockchain Technology', 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150', 'Active', ?)`,
           [defaultHash]
         );
         db.run(
           `INSERT OR IGNORE INTO faculty (id, faculty_code, name, department, designation, email, phone, qualification, experience, specialization, profile_photo, status, password_hash)
-           VALUES ('FAC-006-ID', 'FAC006', 'Mr R Karthik', 'Computer Science', 'Associate Professor', 'karthikr@velhightech.com', '+91 9876502345', 'M.Tech (Information Technology)', '8 Years Teaching', 'Cyber Security & Networking', 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150', 'Active', ?)`,
+           VALUES ('FAC-010-ID', 'FAC010', 'Mr Balaji M', 'AI & Data Science', 'Assistant Professor', 'balaji@velhightech.com', '+91 9876504444', 'M.Tech (AI & DS)', '4 Years Teaching', 'Data Analytics Laboratory', 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150', 'Active', ?)`,
+          [defaultHash]
+        );
+        db.run(
+          `INSERT OR IGNORE INTO faculty (id, faculty_code, name, department, designation, email, phone, qualification, experience, specialization, profile_photo, status, password_hash)
+           VALUES ('FAC-011-ID', 'FAC011', 'Mr Balaarunesh G', 'AI & Data Science', 'Assistant Professor', 'balaarunesh@velhightech.com', '+91 9876505555', 'M.E. (ECE)', '5 Years Teaching', 'Mini Project & Technical Seminar', 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150', 'Active', ?)`,
           [defaultHash]
         );
       });
@@ -696,15 +724,21 @@ function initDb() {
           section TEXT
         )
       `, () => {
-        db.run(`INSERT OR IGNORE INTO faculty_subjects (id, faculty_id, subject_code, subject_name, department, year, section) VALUES ('FS-001', 'FAC-001-ID', '21AI51T', 'Knowledge Engineering', 'AI & DS', 3, 'A')`);
-        db.run(`INSERT OR IGNORE INTO faculty_subjects (id, faculty_id, subject_code, subject_name, department, year, section) VALUES ('FS-002', 'FAC-001-ID', '21AI52T', 'Programming Language for AI', 'AI & DS', 3, 'A')`);
-        db.run(`INSERT OR IGNORE INTO faculty_subjects (id, faculty_id, subject_code, subject_name, department, year, section) VALUES ('FS-003', 'FAC-001-ID', '21CS51T', 'Web Technology', 'AI & DS', 3, 'A')`);
-        db.run(`INSERT OR IGNORE INTO faculty_subjects (id, faculty_id, subject_code, subject_name, department, year, section) VALUES ('FS-004', 'FAC-004-ID', '21CS52T', 'Machine Learning', 'Computer Science', 3, 'A')`);
-        db.run(`INSERT OR IGNORE INTO faculty_subjects (id, faculty_id, subject_code, subject_name, department, year, section) VALUES ('FS-005', 'FAC-005-ID', '21CS53T', 'Cloud Computing', 'Computer Science', 3, 'A')`);
+        db.run(`INSERT OR IGNORE INTO faculty_subjects (id, faculty_id, subject_code, subject_name, department, year, section) VALUES ('FS-001', 'FAC-001-ID', '21AI51T', 'Programming Language for AI', 'AI & DS', 3, 'A')`);
+        db.run(`INSERT OR IGNORE INTO faculty_subjects (id, faculty_id, subject_code, subject_name, department, year, section) VALUES ('FS-002', 'FAC-007-ID', '21AI55T', 'Knowledge Engineering', 'AI & DS', 3, 'A')`);
+        db.run(`INSERT OR IGNORE INTO faculty_subjects (id, faculty_id, subject_code, subject_name, department, year, section) VALUES ('FS-003', 'FAC-008-ID', '21HI52T', 'Data Analytics', 'AI & DS', 3, 'A')`);
+        db.run(`INSERT OR IGNORE INTO faculty_subjects (id, faculty_id, subject_code, subject_name, department, year, section) VALUES ('FS-004', 'FAC-003-ID', '21HI53IT', 'Web Technology', 'AI & DS', 3, 'A')`);
+        db.run(`INSERT OR IGNORE INTO faculty_subjects (id, faculty_id, subject_code, subject_name, department, year, section) VALUES ('FS-005', 'FAC-009-ID', '21HC54T', 'Blockchain Technology', 'AI & DS', 3, 'A')`);
 
-        db.run(`INSERT OR IGNORE INTO faculty_subject_mapping (id, faculty_id, subject_code, subject_name, department, year, section) VALUES ('FSM-001', 'FAC-001-ID', '21AI55T', 'Knowledge Engineering', 'AI & DS', 3, 'A')`);
-        db.run(`INSERT OR IGNORE INTO faculty_subject_mapping (id, faculty_id, subject_code, subject_name, department, year, section) VALUES ('FSM-002', 'FAC-001-ID', '21AI51T', 'Programming Language for AI', 'AI & DS', 3, 'A')`);
-        db.run(`INSERT OR IGNORE INTO faculty_subject_mapping (id, faculty_id, subject_code, subject_name, department, year, section) VALUES ('FSM-003', 'FAC-001-ID', '21HI53IT', 'Web Technology', 'AI & DS', 3, 'A')`);
+        db.run(`INSERT OR IGNORE INTO faculty_subject_mapping (id, faculty_id, subject_code, subject_name, department, year, section) VALUES ('FSM-001', 'FAC-001-ID', '21AI51T', 'Programming Language for AI', 'AI & DS', 3, 'A')`);
+        db.run(`INSERT OR IGNORE INTO faculty_subject_mapping (id, faculty_id, subject_code, subject_name, department, year, section) VALUES ('FSM-002', 'FAC-007-ID', '21AI55T', 'Knowledge Engineering', 'AI & DS', 3, 'A')`);
+        db.run(`INSERT OR IGNORE INTO faculty_subject_mapping (id, faculty_id, subject_code, subject_name, department, year, section) VALUES ('FSM-003', 'FAC-008-ID', '21HI52T', 'Data Analytics', 'AI & DS', 3, 'A')`);
+        db.run(`INSERT OR IGNORE INTO faculty_subject_mapping (id, faculty_id, subject_code, subject_name, department, year, section) VALUES ('FSM-004', 'FAC-003-ID', '21HI53IT', 'Web Technology', 'AI & DS', 3, 'A')`);
+        db.run(`INSERT OR IGNORE INTO faculty_subject_mapping (id, faculty_id, subject_code, subject_name, department, year, section) VALUES ('FSM-005', 'FAC-009-ID', '21HC54T', 'Blockchain Technology', 'AI & DS', 3, 'A')`);
+        db.run(`INSERT OR IGNORE INTO faculty_subject_mapping (id, faculty_id, subject_code, subject_name, department, year, section) VALUES ('FSM-006', 'FAC-008-ID', '21AI57P', 'Data Analytics Laboratory', 'AI & DS', 3, 'A')`);
+        db.run(`INSERT OR IGNORE INTO faculty_subject_mapping (id, faculty_id, subject_code, subject_name, department, year, section) VALUES ('FSM-007', 'FAC-010-ID', '21AI57P', 'Data Analytics Laboratory', 'AI & DS', 3, 'A')`);
+        db.run(`INSERT OR IGNORE INTO faculty_subject_mapping (id, faculty_id, subject_code, subject_name, department, year, section) VALUES ('FSM-008', 'FAC-011-ID', '21EE01P', 'Mini Project - I', 'AI & DS', 3, 'A')`);
+        db.run(`INSERT OR IGNORE INTO faculty_subject_mapping (id, faculty_id, subject_code, subject_name, department, year, section) VALUES ('FSM-009', 'FAC-011-ID', '21EE03P', 'Technical Seminar', 'AI & DS', 3, 'A')`);
       });
 
       // Create Faculty Remarks table
