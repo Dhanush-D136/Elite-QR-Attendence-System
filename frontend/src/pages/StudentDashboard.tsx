@@ -252,8 +252,28 @@ export const StudentDashboard: React.FC = () => {
           </div>
 
           {todaysClassesSorted.length === 0 ? (
-            <div className="text-center py-8 text-[#6B7280] text-xs">
-              <p className="font-medium">No scheduled classes found for today ({todayName}).</p>
+            <div className="p-8 lg:p-12 rounded-[24px] bg-gradient-to-br from-[#FAFAFA] via-[#F3F0FF]/30 to-[#FAFAFA] border-2 border-dashed border-[#6D5DFC]/30 text-center space-y-4 relative overflow-hidden my-2">
+              <div className="w-16 h-16 rounded-3xl bg-[#F3F0FF] text-[#6D5DFC] flex items-center justify-center mx-auto shadow-sm border border-[#6D5DFC]/20 animate-bounce">
+                <Calendar className="w-8 h-8 text-[#6D5DFC]" />
+              </div>
+
+              <div className="space-y-1.5 max-w-md mx-auto">
+                <span className="px-3 py-1 rounded-full bg-[#ECFDF5] text-[#12B76A] font-mono font-extrabold text-[10px] uppercase tracking-wider border border-[#12B76A]/20">
+                  🎉 FREE ACADEMIC DAY
+                </span>
+                <h4 className="font-display font-extrabold text-xl text-[#111827]">
+                  No Classes Scheduled for {todayName}
+                </h4>
+                <p className="text-xs text-[#6B7280] font-medium leading-relaxed">
+                  You currently have no lectures assigned for {todayName}. Enjoy your free period and check back later for timetable updates.
+                </p>
+              </div>
+
+              <div className="pt-2 flex items-center justify-center gap-2">
+                <span className="px-3 py-1 rounded-full bg-white border border-[#E7E7E7] text-[11px] text-[#6B7280] font-bold shadow-xs">
+                  ⚡ Automatic Timetable Synchronization
+                </span>
+              </div>
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

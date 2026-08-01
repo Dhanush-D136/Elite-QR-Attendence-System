@@ -95,11 +95,11 @@ export const ClassManagementPage: React.FC = () => {
     { period: 'BREAK', time: '9:55 AM - 10:10 AM' },
     { period: 3, time: '10:10 AM - 11:00 AM' },
     { period: 4, time: '11:00 AM - 11:50 AM' },
-    { period: 5, time: '11:50 AM - 12:35 PM' },
-    { period: 'LUNCH', time: '12:35 PM - 1:15 PM' },
-    { period: 6, time: '1:15 PM - 2:00 PM' },
-    { period: 7, time: '2:00 PM - 2:45 PM' },
-    { period: 8, time: '2:45 PM - 3:30 PM' }
+    { period: 'LUNCH', time: '11:50 AM - 12:40 PM' },
+    { period: 5, time: '12:40 PM - 1:30 PM' },
+    { period: 6, time: '1:30 PM - 2:20 PM' },
+    { period: 7, time: '2:20 PM - 3:10 PM' },
+    { period: 8, time: '3:10 PM - 4:00 PM' }
   ];
 
   const fetchAllData = async () => {

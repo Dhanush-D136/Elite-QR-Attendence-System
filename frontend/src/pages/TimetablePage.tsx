@@ -399,12 +399,14 @@ export const TimetablePage: React.FC<TimetablePageProps> = ({ onNavigate }) => {
                     onChange={(e) => setFormData({ ...formData, period_number: e.target.value })}
                     className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827] font-mono font-bold"
                   >
-                    <option value="1">Period 1 (P1)</option>
-                    <option value="2">Period 2 (P2)</option>
-                    <option value="3">Period 3 (P3)</option>
-                    <option value="4">Period 4 (P4)</option>
-                    <option value="5">Period 5 (P5)</option>
-                    <option value="6">Period 6 (P6)</option>
+                    <option value="1">Period 1 (P1 - 08:15 AM)</option>
+                    <option value="2">Period 2 (P2 - 09:05 AM)</option>
+                    <option value="3">Period 3 (P3 - 10:10 AM)</option>
+                    <option value="4">Period 4 (P4 - 11:00 AM)</option>
+                    <option value="5">Period 5 (P5 - 12:40 PM)</option>
+                    <option value="6">Period 6 (P6 - 01:30 PM)</option>
+                    <option value="7">Period 7 (P7 - 02:20 PM)</option>
+                    <option value="8">Period 8 (P8 - 03:10 PM)</option>
                   </select>
                 </div>
               </div>
