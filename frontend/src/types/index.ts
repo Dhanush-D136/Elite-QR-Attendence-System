@@ -3,7 +3,7 @@ export interface User {
   name: string;
   roll_number?: string;
   email: string;
-  role: 'admin' | 'student';
+  role: 'admin' | 'student' | 'faculty';
   department?: string;
   year?: number;
   section?: string;

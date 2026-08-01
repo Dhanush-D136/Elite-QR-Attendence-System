@@ -1,0 +1,999 @@
+import React, { useEffect, useState } from 'react';
+import { useAuth } from '../context/AuthContext';
+import api from '../services/api';
+import { getSocket } from '../services/socket';
+import { DynamicQRDisplay } from '../components/DynamicQRDisplay';
+import * as XLSX from 'xlsx';
+import {
+  BookOpen,
+  Calendar,
+  Clock,
+  User,
+  Users,
+  Sparkles,
+  ShieldCheck,
+  CheckCircle2,
+  AlertTriangle,
+  XCircle,
+  FileSpreadsheet,
+  Download,
+  Plus,
+  Search,
+  MessageSquare,
+  FileText,
+  Send,
+  LogOut,
+  ChevronRight,
+  TrendingUp,
+  Award,
+  RefreshCw,
+  Eye,
+  Briefcase
+} from 'lucide-react';
+
+export const FacultyDashboard: React.FC = () => {
+  const { user, logout } = useAuth();
+  const [activeTab, setActiveTab] = useState<'overview' | 'qr_launcher' | 'students' | 'risk_tracker' | 'documents' | 'leave_remarks' | 'profile'>('overview');
+
+  // State
+  const [dashboardData, setDashboardData] = useState<any>(null);
+  const [students, setStudents] = useState<any[]>([]);
+  const [riskData, setRiskData] = useState<any>({ safe: [], warning: [], risk: [], critical: [] });
+  const [documents, setDocuments] = useState<any[]>([]);
+  const [leaveRequests, setLeaveRequests] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+
+  // Live QR Launcher Session State
+  const [activeSession, setActiveSession] = useState<any>(null);
+  const [liveScanFeed, setLiveScanFeed] = useState<any[]>([]);
+  const [liveRecordsCount, setLiveRecordsCount] = useState<number>(0);
+
+  // Form States
+  const [remarkStudent, setRemarkStudent] = useState<any>(null);
+  const [remarkType, setRemarkType] = useState<string>('Needs Attention');
+  const [remarkComment, setRemarkComment] = useState<string>('');
+  const [showRemarkModal, setShowRemarkModal] = useState<boolean>(false);
+
+  const [docTitle, setDocTitle] = useState<string>('');
+  const [docSubject, setDocSubject] = useState<string>('21AI51T');
+  const [docUnit, setDocUnit] = useState<string>('Unit 1');
+  const [docUrl, setDocUrl] = useState<string>('');
+  const [docType, setDocType] = useState<string>('PDF');
+
+  const [leaveType, setLeaveType] = useState<string>('Casual Leave');
+  const [leaveStart, setLeaveStart] = useState<string>('');
+  const [leaveEnd, setLeaveEnd] = useState<string>('');
+  const [leaveReason, setLeaveReason] = useState<string>('');
+
+  // Profile Form State
+  const [facultyPhone, setFacultyPhone] = useState<string>(user?.phone || '+91 9876501234');
+  const [facultyQualification, setFacultyQualification] = useState<string>((user as any)?.qualification || 'M.Tech (AI & DS)');
+  const [facultyExperience, setFacultyExperience] = useState<string>((user as any)?.experience || '6 Years Teaching');
+  const [facultySpecialization, setFacultySpecialization] = useState<string>((user as any)?.specialization || 'AI & Web Security');
+  const [facultyPhoto, setFacultyPhoto] = useState<string>(user?.profile_photo || 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150');
+
+  useEffect(() => {
+    fetchFacultyData();
+
+    // Socket.IO real-time scan feed listener
+    const socket = getSocket();
+    socket.on('attendanceMarked', (data: any) => {
+      setLiveRecordsCount((prev) => prev + 1);
+      setLiveScanFeed((prev) => [
+        {
+          time: new Date().toLocaleTimeString(),
+          name: data.studentName || data.name || 'Student Scanned',
+          roll: data.roll_number || '113024243032',
+          status: 'Present'
+        },
+        ...prev
+      ]);
+    });
+
+    return () => {
+      socket.off('attendanceMarked');
+    };
+  }, []);
+
+  const fetchFacultyData = async () => {
+    try {
+      setIsLoading(true);
+      const [dashRes, stRes, riskRes, docRes, leaveRes] = await Promise.all([
+        api.get(`/faculty/dashboard?faculty_id=${user?.id || 'FAC-001-ID'}`),
+        api.get('/faculty/students'),
+        api.get('/faculty/risk-detection'),
+        api.get('/faculty/documents'),
+        api.get('/faculty/leave-requests')
+      ]);
+
+      setDashboardData(dashRes.data);
+      if (dashRes.data.activeSession) {
+        setActiveSession(dashRes.data.activeSession);
+      }
+      setStudents(stRes.data.students || []);
+      setRiskData(riskRes.data || { safe: [], warning: [], risk: [], critical: [] });
+      setDocuments(docRes.data.documents || []);
+      setLeaveRequests(leaveRes.data.leaveRequests || []);
+    } catch (err) {
+      console.error('Failed to fetch faculty data', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Launch Active Class Session
+  const handleLaunchSession = async (cls: any) => {
+    try {
+      const res = await api.post('/sessions', {
+        subject: cls.subject_name || 'Knowledge Engineering',
+        subject_code: cls.subject_code || '21AI51T',
+        faculty_name: user?.name || 'Mrs Nivetha P',
+        period_number: cls.period_number || 'P1',
+        department: cls.department || 'AI & DS',
+        year: 3,
+        section: cls.section || 'A',
+        duration_minutes: 50
+      });
+
+      setActiveSession(res.data.session);
+      setActiveTab('qr_launcher');
+      alert(`✅ Active Class Session Launched for ${cls.subject_name}! Dynamic 1s QR rotation active.`);
+    } catch (err: any) {
+      alert(`❌ ${err.response?.data?.error || 'Failed to launch class session'}`);
+    }
+  };
+
+  // End Session
+  const handleEndSession = async () => {
+    if (!activeSession) return;
+    if (!confirm('End and close this attendance session? Students will no longer be able to scan.')) return;
+    try {
+      await api.post(`/sessions/${activeSession.id}/end`);
+      setActiveSession(null);
+      alert('✅ Class Session closed successfully.');
+    } catch (err: any) {
+      alert('Failed to end session');
+    }
+  };
+
+  // Faculty Submit Remark
+  const handleAddRemarkSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!remarkStudent) return;
+    try {
+      await api.post('/faculty/remarks', {
+        student_id: remarkStudent.id,
+        faculty_id: user?.id || 'FAC-001-ID',
+        remark_type: remarkType,
+        comment: remarkComment
+      });
+      alert(`✅ Remark added for ${remarkStudent.name}`);
+      setShowRemarkModal(false);
+      setRemarkComment('');
+    } catch (err: any) {
+      alert('Failed to submit remark');
+    }
+  };
+
+  // Document Upload
+  const handleUploadDocument = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await api.post('/faculty/documents', {
+        faculty_id: user?.id || 'FAC-001-ID',
+        subject_code: docSubject,
+        unit: docUnit,
+        title: docTitle,
+        file_url: docUrl,
+        file_type: docType
+      });
+      alert('✅ Course Material uploaded successfully!');
+      setDocTitle('');
+      setDocUrl('');
+      fetchFacultyData();
+    } catch (err: any) {
+      alert('Failed to upload document');
+    }
+  };
+
+  // Submit Leave Request
+  const handleSubmitLeave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await api.post('/faculty/leave-requests', {
+        faculty_id: user?.id || 'FAC-001-ID',
+        leave_type: leaveType,
+        start_date: leaveStart,
+        end_date: leaveEnd,
+        reason: leaveReason
+      });
+      alert('✅ Faculty Leave Application submitted successfully!');
+      setLeaveReason('');
+      fetchFacultyData();
+    } catch (err: any) {
+      alert('Failed to submit leave request');
+    }
+  };
+
+  // Export Risk Tracker Data
+  const exportRiskData = () => {
+    const allRisk = [
+      ...riskData.critical.map((s: any) => ({ ...s, Level: 'CRITICAL (<50%)' })),
+      ...riskData.risk.map((s: any) => ({ ...s, Level: 'HIGH RISK (50-64%)' })),
+      ...riskData.warning.map((s: any) => ({ ...s, Level: 'WARNING (65-74%)' })),
+      ...riskData.safe.map((s: any) => ({ ...s, Level: 'SAFE (>=75%)' }))
+    ];
+
+    const exportRows = allRisk.map((st: any) => ({
+      'Student Name': st.name,
+      'Register Number': st.roll_number,
+      'VH Number': st.vh_number || ('VH' + st.roll_number.slice(-5)),
+      'Official Email': st.email,
+      'Attendance %': `${st.attendance_percentage}%`,
+      'Classes Attended': st.classesAttended,
+      'Classes Missed': st.classesMissed,
+      'Needed For 75%': st.neededFor75,
+      'Risk Category': st.Level
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(exportRows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Risk Detection');
+    XLSX.writeFile(wb, `Faculty_Risk_Tracker_${new Date().toISOString().split('T')[0]}.xlsx`);
+  };
+
+  const facultyObj = dashboardData?.faculty || {
+    name: user?.name || 'Mrs Nivetha P',
+    faculty_code: (user as any)?.faculty_code || 'FAC001',
+    department: user?.department || 'AI & Data Science',
+    designation: (user as any)?.designation || 'Assistant Professor',
+    email: user?.email || 'nivetha@velhightech.com'
+  };
+
+  const todayClasses = dashboardData?.todayClasses || [];
+
+  return (
+    <div className="min-h-screen bg-slate-50 text-slate-900 pb-12">
+      {/* GLASSMORPHISM PURPLE GRADIENT HERO NAVBAR */}
+      <header className="bg-gradient-to-r from-[#4A00E0] via-[#6D5DFC] to-[#8E2DE2] text-white py-6 px-4 sm:px-8 shadow-xl relative overflow-hidden">
+        <div className="absolute inset-0 bg-black/10 backdrop-blur-sm pointer-events-none" />
+        <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4 relative z-10">
+          <div className="flex items-center gap-4">
+            <img
+              src={facultyObj.profile_photo || 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150'}
+              alt=""
+              className="w-16 h-16 rounded-full border-2 border-white/80 object-cover shadow-lg"
+            />
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="px-2.5 py-0.5 rounded-full bg-white/20 text-white font-mono text-[10px] font-bold uppercase tracking-wider border border-white/30">
+                  Faculty Workspace
+                </span>
+                <span className="px-2.5 py-0.5 rounded-full bg-[#12B76A] text-white font-mono text-[10px] font-extrabold uppercase">
+                  {facultyObj.faculty_code}
+                </span>
+              </div>
+              <h1 className="font-display font-extrabold text-2xl sm:text-3xl text-white tracking-tight mt-1">
+                {facultyObj.name}
+              </h1>
+              <p className="text-xs text-purple-100 font-medium">
+                {facultyObj.designation} • {facultyObj.department} Department
+              </p>
+            </div>
+          </div>
+
+          {/* Quick Action Badges */}
+          <div className="flex items-center gap-3">
+            {activeSession ? (
+              <button
+                onClick={() => setActiveTab('qr_launcher')}
+                className="px-4 py-2 rounded-2xl bg-[#12B76A] text-white font-bold text-xs shadow-lg animate-pulse flex items-center gap-2"
+              >
+                <Sparkles className="w-4 h-4" /> Live Class Active ({activeSession.subject})
+              </button>
+            ) : (
+              <span className="px-4 py-2 rounded-2xl bg-white/10 text-white font-medium text-xs border border-white/20 flex items-center gap-2">
+                <Clock className="w-4 h-4 text-purple-200" /> Auto Timetable Detector Ready
+              </span>
+            )}
+            <button
+              onClick={logout}
+              className="p-2.5 rounded-2xl bg-white/10 hover:bg-white/20 text-white border border-white/20 transition-all"
+              title="Sign Out"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+
+        {/* TAB NAVIGATION BAR */}
+        <div className="max-w-7xl mx-auto mt-6 pt-4 border-t border-white/15 flex items-center gap-2 overflow-x-auto text-xs font-bold scrollbar-none relative z-10">
+          <button
+            onClick={() => setActiveTab('overview')}
+            className={`px-4 py-2.5 rounded-xl transition-all flex items-center gap-2 shrink-0 ${
+              activeTab === 'overview' ? 'bg-white text-[#4A00E0] shadow-md font-extrabold' : 'text-purple-100 hover:bg-white/10'
+            }`}
+          >
+            <BookOpen className="w-4 h-4" /> Today's Overview
+          </button>
+          <button
+            onClick={() => setActiveTab('qr_launcher')}
+            className={`px-4 py-2.5 rounded-xl transition-all flex items-center gap-2 shrink-0 ${
+              activeTab === 'qr_launcher' ? 'bg-white text-[#4A00E0] shadow-md font-extrabold' : 'text-purple-100 hover:bg-white/10'
+            }`}
+          >
+            <Sparkles className="w-4 h-4 text-[#12B76A]" /> Live 1s QR Launcher
+          </button>
+          <button
+            onClick={() => setActiveTab('risk_tracker')}
+            className={`px-4 py-2.5 rounded-xl transition-all flex items-center gap-2 shrink-0 ${
+              activeTab === 'risk_tracker' ? 'bg-white text-[#4A00E0] shadow-md font-extrabold' : 'text-purple-100 hover:bg-white/10'
+            }`}
+          >
+            <AlertTriangle className="w-4 h-4 text-amber-300" /> Student Risk Tracker
+          </button>
+          <button
+            onClick={() => setActiveTab('students')}
+            className={`px-4 py-2.5 rounded-xl transition-all flex items-center gap-2 shrink-0 ${
+              activeTab === 'students' ? 'bg-white text-[#4A00E0] shadow-md font-extrabold' : 'text-purple-100 hover:bg-white/10'
+            }`}
+          >
+            <Users className="w-4 h-4" /> Class Roster ({students.length})
+          </button>
+          <button
+            onClick={() => setActiveTab('documents')}
+            className={`px-4 py-2.5 rounded-xl transition-all flex items-center gap-2 shrink-0 ${
+              activeTab === 'documents' ? 'bg-white text-[#4A00E0] shadow-md font-extrabold' : 'text-purple-100 hover:bg-white/10'
+            }`}
+          >
+            <FileText className="w-4 h-4" /> Course Document Hub
+          </button>
+          <button
+            onClick={() => setActiveTab('leave_remarks')}
+            className={`px-4 py-2.5 rounded-xl transition-all flex items-center gap-2 shrink-0 ${
+              activeTab === 'leave_remarks' ? 'bg-white text-[#4A00E0] shadow-md font-extrabold' : 'text-purple-100 hover:bg-white/10'
+            }`}
+          >
+            <MessageSquare className="w-4 h-4" /> Remarks & Leaves
+          </button>
+          <button
+            onClick={() => setActiveTab('profile')}
+            className={`px-4 py-2.5 rounded-xl transition-all flex items-center gap-2 shrink-0 ${
+              activeTab === 'profile' ? 'bg-white text-[#4A00E0] shadow-md font-extrabold' : 'text-purple-100 hover:bg-white/10'
+            }`}
+          >
+            <User className="w-4 h-4" /> Faculty Profile
+          </button>
+        </div>
+      </header>
+
+      {/* MAIN CONTENT AREA */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-8 pt-8">
+        {isLoading ? (
+          <div className="p-12 text-center text-[#6B7280]">
+            <RefreshCw className="w-8 h-8 animate-spin mx-auto text-[#6D5DFC] mb-3" />
+            <p className="font-bold text-sm">Loading Faculty Workspace & Live Telemetry...</p>
+          </div>
+        ) : (
+          <>
+            {/* ================================================== */}
+            {/* TAB 1: OVERVIEW & TIMETABLE HUB */}
+            {/* ================================================== */}
+            {activeTab === 'overview' && (
+              <div className="space-y-6 animate-fade-in">
+                {/* Metric Summary Cards */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                  <div className="p-5 rounded-2xl bg-white border border-[#E7E7E7] shadow-sm">
+                    <span className="text-[10px] font-bold text-[#6D5DFC] block uppercase tracking-wider">Today's Classes</span>
+                    <strong className="text-2xl font-extrabold text-[#111827] mt-1 block">{todayClasses.length} Scheduled</strong>
+                    <span className="text-[11px] text-[#6B7280] mt-1 block">AI & DS III-A</span>
+                  </div>
+
+                  <div className="p-5 rounded-2xl bg-white border border-[#E7E7E7] shadow-sm">
+                    <span className="text-[10px] font-bold text-[#12B76A] block uppercase tracking-wider">Enrolled Students</span>
+                    <strong className="text-2xl font-extrabold text-[#111827] mt-1 block">{students.length} Students</strong>
+                    <span className="text-[11px] text-[#12B76A] mt-1 block">Active Attendance Roster</span>
+                  </div>
+
+                  <div className="p-5 rounded-2xl bg-white border border-[#E7E7E7] shadow-sm">
+                    <span className="text-[10px] font-bold text-amber-600 block uppercase tracking-wider">Risk Watchlist</span>
+                    <strong className="text-2xl font-extrabold text-amber-600 mt-1 block">
+                      {riskData.risk.length + riskData.critical.length} Students
+                    </strong>
+                    <span className="text-[11px] text-amber-600 mt-1 block">Attendance &lt; 65%</span>
+                  </div>
+
+                  <div className="p-5 rounded-2xl bg-white border border-[#E7E7E7] shadow-sm">
+                    <span className="text-[10px] font-bold text-blue-600 block uppercase tracking-wider">Course Materials</span>
+                    <strong className="text-2xl font-extrabold text-[#111827] mt-1 block">{documents.length} Files</strong>
+                    <span className="text-[11px] text-blue-600 mt-1 block">PDFs, DOCXs, PPTs Uploaded</span>
+                  </div>
+                </div>
+
+                {/* Today's Timetable Schedule */}
+                <div className="bg-white rounded-[24px] p-6 sm:p-8 border border-[#E7E7E7] shadow-enterprise space-y-4">
+                  <div className="flex items-center justify-between pb-3 border-b border-[#E7E7E7]">
+                    <div>
+                      <h3 className="font-display font-extrabold text-lg text-[#111827]">Today's Assigned Timetable Schedule</h3>
+                      <p className="text-xs text-[#6B7280] font-medium">Automatic active timetable detector for instant 1s QR launching</p>
+                    </div>
+                    <span className="px-3 py-1 rounded-full bg-[#F3F0FF] text-[#6D5DFC] font-mono text-xs font-bold border border-[#6D5DFC]/20">
+                      {dashboardData?.todayDay || 'Monday'}
+                    </span>
+                  </div>
+
+                  {todayClasses.length === 0 ? (
+                    <div className="p-8 text-center bg-[#FAFAFA] rounded-2xl border border-[#E7E7E7]">
+                      <Calendar className="w-10 h-10 text-[#6B7280] mx-auto mb-2" />
+                      <h4 className="font-bold text-[#111827]">📅 No Classes Scheduled Today</h4>
+                      <p className="text-xs text-[#6B7280] mt-1">You currently have no assigned periods for today. Enjoy your free schedule!</p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      {todayClasses.map((cls: any) => (
+                        <div key={cls.id || cls.period_number} className="p-5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] space-y-3 hover:border-[#6D5DFC] transition-all">
+                          <div className="flex items-center justify-between">
+                            <span className="px-2.5 py-0.5 rounded-full bg-[#6D5DFC] text-white font-mono text-xs font-extrabold">
+                              {cls.period_number || 'P1'}
+                            </span>
+                            <span className="text-xs text-[#6B7280] font-mono font-bold flex items-center gap-1">
+                              <Clock className="w-3.5 h-3.5 text-[#6D5DFC]" /> {cls.start_time} - {cls.end_time}
+                            </span>
+                          </div>
+
+                          <div>
+                            <h4 className="font-bold text-[#111827] text-base">{cls.subject_name}</h4>
+                            <p className="text-xs text-[#6B7280] font-medium mt-0.5">
+                              {cls.department || 'AI & DS'} • Room {cls.room_number || 'F305'} (Sec {cls.section || 'A'})
+                            </p>
+                          </div>
+
+                          <button
+                            onClick={() => handleLaunchSession(cls)}
+                            className="w-full py-2.5 rounded-xl bg-[#6D5DFC] hover:bg-[#5b4be0] text-white font-bold text-xs shadow-md transition-all flex items-center justify-center gap-2"
+                          >
+                            <Sparkles className="w-4 h-4 text-[#12B76A]" /> Launch Dynamic 1s QR Session
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* ================================================== */}
+            {/* TAB 2: LIVE 1s DYNAMIC QR LAUNCHER */}
+            {/* ================================================== */}
+            {activeTab === 'qr_launcher' && (
+              <div className="space-y-6 animate-fade-in">
+                {activeSession ? (
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    {/* QR Display Card */}
+                    <div className="lg:col-span-1">
+                      <DynamicQRDisplay
+                        sessionId={activeSession.id}
+                        subjectName={activeSession.subject}
+                        subjectCode={activeSession.subject_code || '21AI51T'}
+                        facultyName={activeSession.faculty_name || facultyObj.name}
+                        periodNumber={activeSession.period_number || 'P1'}
+                        department={activeSession.department || 'AI & DS'}
+                        section={activeSession.section || 'A'}
+                        liveRecordsCount={liveRecordsCount}
+                      />
+                      <button
+                        onClick={handleEndSession}
+                        className="w-full mt-4 py-3 rounded-2xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-lg transition-all"
+                      >
+                        End & Close Class Session
+                      </button>
+                    </div>
+
+                    {/* Live Student Scan Feed Monitor */}
+                    <div className="lg:col-span-2 bg-white rounded-[24px] p-6 sm:p-8 border border-[#E7E7E7] shadow-enterprise space-y-4">
+                      <div className="flex items-center justify-between pb-3 border-b border-[#E7E7E7]">
+                        <div>
+                          <h3 className="font-display font-extrabold text-lg text-[#111827]">Live Telemetry Scan Monitor</h3>
+                          <p className="text-xs text-[#6B7280]">Auto-refreshes every 1s as students scan dynamic 1s QR payload</p>
+                        </div>
+                        <span className="px-3 py-1 rounded-full bg-[#ECFDF5] text-[#12B76A] font-mono text-xs font-bold border border-[#12B76A]/30">
+                          {liveScanFeed.length} Scans Streamed
+                        </span>
+                      </div>
+
+                      <div className="max-h-[420px] overflow-y-auto space-y-2">
+                        {liveScanFeed.length === 0 ? (
+                          <div className="p-10 text-center text-[#6B7280]">
+                            <RefreshCw className="w-8 h-8 animate-spin mx-auto text-[#6D5DFC] mb-2" />
+                            <p className="text-xs font-bold">Waiting for student scans... Keep QR displayed on projector.</p>
+                          </div>
+                        ) : (
+                          liveScanFeed.map((feed: any, idx: number) => (
+                            <div key={idx} className="p-3.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] flex items-center justify-between text-xs animate-fade-in">
+                              <div className="flex items-center gap-3">
+                                <span className="w-2.5 h-2.5 rounded-full bg-[#12B76A] animate-ping" />
+                                <div>
+                                  <p className="font-bold text-[#111827]">{feed.name}</p>
+                                  <span className="font-mono text-[10px] text-[#6B7280]">{feed.roll}</span>
+                                </div>
+                              </div>
+                              <div className="text-right font-mono">
+                                <span className="px-2.5 py-0.5 rounded-full bg-[#ECFDF5] text-[#12B76A] font-bold text-[10px] border border-[#12B76A]/20">
+                                  {feed.status}
+                                </span>
+                                <span className="text-[10px] text-[#6B7280] block mt-0.5">{feed.time}</span>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="bg-white rounded-[24px] p-8 border border-[#E7E7E7] shadow-enterprise text-center max-w-lg mx-auto space-y-4">
+                    <Sparkles className="w-12 h-12 text-[#6D5DFC] mx-auto" />
+                    <h3 className="font-display font-extrabold text-xl text-[#111827]">No Active QR Session</h3>
+                    <p className="text-xs text-[#6B7280]">Select a timetable class from the Overview tab to launch dynamic 1s QR rotation.</p>
+                    <button
+                      onClick={() => setActiveTab('overview')}
+                      className="px-6 py-3 rounded-2xl bg-[#6D5DFC] text-white font-bold text-xs shadow-md"
+                    >
+                      Go To Today's Timetable
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ================================================== */}
+            {/* TAB 3: STUDENT RISK TRACKER */}
+            {/* ================================================== */}
+            {activeTab === 'risk_tracker' && (
+              <div className="space-y-6 animate-fade-in">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="font-display font-extrabold text-xl text-[#111827]">Student Risk Detection Hub</h3>
+                    <p className="text-xs text-[#6B7280]">Categorizes students based on attendance thresholds and calculates required classes to reach 75%</p>
+                  </div>
+                  <button
+                    onClick={exportRiskData}
+                    className="px-4 py-2.5 rounded-2xl bg-[#12B76A] hover:bg-[#0ea25d] text-white font-bold text-xs shadow-md flex items-center gap-2"
+                  >
+                    <FileSpreadsheet className="w-4 h-4" /> Export Risk Watchlist (Excel)
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200">
+                    <span className="text-[10px] font-bold text-rose-700 uppercase">Critical (&lt;50%)</span>
+                    <strong className="text-2xl font-extrabold text-rose-700 block mt-1">{riskData.critical.length} Students</strong>
+                  </div>
+
+                  <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200">
+                    <span className="text-[10px] font-bold text-amber-700 uppercase">High Risk (50-64%)</span>
+                    <strong className="text-2xl font-extrabold text-amber-700 block mt-1">{riskData.risk.length} Students</strong>
+                  </div>
+
+                  <div className="p-4 rounded-2xl bg-yellow-50 border border-yellow-200">
+                    <span className="text-[10px] font-bold text-yellow-800 uppercase">Warning (65-74%)</span>
+                    <strong className="text-2xl font-extrabold text-yellow-800 block mt-1">{riskData.warning.length} Students</strong>
+                  </div>
+
+                  <div className="p-4 rounded-2xl bg-[#ECFDF5] border border-[#12B76A]/30">
+                    <span className="text-[10px] font-bold text-[#12B76A] uppercase">Safe (&ge;75%)</span>
+                    <strong className="text-2xl font-extrabold text-[#12B76A] block mt-1">{riskData.safe.length} Students</strong>
+                  </div>
+                </div>
+
+                {/* Risk Table */}
+                <div className="bg-white rounded-[24px] border border-[#E7E7E7] shadow-enterprise overflow-hidden">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-[#FAFAFA] border-b border-[#E7E7E7] text-[#6B7280] uppercase text-[10px] font-bold">
+                      <tr>
+                        <th className="p-4">Student Name</th>
+                        <th className="p-4">Register Number</th>
+                        <th className="p-4">VH Number</th>
+                        <th className="p-4">Attendance %</th>
+                        <th className="p-4">Missed Classes</th>
+                        <th className="p-4">Classes Needed for 75%</th>
+                        <th className="p-4">Risk Category</th>
+                        <th className="p-4 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#E7E7E7]">
+                      {[
+                        ...riskData.critical.map((s: any) => ({ ...s, level: 'Critical', bg: 'bg-rose-50 text-rose-700 border-rose-200' })),
+                        ...riskData.risk.map((s: any) => ({ ...s, level: 'High Risk', bg: 'bg-amber-50 text-amber-700 border-amber-200' })),
+                        ...riskData.warning.map((s: any) => ({ ...s, level: 'Warning', bg: 'bg-yellow-50 text-yellow-800 border-yellow-200' })),
+                        ...riskData.safe.map((s: any) => ({ ...s, level: 'Safe', bg: 'bg-[#ECFDF5] text-[#12B76A] border-[#12B76A]/20' }))
+                      ].map((st: any) => (
+                        <tr key={st.id} className="hover:bg-[#FAFAFA] transition-colors">
+                          <td className="p-4 font-bold text-[#111827]">{st.name}</td>
+                          <td className="p-4 font-mono font-bold text-[#111827]">{st.roll_number}</td>
+                          <td className="p-4 font-mono font-extrabold text-[#6D5DFC]">
+                            {st.vh_number || ('VH' + st.roll_number.slice(-5))}
+                          </td>
+                          <td className="p-4 font-mono font-bold">{st.attendance_percentage}%</td>
+                          <td className="p-4 font-mono text-rose-600 font-bold">{st.classesMissed}</td>
+                          <td className="p-4 font-mono font-bold text-[#6D5DFC]">{st.neededFor75} Classes</td>
+                          <td className="p-4">
+                            <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${st.bg}`}>
+                              {st.level}
+                            </span>
+                          </td>
+                          <td className="p-4 text-right">
+                            <button
+                              onClick={() => { setRemarkStudent(st); setShowRemarkModal(true); }}
+                              className="px-3 py-1 rounded-xl bg-[#F3F0FF] text-[#6D5DFC] font-bold text-[10px] hover:bg-[#6D5DFC] hover:text-white transition-all"
+                            >
+                              Add Remark
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* ================================================== */}
+            {/* TAB 4: CLASS ROSTER (READ ONLY) */}
+            {/* ================================================== */}
+            {activeTab === 'students' && (
+              <div className="space-y-6 animate-fade-in">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="font-display font-extrabold text-xl text-[#111827]">Assigned Class Student Roster</h3>
+                    <p className="text-xs text-[#6B7280]">Faculty read-only view of enrolled student profiles and attendance records</p>
+                  </div>
+                  <span className="px-3.5 py-1 rounded-full bg-[#F3F0FF] text-[#6D5DFC] font-mono text-xs font-bold">
+                    {students.length} Students Total
+                  </span>
+                </div>
+
+                <div className="bg-white rounded-[24px] border border-[#E7E7E7] shadow-enterprise overflow-hidden">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-[#FAFAFA] border-b border-[#E7E7E7] text-[#6B7280] uppercase text-[10px] font-bold">
+                      <tr>
+                        <th className="p-4">Student Name</th>
+                        <th className="p-4">Register Number</th>
+                        <th className="p-4">VH Number</th>
+                        <th className="p-4">Official Email ID</th>
+                        <th className="p-4">Phone Number</th>
+                        <th className="p-4">Attendance %</th>
+                        <th className="p-4 text-right">Faculty Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#E7E7E7]">
+                      {students.map((st: any) => {
+                        const displayVH = st.vh_number || ('VH' + st.roll_number.slice(-5));
+                        const displayEmail = st.email || `${displayVH.toLowerCase()}@velhightech.com`;
+                        const attVal = typeof st.attendance_percentage === 'number' ? st.attendance_percentage : 100;
+
+                        return (
+                          <tr key={st.id} className="hover:bg-[#FAFAFA] transition-colors">
+                            <td className="p-4 font-bold text-[#111827]">{st.name}</td>
+                            <td className="p-4 font-mono font-bold text-[#111827]">{st.roll_number}</td>
+                            <td className="p-4 font-mono font-extrabold text-[#6D5DFC]">{displayVH}</td>
+                            <td className="p-4 font-mono text-xs text-[#12B76A] font-bold">{displayEmail}</td>
+                            <td className="p-4 font-mono text-[#6B7280]">{st.phone || 'N/A'}</td>
+                            <td className="p-4 font-mono font-bold">
+                              <span className={attVal >= 75 ? 'text-[#12B76A]' : 'text-rose-600'}>
+                                {attVal}%
+                              </span>
+                            </td>
+                            <td className="p-4 text-right">
+                              <button
+                                onClick={() => { setRemarkStudent(st); setShowRemarkModal(true); }}
+                                className="px-3 py-1 rounded-xl bg-[#F3F0FF] text-[#6D5DFC] font-bold text-[10px] hover:bg-[#6D5DFC] hover:text-white transition-all"
+                              >
+                                Add Remark
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* ================================================== */}
+            {/* TAB 5: COURSE DOCUMENT HUB */}
+            {/* ================================================== */}
+            {activeTab === 'documents' && (
+              <div className="space-y-6 animate-fade-in">
+                <div className="bg-white rounded-[24px] p-6 sm:p-8 border border-[#E7E7E7] shadow-enterprise space-y-4">
+                  <h3 className="font-display font-extrabold text-lg text-[#111827]">Upload Course Material / Study Document</h3>
+                  <form onSubmit={handleUploadDocument} className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-bold text-[#111827] mb-1">Document Title *</label>
+                      <input
+                        type="text"
+                        required
+                        value={docTitle}
+                        onChange={(e) => setDocTitle(e.target.value)}
+                        placeholder="e.g. Unit 1 Notes - AI Basics"
+                        className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-[#111827] mb-1">Subject & Unit *</label>
+                      <input
+                        type="text"
+                        required
+                        value={docUnit}
+                        onChange={(e) => setDocUnit(e.target.value)}
+                        placeholder="e.g. Unit 1"
+                        className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-[#111827] mb-1">File URL / Download Link *</label>
+                      <input
+                        type="url"
+                        required
+                        value={docUrl}
+                        onChange={(e) => setDocUrl(e.target.value)}
+                        placeholder="https://drive.google.com/..."
+                        className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827]"
+                      />
+                    </div>
+                    <div className="sm:col-span-3">
+                      <button
+                        type="submit"
+                        className="px-6 py-2.5 rounded-2xl bg-[#6D5DFC] hover:bg-[#5b4be0] text-white font-bold text-xs shadow-md transition-all"
+                      >
+                        Upload Course Document
+                      </button>
+                    </div>
+                  </form>
+                </div>
+
+                <div className="bg-white rounded-[24px] p-6 border border-[#E7E7E7] shadow-enterprise space-y-3">
+                  <h4 className="font-bold text-[#111827] text-sm">Uploaded Course Materials</h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {documents.map((doc: any) => (
+                      <div key={doc.id} className="p-4 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] flex items-center justify-between">
+                        <div>
+                          <span className="px-2 py-0.5 rounded-full bg-[#F3F0FF] text-[#6D5DFC] font-mono text-[10px] font-bold">
+                            {doc.unit}
+                          </span>
+                          <h5 className="font-bold text-[#111827] text-xs mt-1">{doc.title}</h5>
+                          <span className="text-[10px] text-[#6B7280]">{doc.subject_code} • {new Date(doc.created_at).toLocaleDateString()}</span>
+                        </div>
+                        <a
+                          href={doc.file_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="px-3 py-1.5 rounded-xl bg-[#6D5DFC] text-white font-bold text-[10px]"
+                        >
+                          View File
+                        </a>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ================================================== */}
+            {/* TAB 6: REMARKS & LEAVES */}
+            {/* ================================================== */}
+            {activeTab === 'leave_remarks' && (
+              <div className="space-y-6 animate-fade-in">
+                {/* Submit Leave Application */}
+                <div className="bg-white rounded-[24px] p-6 sm:p-8 border border-[#E7E7E7] shadow-enterprise space-y-4">
+                  <h3 className="font-display font-extrabold text-lg text-[#111827]">Faculty Leave Application</h3>
+                  <form onSubmit={handleSubmitLeave} className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-bold text-[#111827] mb-1">Leave Type</label>
+                      <select
+                        value={leaveType}
+                        onChange={(e) => setLeaveType(e.target.value)}
+                        className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827]"
+                      >
+                        <option value="Casual Leave">Casual Leave</option>
+                        <option value="Medical Leave">Medical Leave</option>
+                        <option value="On Duty (OD)">On Duty (OD)</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-[#111827] mb-1">Start Date *</label>
+                      <input
+                        type="date"
+                        required
+                        value={leaveStart}
+                        onChange={(e) => setLeaveStart(e.target.value)}
+                        className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-[#111827] mb-1">End Date *</label>
+                      <input
+                        type="date"
+                        required
+                        value={leaveEnd}
+                        onChange={(e) => setLeaveEnd(e.target.value)}
+                        className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827]"
+                      />
+                    </div>
+                    <div className="sm:col-span-3">
+                      <label className="block text-[11px] font-bold text-[#111827] mb-1">Reason for Leave *</label>
+                      <input
+                        type="text"
+                        required
+                        value={leaveReason}
+                        onChange={(e) => setLeaveReason(e.target.value)}
+                        placeholder="e.g. Attending International Conference on AI"
+                        className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827]"
+                      />
+                    </div>
+                    <div className="sm:col-span-3">
+                      <button
+                        type="submit"
+                        className="px-6 py-2.5 rounded-2xl bg-[#6D5DFC] text-white font-bold text-xs shadow-md"
+                      >
+                        Submit Leave Application
+                      </button>
+                    </div>
+                  </form>
+                </div>
+
+                {/* Submitted Leave Applications */}
+                <div className="bg-white rounded-[24px] p-6 border border-[#E7E7E7] shadow-enterprise space-y-3">
+                  <h4 className="font-bold text-[#111827] text-sm">My Submitted Leave Applications</h4>
+                  <div className="space-y-2">
+                    {leaveRequests.map((l: any) => (
+                      <div key={l.id} className="p-3.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] flex items-center justify-between text-xs">
+                        <div>
+                          <strong className="text-[#111827] font-bold">{l.leave_type}</strong> ({l.start_date} to {l.end_date})
+                          <p className="text-[11px] text-[#6B7280] mt-0.5">{l.reason}</p>
+                        </div>
+                        <span className="px-3 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200 font-bold text-[10px]">
+                          {l.status}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ================================================== */}
+            {/* TAB 7: FACULTY PROFILE MANAGEMENT */}
+            {/* ================================================== */}
+            {activeTab === 'profile' && (
+              <div className="bg-white rounded-[24px] p-6 sm:p-8 border border-[#E7E7E7] shadow-enterprise max-w-2xl mx-auto space-y-6 animate-fade-in">
+                <h3 className="font-display font-extrabold text-xl text-[#111827]">Faculty Profile Management</h3>
+
+                <div className="flex items-center gap-4 pb-4 border-b border-[#E7E7E7]">
+                  <img src={facultyPhoto} alt="" className="w-16 h-16 rounded-full border border-[#E7E7E7] object-cover" />
+                  <div>
+                    <h4 className="font-bold text-[#111827] text-base">{facultyObj.name}</h4>
+                    <p className="text-xs text-[#6D5DFC] font-bold font-mono">{facultyObj.faculty_code} • {facultyObj.department}</p>
+                  </div>
+                </div>
+
+                <form onSubmit={async (e) => {
+                  e.preventDefault();
+                  try {
+                    await api.put(`/faculty/profile/${user?.id || 'FAC-001-ID'}`, {
+                      phone: facultyPhone,
+                      qualification: facultyQualification,
+                      experience: facultyExperience,
+                      specialization: facultySpecialization,
+                      profile_photo: facultyPhoto
+                    });
+                    alert('✅ Faculty profile updated successfully!');
+                  } catch (err) {
+                    alert('Failed to update profile');
+                  }
+                }} className="space-y-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-[#111827] mb-1">Phone Number</label>
+                    <input
+                      type="text"
+                      value={facultyPhone}
+                      onChange={(e) => setFacultyPhone(e.target.value)}
+                      className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-[#111827] mb-1">Qualification</label>
+                    <input
+                      type="text"
+                      value={facultyQualification}
+                      onChange={(e) => setFacultyQualification(e.target.value)}
+                      className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-[#111827] mb-1">Teaching Experience</label>
+                    <input
+                      type="text"
+                      value={facultyExperience}
+                      onChange={(e) => setFacultyExperience(e.target.value)}
+                      className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-[#111827] mb-1">Specialization</label>
+                    <input
+                      type="text"
+                      value={facultySpecialization}
+                      onChange={(e) => setFacultySpecialization(e.target.value)}
+                      className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827]"
+                    />
+                  </div>
+                  <div>
+                    <button
+                      type="submit"
+                      className="px-6 py-2.5 rounded-2xl bg-[#6D5DFC] text-white font-bold text-xs shadow-md"
+                    >
+                      Save Profile Changes
+                    </button>
+                  </div>
+                </form>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* MODAL: ADD STUDENT REMARK */}
+        {showRemarkModal && remarkStudent && (
+          <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-md flex items-center justify-center p-4">
+            <div className="bg-white w-full max-w-md rounded-[32px] p-6 border border-[#E7E7E7] shadow-2xl space-y-4">
+              <h4 className="font-bold text-[#111827]">Add Faculty Remark for {remarkStudent.name}</h4>
+              <form onSubmit={handleAddRemarkSubmit} className="space-y-3">
+                <div>
+                  <label className="block text-[11px] font-bold text-[#111827] mb-1">Remark Category</label>
+                  <select
+                    value={remarkType}
+                    onChange={(e) => setRemarkType(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827]"
+                  >
+                    <option value="Good Performance">Good Performance</option>
+                    <option value="Attendance Improving">Attendance Improving</option>
+                    <option value="Needs Attention">Needs Attention</option>
+                    <option value="Parent Meeting Required">Parent Meeting Required</option>
+                    <option value="Medical Leave">Medical Leave</option>
+                    <option value="Internal Assessment Concern">Internal Assessment Concern</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-[#111827] mb-1">Remark Note / Detail *</label>
+                  <textarea
+                    required
+                    rows={3}
+                    value={remarkComment}
+                    onChange={(e) => setRemarkComment(e.target.value)}
+                    placeholder="Enter observation notes..."
+                    className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827]"
+                  />
+                </div>
+                <div className="flex items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowRemarkModal(false)}
+                    className="px-4 py-2 rounded-xl bg-gray-100 text-gray-700 font-bold text-xs"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-5 py-2 rounded-xl bg-[#6D5DFC] text-white font-bold text-xs shadow-md"
+                  >
+                    Save Remark
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+      </main>
+    </div>
+  );
+};

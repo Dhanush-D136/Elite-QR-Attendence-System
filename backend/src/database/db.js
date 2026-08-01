@@ -565,14 +565,116 @@ function initDb() {
         );
       });
 
-      // Create Faculties table
+      // Create Faculties table with extended schema
       db.run(`
-        CREATE TABLE IF NOT EXISTS faculties (
+        CREATE TABLE IF NOT EXISTS faculty (
           id TEXT PRIMARY KEY,
+          faculty_code TEXT UNIQUE NOT NULL,
           name TEXT NOT NULL,
           department TEXT,
-          email TEXT,
+          designation TEXT,
+          email TEXT UNIQUE NOT NULL,
+          phone TEXT,
+          qualification TEXT,
+          experience TEXT,
+          specialization TEXT,
+          profile_photo TEXT,
+          password_hash TEXT NOT NULL,
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+      `, async () => {
+        // Seed default faculty account FAC001 - Mrs Nivetha P if not exists
+        const bcrypt = require('bcryptjs');
+        const defaultHash = await bcrypt.hash('1234', 10);
+        db.run(
+          `INSERT OR IGNORE INTO faculty (id, faculty_code, name, department, designation, email, phone, qualification, experience, specialization, profile_photo, password_hash)
+           VALUES ('FAC-001-ID', 'FAC001', 'Mrs Nivetha P', 'AI & Data Science', 'Assistant Professor', 'nivetha@velhightech.com', '+91 9876501234', 'M.Tech (AI & DS), Ph.D (Pursuing)', '6 Years Teaching', 'Artificial Intelligence & Web Security', 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150', ?)`,
+          [defaultHash]
+        );
+        db.run(
+          `INSERT OR IGNORE INTO faculty (id, faculty_code, name, department, designation, email, phone, qualification, experience, specialization, profile_photo, password_hash)
+           VALUES ('FAC-002-ID', 'FAC002', 'Mr Abaskar N', 'AI & Data Science', 'Associate Professor', 'abaskarn@velhightech.com', '+91 9876505678', 'M.E. (Computer Science)', '9 Years Teaching', 'Machine Learning & Knowledge Engineering', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150', ?)`,
+          [defaultHash]
+        );
+      });
+
+      // Create Faculty Subjects Mapping table
+      db.run(`
+        CREATE TABLE IF NOT EXISTS faculty_subjects (
+          id TEXT PRIMARY KEY,
+          faculty_id TEXT NOT NULL,
+          subject_code TEXT NOT NULL,
+          subject_name TEXT NOT NULL,
+          department TEXT,
+          year INTEGER,
+          section TEXT
+        )
+      `, () => {
+        db.run(`INSERT OR IGNORE INTO faculty_subjects (id, faculty_id, subject_code, subject_name, department, year, section) VALUES ('FS-001', 'FAC-001-ID', '21AI51T', 'Knowledge Engineering', 'AI & DS', 3, 'A')`);
+        db.run(`INSERT OR IGNORE INTO faculty_subjects (id, faculty_id, subject_code, subject_name, department, year, section) VALUES ('FS-002', 'FAC-001-ID', '21AI52T', 'Programming Language for AI', 'AI & DS', 3, 'A')`);
+        db.run(`INSERT OR IGNORE INTO faculty_subjects (id, faculty_id, subject_code, subject_name, department, year, section) VALUES ('FS-003', 'FAC-001-ID', '21CS51T', 'Web Technology', 'AI & DS', 3, 'A')`);
+      });
+
+      // Create Faculty Remarks table
+      db.run(`
+        CREATE TABLE IF NOT EXISTS faculty_remarks (
+          id TEXT PRIMARY KEY,
+          student_id TEXT NOT NULL,
+          faculty_id TEXT NOT NULL,
+          remark_type TEXT NOT NULL,
+          comment TEXT NOT NULL,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+
+      // Create Faculty Documents table
+      db.run(`
+        CREATE TABLE IF NOT EXISTS faculty_documents (
+          id TEXT PRIMARY KEY,
+          faculty_id TEXT NOT NULL,
+          subject_code TEXT NOT NULL,
+          unit TEXT NOT NULL,
+          title TEXT NOT NULL,
+          file_url TEXT NOT NULL,
+          file_type TEXT DEFAULT 'PDF',
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+
+      // Create Faculty Announcements table
+      db.run(`
+        CREATE TABLE IF NOT EXISTS faculty_announcements (
+          id TEXT PRIMARY KEY,
+          faculty_id TEXT NOT NULL,
+          subject_code TEXT,
+          title TEXT NOT NULL,
+          content TEXT NOT NULL,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+
+      // Create Faculty Leave Requests table
+      db.run(`
+        CREATE TABLE IF NOT EXISTS faculty_leave_requests (
+          id TEXT PRIMARY KEY,
+          faculty_id TEXT NOT NULL,
+          leave_type TEXT NOT NULL,
+          start_date TEXT NOT NULL,
+          end_date TEXT NOT NULL,
+          reason TEXT NOT NULL,
+          status TEXT DEFAULT 'Pending',
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+
+      // Create Faculty Activity Logs table
+      db.run(`
+        CREATE TABLE IF NOT EXISTS faculty_activity_logs (
+          id TEXT PRIMARY KEY,
+          faculty_id TEXT NOT NULL,
+          action TEXT NOT NULL,
+          details TEXT,
+          timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
         )
       `);
 
@@ -610,7 +712,7 @@ function initDb() {
         )
       `);
 
-      console.log('✅ Database initialized cleanly for production. Demo seeds removed.');
+      console.log('✅ Database initialized cleanly with Faculty Ecosystem tables & FAC001 / FAC002 accounts.');
       resolve(true);
     });
   });

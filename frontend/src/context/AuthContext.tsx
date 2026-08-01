@@ -10,6 +10,7 @@ interface AuthContextType {
   mustChangePasswordTempToken: string | null;
   loginAdmin: (email: string, pass: string) => Promise<any>;
   loginStudent: (rollNumber: string, pass: string) => Promise<any>;
+  loginFaculty: (identifier: string, pass: string) => Promise<any>;
   submitFirstPasswordChange: (newPassword: string, confirmPassword?: string) => Promise<any>;
   updateUser: (newUser: User) => void;
   logout: () => void;
@@ -125,6 +126,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return res.data;
   };
 
+  const loginFaculty = async (identifier: string, pass: string) => {
+    console.log('[LOGIN FACULTY REQUEST] Sending credentials to /api/auth/faculty/login...', { identifier });
+    const res = await api.post('/auth/faculty/login', { identifier, password: pass });
+    const { token, user } = res.data;
+
+    localStorage.setItem('smartattend_token', token);
+    localStorage.setItem('smartattend_user', JSON.stringify(user));
+
+    setToken(token);
+    setUser(user);
+    setIsLoading(false);
+    return res.data;
+  };
+
   const submitFirstPasswordChange = async (newPassword: string, confirmPassword?: string) => {
     const fp = deviceFingerprint || (await getDeviceFingerprint());
     const res = await api.post('/auth/student/first-login-change-password', {
@@ -171,6 +186,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         mustChangePasswordTempToken,
         loginAdmin,
         loginStudent,
+        loginFaculty,
         submitFirstPasswordChange,
         updateUser,
         logout,

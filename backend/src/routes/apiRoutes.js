@@ -8,18 +8,34 @@ const attendanceController = require('../controllers/attendanceController');
 const studentController = require('../controllers/studentController');
 const analyticsController = require('../controllers/analyticsController');
 const violationController = require('../controllers/violationController');
-
 const erpController = require('../controllers/erpController');
+const facultyController = require('../controllers/facultyController');
 
 // --- Auth Routes ---
 router.post('/auth/admin/login', authController.adminLogin);
 router.post('/auth/student/login', authController.studentLogin);
+router.post('/auth/faculty/login', facultyController.facultyLogin);
 router.post('/auth/student/first-login-change-password', verifyToken, authController.firstTimePasswordChange);
 router.post('/auth/change-password', verifyToken, authController.changePassword);
 router.get('/auth/me', verifyToken, authController.getMe);
 router.put('/auth/admin/profile', verifyToken, requireRole('admin'), authController.updateAdminProfile);
 router.put('/auth/student/profile', verifyToken, requireRole('student'), authController.updateStudentProfile);
 router.post('/auth/student/register-device', verifyToken, requireRole('student'), authController.registerStudentDevice);
+
+// --- Faculty Ecosystem Routes ---
+router.get('/faculty/dashboard', facultyController.getFacultyDashboard);
+router.get('/faculty/students', facultyController.getFacultyStudents);
+router.get('/faculty/risk-detection', facultyController.getStudentRiskDetection);
+router.post('/faculty/remarks', facultyController.addFacultyRemark);
+router.get('/faculty/remarks/:student_id', facultyController.getFacultyRemarks);
+router.post('/faculty/documents', facultyController.uploadFacultyDocument);
+router.get('/faculty/documents', facultyController.getFacultyDocuments);
+router.post('/faculty/leave-requests', facultyController.submitLeaveRequest);
+router.get('/faculty/leave-requests', facultyController.getFacultyLeaveRequests);
+router.put('/faculty/profile/:id', facultyController.updateFacultyProfile);
+router.get('/admin/faculties-list', facultyController.adminGetFaculties);
+router.post('/admin/faculties-create', facultyController.adminCreateFaculty);
+router.delete('/admin/faculties-delete/:id', facultyController.adminDeleteFaculty);
 
 // --- Class Details & Faculty Routes (AI&DS III-A) ---
 router.get('/class-details', verifyToken, erpController.getClassDetails);

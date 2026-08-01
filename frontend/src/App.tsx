@@ -17,12 +17,14 @@ import { SubjectsPage } from './pages/SubjectsPage';
 import { StudentTimetablePage } from './pages/StudentTimetablePage';
 import { TimetablePage } from './pages/TimetablePage';
 import { StudentManagement } from './pages/StudentManagement';
+import { FacultyDashboard } from './pages/FacultyDashboard';
 import { RefreshCw } from 'lucide-react';
 
 const MainLayout: React.FC = () => {
   const { user, token, isLoading, mustChangePasswordTempToken } = useAuth();
   const isAdmin = user?.role === 'admin';
-  const [activeTab, setActiveTab] = useState<string>(() => (isAdmin ? 'class-management' : 'student-dashboard'));
+  const isFaculty = user?.role === 'faculty';
+  const [activeTab, setActiveTab] = useState<string>(() => (isAdmin ? 'class-management' : isFaculty ? 'faculty-dashboard' : 'student-dashboard'));
   const [sessionParams, setSessionParams] = useState<{ subject?: string; code?: string; faculty?: string; period?: string } | null>(null);
 
   const handleNavigate = (tab: string, extraData?: any) => {
@@ -39,6 +41,8 @@ const MainLayout: React.FC = () => {
         setActiveTab('class-management');
       } else if (user.role === 'student' && (activeTab === 'class-management' || activeTab === 'sessions' || activeTab === 'dashboard' || activeTab === 'timetable')) {
         setActiveTab('student-dashboard');
+      } else if (user.role === 'faculty') {
+        setActiveTab('faculty-dashboard');
       }
     }
   }, [user]);
@@ -64,6 +68,11 @@ const MainLayout: React.FC = () => {
   // Route Guard: If not authenticated, render Login Page
   if (!user || !token) {
     return <Login />;
+  }
+
+  // Faculty Workspace Layout
+  if (isFaculty) {
+    return <FacultyDashboard />;
   }
 
   return (

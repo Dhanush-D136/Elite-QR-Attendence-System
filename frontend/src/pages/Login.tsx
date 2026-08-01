@@ -20,8 +20,8 @@ import {
 } from 'lucide-react';
 
 export const Login: React.FC = () => {
-  const { loginAdmin, loginStudent } = useAuth();
-  const [role, setRole] = useState<'student' | 'admin'>('student');
+  const { loginAdmin, loginStudent, loginFaculty } = useAuth();
+  const [role, setRole] = useState<'student' | 'faculty' | 'admin'>('student');
 
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
@@ -35,7 +35,7 @@ export const Login: React.FC = () => {
     setError('');
 
     if (!identifier.trim() || !password.trim()) {
-      setError('Please enter both your User ID / Register Number and Password.');
+      setError('Please enter both your Credentials and Password.');
       return;
     }
 
@@ -43,6 +43,8 @@ export const Login: React.FC = () => {
     try {
       if (role === 'admin') {
         await loginAdmin(identifier.trim(), password);
+      } else if (role === 'faculty') {
+        await loginFaculty(identifier.trim(), password);
       } else {
         await loginStudent(identifier.trim(), password);
       }
@@ -170,32 +172,45 @@ export const Login: React.FC = () => {
             </p>
           </div>
 
-          {/* ANIMATED SEGMENTED CONTROL ROLE SWITCHER */}
-          <div className="relative p-1.5 rounded-2xl bg-[#F1F5F9] border border-[#E2E8F0] grid grid-cols-2 text-xs font-bold">
+          {/* ANIMATED SEGMENTED CONTROL ROLE SWITCHER (3-WAY) */}
+          <div className="relative p-1.5 rounded-2xl bg-[#F1F5F9] border border-[#E2E8F0] grid grid-cols-3 text-xs font-bold gap-1">
             <button
               type="button"
               onClick={() => { setRole('student'); setError(''); setIdentifier(''); setPassword(''); }}
-              className={`py-3 rounded-xl transition-all duration-300 flex items-center justify-center gap-2 relative z-10 ${
+              className={`py-2.5 rounded-xl transition-all duration-300 flex items-center justify-center gap-1.5 relative z-10 ${
                 role === 'student'
                   ? 'bg-white text-[#111827] shadow-md font-extrabold border border-[#E2E8F0]'
                   : 'text-[#64748B] hover:text-[#111827]'
               }`}
             >
-              <User className={`w-4 h-4 ${role === 'student' ? 'text-[#6D5DFC]' : 'text-[#94A3B8]'}`} />
-              <span>Student Portal</span>
+              <User className={`w-3.5 h-3.5 ${role === 'student' ? 'text-[#6D5DFC]' : 'text-[#94A3B8]'}`} />
+              <span>Student</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => { setRole('faculty'); setError(''); setIdentifier(''); setPassword(''); }}
+              className={`py-2.5 rounded-xl transition-all duration-300 flex items-center justify-center gap-1.5 relative z-10 ${
+                role === 'faculty'
+                  ? 'bg-white text-[#111827] shadow-md font-extrabold border border-[#E2E8F0]'
+                  : 'text-[#64748B] hover:text-[#111827]'
+              }`}
+            >
+              <BookOpen className={`w-3.5 h-3.5 ${role === 'faculty' ? 'text-purple-600' : 'text-[#94A3B8]'}`} />
+              <span>Faculty</span>
             </button>
 
             <button
               type="button"
               onClick={() => { setRole('admin'); setError(''); setIdentifier(''); setPassword(''); }}
-              className={`py-3 rounded-xl transition-all duration-300 flex items-center justify-center gap-2 relative z-10 ${
+              className={`py-2.5 rounded-xl transition-all duration-300 flex items-center justify-center gap-1.5 relative z-10 ${
                 role === 'admin'
                   ? 'bg-white text-[#111827] shadow-md font-extrabold border border-[#E2E8F0]'
                   : 'text-[#64748B] hover:text-[#111827]'
               }`}
             >
-              <Shield className={`w-4 h-4 ${role === 'admin' ? 'text-[#4F7CFF]' : 'text-[#94A3B8]'}`} />
-              <span>Admin Console</span>
+              <Shield className={`w-3.5 h-3.5 ${role === 'admin' ? 'text-[#4F7CFF]' : 'text-[#94A3B8]'}`} />
+              <span>Admin</span>
             </button>
           </div>
 
@@ -211,7 +226,7 @@ export const Login: React.FC = () => {
           <form onSubmit={handleSubmit} className="space-y-4" autoComplete="off">
             <div>
               <label className="block text-xs font-bold text-[#111827] uppercase tracking-wider mb-1.5">
-                {role === 'student' ? 'Register Number / Official VH Email' : 'Admin Email / Username'}
+                {role === 'student' ? 'Register Number / Official VH Email' : role === 'faculty' ? 'Faculty ID / Official Email' : 'Admin Email / Username'}
               </label>
               <div className="relative group">
                 <input
@@ -220,11 +235,19 @@ export const Login: React.FC = () => {
                   autoComplete="off"
                   value={identifier}
                   onChange={(e) => setIdentifier(e.target.value)}
-                  placeholder={role === 'student' ? 'e.g. 113024243032 or vh13936@velhightech.com' : 'Enter Admin Email'}
+                  placeholder={
+                    role === 'student'
+                      ? 'e.g. 113024243032 or vh13936@velhightech.com'
+                      : role === 'faculty'
+                      ? 'e.g. FAC001 or nivetha@velhightech.com'
+                      : 'Enter Admin Email'
+                  }
                   className="w-full px-4 py-3.5 rounded-2xl bg-[#F8FAFC] border border-[#E2E8F0] text-[#111827] placeholder-[#94A3B8] focus:outline-none focus:border-[#6D5DFC] focus:bg-white focus:ring-4 focus:ring-[#6D5DFC]/10 text-xs pl-11 font-medium transition-all"
                 />
                 {role === 'student' ? (
                   <User className="w-4 h-4 text-[#94A3B8] group-focus-within:text-[#6D5DFC] absolute left-4 top-4 transition-colors" />
+                ) : role === 'faculty' ? (
+                  <BookOpen className="w-4 h-4 text-[#94A3B8] group-focus-within:text-purple-600 absolute left-4 top-4 transition-colors" />
                 ) : (
                   <Mail className="w-4 h-4 text-[#94A3B8] group-focus-within:text-[#4F7CFF] absolute left-4 top-4 transition-colors" />
                 )}
