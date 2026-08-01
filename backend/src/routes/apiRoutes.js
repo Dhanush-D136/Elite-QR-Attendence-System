@@ -33,6 +33,14 @@ router.get('/faculty/documents', facultyController.getFacultyDocuments);
 router.post('/faculty/leave-requests', facultyController.submitLeaveRequest);
 router.get('/faculty/leave-requests', facultyController.getFacultyLeaveRequests);
 router.put('/faculty/profile/:id', facultyController.updateFacultyProfile);
+
+// --- Admin Faculty Management Routes ---
+router.get('/admin/faculty-management/stats', facultyController.adminGetFacultyManagementStats);
+router.get('/admin/faculty-management/faculties', facultyController.adminGetFaculties);
+router.post('/admin/faculty-management/faculties', facultyController.adminCreateFaculty);
+router.put('/admin/faculty-management/faculties/:id', facultyController.adminUpdateFaculty);
+router.post('/admin/faculty-management/faculties/:id/reset-password', facultyController.adminResetFacultyPassword);
+router.delete('/admin/faculty-management/faculties/:id', facultyController.adminDeleteFaculty);
 router.get('/admin/faculties-list', facultyController.adminGetFaculties);
 router.post('/admin/faculties-create', facultyController.adminCreateFaculty);
 router.delete('/admin/faculties-delete/:id', facultyController.adminDeleteFaculty);

@@ -17,6 +17,7 @@ import { SubjectsPage } from './pages/SubjectsPage';
 import { StudentTimetablePage } from './pages/StudentTimetablePage';
 import { TimetablePage } from './pages/TimetablePage';
 import { StudentManagement } from './pages/StudentManagement';
+import { FacultyManagement } from './pages/FacultyManagement';
 import { FacultyDashboard } from './pages/FacultyDashboard';
 import { RefreshCw } from 'lucide-react';
 
@@ -90,6 +91,7 @@ const MainLayout: React.FC = () => {
             <>
               {(activeTab === 'class-management' || activeTab === 'dashboard') && <ClassManagementPage />}
               {activeTab === 'students-management' && <StudentManagement />}
+              {activeTab === 'faculty-management' && <FacultyManagement />}
               {activeTab === 'timetable' && <TimetablePage onNavigate={handleNavigate} />}
               {activeTab === 'subjects' && <SubjectsPage onNavigate={handleNavigate} />}
               {activeTab === 'sessions' && (
