@@ -139,24 +139,109 @@ function runMigrations() {
                   });
                 }
 
-                // Auto-sync any subjects present in timetables into subjects master table
-                db.all('SELECT DISTINCT subject_name, faculty_name, department, semester, section FROM timetables', [], (errTt, ttRows) => {
-                  if (ttRows && ttRows.length > 0) {
-                    ttRows.forEach((row) => {
-                      if (!row.subject_name) return;
-                      const code = row.subject_name.substring(0, 4).toUpperCase() + Math.floor(100 + Math.random() * 900);
-                      const subId = 'sub-' + uuidv4();
-                      db.run(
-                        `INSERT OR IGNORE INTO subjects (id, name, code, type, department, year, semester, section, faculty_name, credits, status, is_archived)
-                         VALUES (?, ?, ?, 'Theory', ?, 3, ?, ?, ?, 3, 'Active', 0)`,
-                        [subId, row.subject_name, code, row.department || 'AI & DS', row.semester || 5, row.section || 'A', row.faculty_name || 'Faculty Member']
-                      );
-                    });
-                  }
+                // Auto-sync & Seed Master Timetable for Semester 5 Section A
+                const SEMESTER_5_CODES = [
+                  '21AI55T', '21AI51T', '21HI52T', '21EE01P', '21HI53IT', 
+                  '21MB03OT', '21HC54T', '21AI57P', '21EE03P', 'SPORTS_HOUR'
+                ];
 
-                  console.log('[DATABASE MIGRATION] Schema validation and migrations completed cleanly.');
-                  resolve(true);
+                // 1. Purge legacy subjects not in Semester 5 master list
+                db.run(
+                  `DELETE FROM subjects WHERE code NOT IN (${SEMESTER_5_CODES.map(() => '?').join(',')}) AND (semester != 5 OR code LIKE 'SUB%')`,
+                  SEMESTER_5_CODES
+                );
+                db.run(
+                  `DELETE FROM timetables WHERE subject_name NOT IN (${SEMESTER_5_CODES.map(() => '?').join(',')}) AND subject_name NOT IN (SELECT name FROM subjects)`
+                );
+
+                const SEMESTER_5_SUBJECTS = [
+                  { code: '21AI55T', name: 'Knowledge Engineering', faculty_name: 'Mrs Nivetha P', type: 'Theory', credits: 3 },
+                  { code: '21AI51T', name: 'Programming Language for AI', faculty_name: 'Dr Rajesh Kumar', type: 'Theory', credits: 3 },
+                  { code: '21HI52T', name: 'Data Analytics', faculty_name: 'Mrs Gowthami K', type: 'Theory', credits: 3 },
+                  { code: '21EE01P', name: 'Mini Project - I', faculty_name: 'Mr Arun Kumar', type: 'Project', credits: 2 },
+                  { code: '21HI53IT', name: 'Web Technology', faculty_name: 'Mrs Vasanthapriya M J T', type: 'Theory', credits: 3 },
+                  { code: '21MB03OT', name: 'Open Elective Subject', faculty_name: 'Faculty Member', type: 'Theory', credits: 3 },
+                  { code: '21HC54T', name: 'Block Chain Technology', faculty_name: 'Mrs Deepa R', type: 'Theory', credits: 3 },
+                  { code: '21AI57P', name: 'Data Analytics Laboratory', faculty_name: 'Mrs Gowthami K', type: 'Lab', credits: 2 },
+                  { code: '21EE03P', name: 'Technical Seminar', faculty_name: 'Mr Arun Kumar', type: 'Seminar', credits: 1 },
+                  { code: 'SPORTS_HOUR', name: 'Sports', faculty_name: 'Physical Director', type: 'Sports', credits: 0 }
+                ];
+
+                SEMESTER_5_SUBJECTS.forEach((sub) => {
+                  const subId = 'sub-' + sub.code.toLowerCase();
+                  db.run(
+                    `INSERT OR REPLACE INTO subjects (id, name, code, type, department, year, semester, section, faculty_name, credits, status, is_archived)
+                     VALUES (?, ?, ?, ?, 'AI & DS', 3, 5, 'A', ?, ?, 'Active', 0)`,
+                    [subId, sub.name, sub.code, sub.type, sub.faculty_name, sub.credits]
+                  );
                 });
+
+                // Clear & Repopulate Master Timetable Slots for Semester 5 Section A
+                db.run("DELETE FROM timetables WHERE department = 'AI & DS' AND year = 3 AND section = 'A'", () => {
+                  const MASTER_TIMETABLE_SLOTS = [
+                    // Monday
+                    { day: 'Monday', period_number: 1, code: '21AI55T', name: 'Knowledge Engineering', faculty: 'Mrs Nivetha P', start: '08:15 AM', end: '09:05 AM', room: 'F305' },
+                    { day: 'Monday', period_number: 2, code: '21AI51T', name: 'Programming Language for AI', faculty: 'Dr Rajesh Kumar', start: '09:05 AM', end: '09:55 AM', room: 'F305' },
+                    { day: 'Monday', period_number: 3, code: '21HI52T', name: 'Data Analytics', faculty: 'Mrs Gowthami K', start: '10:10 AM', end: '11:00 AM', room: 'F305' },
+                    { day: 'Monday', period_number: 4, code: '21EE01P', name: 'Mini Project - I', faculty: 'Mr Arun Kumar', start: '11:00 AM', end: '11:50 AM', room: 'F305' },
+                    { day: 'Monday', period_number: 5, code: '21HI53IT', name: 'Web Technology', faculty: 'Mrs Vasanthapriya M J T', start: '12:40 PM', end: '01:30 PM', room: 'F305' },
+                    { day: 'Monday', period_number: 6, code: '21HI53IT', name: 'Web Technology', faculty: 'Mrs Vasanthapriya M J T', start: '01:30 PM', end: '02:20 PM', room: 'F305' },
+                    { day: 'Monday', period_number: 7, code: '21HI53IT', name: 'Web Technology', faculty: 'Mrs Vasanthapriya M J T', start: '02:20 PM', end: '03:10 PM', room: 'F305' },
+                    { day: 'Monday', period_number: 8, code: '21HI53IT', name: 'Web Technology', faculty: 'Mrs Vasanthapriya M J T', start: '03:10 PM', end: '04:00 PM', room: 'F305' },
+
+                    // Tuesday
+                    { day: 'Tuesday', period_number: 1, code: '21MB03OT', name: 'Open Elective Subject', faculty: 'Faculty Member', start: '08:15 AM', end: '09:05 AM', room: 'F305' },
+                    { day: 'Tuesday', period_number: 2, code: '21MB03OT', name: 'Open Elective Subject', faculty: 'Faculty Member', start: '09:05 AM', end: '09:55 AM', room: 'F305' },
+                    { day: 'Tuesday', period_number: 3, code: '21HI52T', name: 'Data Analytics', faculty: 'Mrs Gowthami K', start: '10:10 AM', end: '11:00 AM', room: 'F305' },
+                    { day: 'Tuesday', period_number: 4, code: '21AI55T', name: 'Knowledge Engineering', faculty: 'Mrs Nivetha P', start: '11:00 AM', end: '11:50 AM', room: 'F305' },
+                    { day: 'Tuesday', period_number: 5, code: '21HC54T', name: 'Block Chain Technology', faculty: 'Mrs Deepa R', start: '12:40 PM', end: '01:30 PM', room: 'F305' },
+                    { day: 'Tuesday', period_number: 6, code: '21HI52T', name: 'Data Analytics', faculty: 'Mrs Gowthami K', start: '01:30 PM', end: '02:20 PM', room: 'F305' },
+                    { day: 'Tuesday', period_number: 7, code: '21HI53IT', name: 'Web Technology', faculty: 'Mrs Vasanthapriya M J T', start: '02:20 PM', end: '03:10 PM', room: 'F305' },
+                    { day: 'Tuesday', period_number: 8, code: '21HC54T', name: 'Block Chain Technology', faculty: 'Mrs Deepa R', start: '03:10 PM', end: '04:00 PM', room: 'F305' },
+
+                    // Wednesday
+                    { day: 'Wednesday', period_number: 1, code: '21HI53IT', name: 'Web Technology', faculty: 'Mrs Vasanthapriya M J T', start: '08:15 AM', end: '09:05 AM', room: 'F305' },
+                    { day: 'Wednesday', period_number: 2, code: '21AI57P', name: 'Data Analytics Laboratory', faculty: 'Mrs Gowthami K', start: '09:05 AM', end: '09:55 AM', room: 'Lab 2' },
+                    { day: 'Wednesday', period_number: 3, code: '21AI57P', name: 'Data Analytics Laboratory', faculty: 'Mrs Gowthami K', start: '10:10 AM', end: '11:00 AM', room: 'Lab 2' },
+                    { day: 'Wednesday', period_number: 4, code: '21AI57P', name: 'Data Analytics Laboratory', faculty: 'Mrs Gowthami K', start: '11:00 AM', end: '11:50 AM', room: 'Lab 2' },
+                    { day: 'Wednesday', period_number: 5, code: '21AI57P', name: 'Data Analytics Laboratory', faculty: 'Mrs Gowthami K', start: '12:40 PM', end: '01:30 PM', room: 'Lab 2' },
+                    { day: 'Wednesday', period_number: 6, code: '21AI51T', name: 'Programming Language for AI', faculty: 'Dr Rajesh Kumar', start: '01:30 PM', end: '02:20 PM', room: 'F305' },
+                    { day: 'Wednesday', period_number: 7, code: '21AI55T', name: 'Knowledge Engineering', faculty: 'Mrs Nivetha P', start: '02:20 PM', end: '03:10 PM', room: 'F305' },
+                    { day: 'Wednesday', period_number: 8, code: 'SPORTS_HOUR', name: 'Sports', faculty: 'Physical Director', start: '03:10 PM', end: '04:00 PM', room: 'Ground' },
+
+                    // Thursday
+                    { day: 'Thursday', period_number: 1, code: '21MB03OT', name: 'Open Elective Subject', faculty: 'Faculty Member', start: '08:15 AM', end: '09:05 AM', room: 'F305' },
+                    { day: 'Thursday', period_number: 2, code: '21MB03OT', name: 'Open Elective Subject', faculty: 'Faculty Member', start: '09:05 AM', end: '09:55 AM', room: 'F305' },
+                    { day: 'Thursday', period_number: 3, code: '21AI51T', name: 'Programming Language for AI', faculty: 'Dr Rajesh Kumar', start: '10:10 AM', end: '11:00 AM', room: 'F305' },
+                    { day: 'Thursday', period_number: 4, code: '21HI52T', name: 'Data Analytics', faculty: 'Mrs Gowthami K', start: '11:00 AM', end: '11:50 AM', room: 'F305' },
+                    { day: 'Thursday', period_number: 5, code: '21HC54T', name: 'Block Chain Technology', faculty: 'Mrs Deepa R', start: '12:40 PM', end: '01:30 PM', room: 'F305' },
+                    { day: 'Thursday', period_number: 6, code: '21AI55T', name: 'Knowledge Engineering', faculty: 'Mrs Nivetha P', start: '01:30 PM', end: '02:20 PM', room: 'F305' },
+                    { day: 'Thursday', period_number: 7, code: '21HC54T', name: 'Block Chain Technology', faculty: 'Mrs Deepa R', start: '02:20 PM', end: '03:10 PM', room: 'F305' },
+                    { day: 'Thursday', period_number: 8, code: '21AI51T', name: 'Programming Language for AI', faculty: 'Dr Rajesh Kumar', start: '03:10 PM', end: '04:00 PM', room: 'F305' },
+
+                    // Friday
+                    { day: 'Friday', period_number: 1, code: '21EE01P', name: 'Mini Project - I', faculty: 'Mr Arun Kumar', start: '08:15 AM', end: '09:05 AM', room: 'F305' },
+                    { day: 'Friday', period_number: 2, code: '21EE01P', name: 'Mini Project - I', faculty: 'Mr Arun Kumar', start: '09:05 AM', end: '09:55 AM', room: 'F305' },
+                    { day: 'Friday', period_number: 3, code: '21HI52T', name: 'Data Analytics', faculty: 'Mrs Gowthami K', start: '10:10 AM', end: '11:00 AM', room: 'F305' },
+                    { day: 'Friday', period_number: 4, code: '21EE03P', name: 'Technical Seminar', faculty: 'Mr Arun Kumar', start: '11:00 AM', end: '11:50 AM', room: 'F305' },
+                    { day: 'Friday', period_number: 5, code: '21AI51T', name: 'Programming Language for AI', faculty: 'Dr Rajesh Kumar', start: '12:40 PM', end: '01:30 PM', room: 'F305' },
+                    { day: 'Friday', period_number: 6, code: '21HI52T', name: 'Data Analytics', faculty: 'Mrs Gowthami K', start: '01:30 PM', end: '02:20 PM', room: 'F305' },
+                    { day: 'Friday', period_number: 7, code: '21AI55T', name: 'Knowledge Engineering', faculty: 'Mrs Nivetha P', start: '02:20 PM', end: '03:10 PM', room: 'F305' },
+                    { day: 'Friday', period_number: 8, code: '21HC54T', name: 'Block Chain Technology', faculty: 'Mrs Deepa R', start: '03:10 PM', end: '04:00 PM', room: 'F305' }
+                  ];
+
+                  MASTER_TIMETABLE_SLOTS.forEach((slot) => {
+                    const ttId = `tt-${slot.day.toLowerCase()}-p${slot.period_number}`;
+                    db.run(
+                      `INSERT OR REPLACE INTO timetables (id, department, year, section, semester, day, period_number, subject_name, faculty_name, start_time, end_time, room_number)
+                       VALUES (?, 'AI & DS', 3, 'A', 5, ?, ?, ?, ?, ?, ?, ?)`,
+                      [ttId, slot.day, slot.period_number, slot.name, slot.faculty, slot.start, slot.end, slot.room]
+                    );
+                  });
+                });
+
+                console.log('[DATABASE MIGRATION] Master Semester 5 Section A Timetable seeded cleanly.');
+                resolve(true);
               });
             });
           });
