@@ -31,13 +31,12 @@ function getISTTimeDetails() {
 
   const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
   const currentDayName = days[istDate.getDay()];
-  const activeDayName = (currentDayName === 'Sunday' || currentDayName === 'Saturday') ? 'Monday' : currentDayName;
   const currentMinutes = istDate.getHours() * 60 + istDate.getMinutes();
 
   return {
     now: istDate,
     rawNow: now,
-    currentDay: activeDayName,
+    currentDay: currentDayName,
     currentMinutes,
     todayStr: `${istDate.getFullYear()}-${String(istDate.getMonth() + 1).padStart(2, '0')}-${String(istDate.getDate()).padStart(2, '0')}`,
     formattedTime: istDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })

@@ -49,7 +49,7 @@ export const StudentDashboard: React.FC = () => {
   }, [user?.id]);
 
   const daysOfWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-  const todayName = daysOfWeek[new Date().getDay()] === 'Sunday' || daysOfWeek[new Date().getDay()] === 'Saturday' ? 'Monday' : daysOfWeek[new Date().getDay()];
+  const todayName = daysOfWeek[new Date().getDay()];
 
   const dayOrderMap: Record<string, string> = {
     'Monday': 'Monday • Day Order 1',
