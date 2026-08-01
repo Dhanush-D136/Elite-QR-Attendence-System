@@ -6,39 +6,57 @@ function generate4DigitCode() {
   return Math.floor(1000 + Math.random() * 9000).toString();
 }
 
-// Auto-detect Current Class Slot from Timetable based on Server Clock
-function getCurrentTimetableSlot(req, res) {
-  const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-  const now = new Date();
-  const currentDay = days[now.getDay()] === 'Sunday' || days[now.getDay()] === 'Saturday' ? 'Monday' : days[now.getDay()];
+// Helper to parse time string (e.g. "08:15 AM", "12:40 PM") into total minutes from midnight
+function parseTimeToMinutes(timeStr) {
+  if (!timeStr) return 0;
+  const clean = timeStr.trim();
+  const isPM = clean.toUpperCase().includes('PM');
+  const isAM = clean.toUpperCase().includes('AM');
+  const timePart = clean.replace(/AM|PM/i, '').trim();
+  const parts = timePart.split(':');
+  let hours = parseInt(parts[0] || '0', 10);
+  const minutes = parseInt(parts[1] || '0', 10);
 
-  db.all('SELECT * FROM timetables WHERE day = ? ORDER BY id ASC', [currentDay], (err, rows) => {
+  if (isPM && hours < 12) hours += 12;
+  if (isAM && hours === 12) hours = 0;
+
+  return hours * 60 + minutes;
+}
+
+// Helper to calculate Indian Standard Time (Asia/Kolkata, UTC+5:30)
+function getISTTimeDetails() {
+  const now = new Date();
+  const istDateString = now.toLocaleString("en-US", { timeZone: "Asia/Kolkata" });
+  const istDate = new Date(istDateString);
+
+  const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const currentDayName = days[istDate.getDay()];
+  const activeDayName = (currentDayName === 'Sunday' || currentDayName === 'Saturday') ? 'Monday' : currentDayName;
+  const currentMinutes = istDate.getHours() * 60 + istDate.getMinutes();
+
+  return {
+    now: istDate,
+    rawNow: now,
+    currentDay: activeDayName,
+    currentMinutes,
+    todayStr: `${istDate.getFullYear()}-${String(istDate.getMonth() + 1).padStart(2, '0')}-${String(istDate.getDate()).padStart(2, '0')}`,
+    formattedTime: istDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })
+  };
+}
+
+// Auto-detect Current Class Slot from Timetable based on Server Clock (IST Asia/Kolkata)
+function getCurrentTimetableSlot(req, res) {
+  const ist = getISTTimeDetails();
+
+  db.all('SELECT * FROM timetables WHERE day = ? ORDER BY period_number ASC, id ASC', [ist.currentDay], (err, rows) => {
     if (err || !rows || rows.length === 0) {
       return res.json({
         hasActiveSlot: false,
-        message: 'No active timetable slot currently.',
-        currentDay,
-        currentTime: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        message: 'No Active Lecture',
+        currentDay: ist.currentDay,
+        currentTime: ist.formattedTime
       });
     }
-
-    const currentMinutes = now.getHours() * 60 + now.getMinutes();
-
-    const parseTimeToMinutes = (timeStr) => {
-      if (!timeStr) return 0;
-      const clean = timeStr.trim();
-      const isPM = clean.toUpperCase().includes('PM');
-      const isAM = clean.toUpperCase().includes('AM');
-      const timePart = clean.replace(/AM|PM/i, '').trim();
-      const parts = timePart.split(':');
-      let hours = parseInt(parts[0] || '0', 10);
-      const minutes = parseInt(parts[1] || '0', 10);
-
-      if (isPM && hours < 12) hours += 12;
-      if (isAM && hours === 12) hours = 0;
-
-      return hours * 60 + minutes;
-    };
 
     let matchedSlot = null;
     let periodIndex = -1;
@@ -48,9 +66,9 @@ function getCurrentTimetableSlot(req, res) {
       const startMins = parseTimeToMinutes(slot.start_time);
       const endMins = parseTimeToMinutes(slot.end_time);
 
-      if (currentMinutes >= startMins && currentMinutes <= endMins) {
+      if (ist.currentMinutes >= startMins && ist.currentMinutes <= endMins) {
         matchedSlot = slot;
-        periodIndex = i + 1;
+        periodIndex = slot.period_number || (i + 1);
         break;
       }
     }
@@ -73,24 +91,21 @@ function getCurrentTimetableSlot(req, res) {
       });
     }
 
-    // Default to the first lecture of the day for seamless testing/demonstration
-    const firstOrNext = rows[0];
+    // No class currently active at this exact time (e.g. Lunch Break or Off Hours)
     return res.json({
-      hasActiveSlot: true,
-      isAutoLoadedSlot: true,
-      message: `Timetable slot for ${currentDay}`,
-      slot: {
-        period: `Period 1`,
-        periodNumber: 1,
-        subject: firstOrNext.subject_name,
-        faculty: firstOrNext.faculty_name,
-        room: firstOrNext.room_number,
-        department: firstOrNext.department || 'AI & DS',
-        year: 'III Year',
-        section: 'A',
-        startTime: firstOrNext.start_time,
-        endTime: firstOrNext.end_time
-      }
+      hasActiveSlot: false,
+      isBreakOrOffHours: true,
+      message: 'No Active Lecture',
+      currentDay: ist.currentDay,
+      currentTime: ist.formattedTime,
+      nextSlot: rows[0] ? {
+        period: `Period ${rows[0].period_number || 1}`,
+        subject: rows[0].subject_name,
+        faculty: rows[0].faculty_name,
+        room: rows[0].room_number,
+        startTime: rows[0].start_time,
+        endTime: rows[0].end_time
+      } : null
     });
   });
 }
@@ -347,35 +362,15 @@ function endSession(req, res) {
 
 // Auto-Launch Attendance Session from Current Timetable Slot (1-Click Launch)
 function autoLaunchSession(req, res) {
-  const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-  const now = new Date();
-  const currentDay = days[now.getDay()] === 'Sunday' || days[now.getDay()] === 'Saturday' ? 'Monday' : days[now.getDay()];
+  const ist = getISTTimeDetails();
 
-  db.all('SELECT * FROM timetables WHERE day = ? ORDER BY id ASC', [currentDay], (err, rows) => {
+  db.all('SELECT * FROM timetables WHERE day = ? ORDER BY period_number ASC, id ASC', [ist.currentDay], (err, rows) => {
     if (err || !rows || rows.length === 0) {
       return res.status(400).json({
         error: 'No active timetable slot currently.',
-        message: 'Current time is outside standard lecture hours or during break intervals.'
+        message: `Current time (${ist.formattedTime}) on ${ist.currentDay} is outside standard lecture hours.`
       });
     }
-
-    const currentMinutes = now.getHours() * 60 + now.getMinutes();
-
-    const parseTimeToMinutes = (timeStr) => {
-      if (!timeStr) return 0;
-      const clean = timeStr.trim();
-      const isPM = clean.toUpperCase().includes('PM');
-      const isAM = clean.toUpperCase().includes('AM');
-      const timePart = clean.replace(/AM|PM/i, '').trim();
-      const parts = timePart.split(':');
-      let hours = parseInt(parts[0] || '0', 10);
-      const minutes = parseInt(parts[1] || '0', 10);
-
-      if (isPM && hours < 12) hours += 12;
-      if (isAM && hours === 12) hours = 0;
-
-      return hours * 60 + minutes;
-    };
 
     let matchedSlot = null;
     let periodNumber = 1;
@@ -385,20 +380,20 @@ function autoLaunchSession(req, res) {
       const startMins = parseTimeToMinutes(slot.start_time);
       const endMins = parseTimeToMinutes(slot.end_time);
 
-      if (currentMinutes >= startMins && currentMinutes <= endMins) {
+      if (ist.currentMinutes >= startMins && ist.currentMinutes <= endMins) {
         matchedSlot = slot;
-        periodNumber = i + 1;
+        periodNumber = slot.period_number || (i + 1);
         break;
       }
     }
 
+    // If auto-launching and currently between classes or off-hours, fallback to first slot or specified slot
     if (!matchedSlot) {
       matchedSlot = rows[0];
-      periodNumber = 1;
+      periodNumber = rows[0].period_number || 1;
     }
 
-    const todayStr = now.toISOString().split('T')[0];
-    const sessionId = `SES-${todayStr}-P${periodNumber}`;
+    const sessionId = `SES-${ist.todayStr}-P${periodNumber}`;
     const attendanceCode = generate4DigitCode();
     const duration = 25;
     const startTime = new Date();

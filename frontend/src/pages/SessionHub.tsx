@@ -3,6 +3,7 @@ import api from '../services/api';
 import { getSocket } from '../services/socket';
 import { AttendanceSession, AttendanceRecord, TimetableItem } from '../types';
 import { DynamicQRDisplay } from '../components/DynamicQRDisplay';
+import { HeroBanner } from '../components/HeroBanner';
 import {
   QrCode,
   Play,
@@ -263,6 +264,9 @@ export const SessionHub: React.FC<SessionHubProps> = ({
 
   return (
     <div className="space-y-6 animate-fade-in">
+      {/* Hero Cover Banner */}
+      <HeroBanner />
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>

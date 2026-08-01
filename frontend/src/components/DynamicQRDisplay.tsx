@@ -76,6 +76,8 @@ export const DynamicQRDisplay: React.FC<DynamicQRDisplayProps> = ({
   };
 
   useEffect(() => {
+    // Render immediate initial QR SVG to prevent blank display
+    renderQRCode(attendanceCode, timestamp);
     rotateQR();
 
     const timerInterval = setInterval(() => {
