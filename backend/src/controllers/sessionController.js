@@ -1,5 +1,27 @@
 const { v4: uuidv4 } = require('uuid');
 const { db } = require('../database/db');
+const { generateDynamicToken } = require('../utils/qrEncryptor');
+
+// In-Memory Active Session QR Cache: key = sessionId, value = payload object
+const activeSessionQRCodes = new Map();
+
+function generateAndCacheLatestQR(sessionId, subject = 'Subject', faculty = 'Faculty') {
+  const { token, payload } = generateDynamicToken(sessionId, subject, faculty);
+  activeSessionQRCodes.set(sessionId, payload);
+  return { token, payload };
+}
+
+// Background 5-second dynamic QR rotation for active sessions
+setInterval(() => {
+  db.all("SELECT id, subject, faculty_name FROM attendance_sessions WHERE status = 'active'", [], (err, activeSessions) => {
+    if (!err && activeSessions && activeSessions.length > 0) {
+      activeSessions.forEach((sess) => {
+        const { token, payload } = generateAndCacheLatestQR(sess.id, sess.subject, sess.faculty_name);
+        db.run("UPDATE attendance_sessions SET attendance_code = ?, active_token = ?, token = ? WHERE id = ?", [payload.nonce, payload.nonce, token, sess.id]);
+      });
+    }
+  });
+}, 5000);
 
 // Helper to generate a random 4-digit attendance code (e.g. 4821, 7194, 3058)
 function generate4DigitCode() {
@@ -126,11 +148,11 @@ function createSession(req, res) {
   date = date || new Date().toISOString().split('T')[0];
 
   const id = uuidv4();
-  const attendanceCode = generate4DigitCode();
   const duration = parseInt(duration_minutes || 25);
   const startTime = new Date();
   const expiryTime = new Date(startTime.getTime() + duration * 60000);
-  const currentTimestamp = Math.floor(Date.now() / 1000);
+
+  const { token, payload } = generateAndCacheLatestQR(id, subject, faculty_name);
 
   const query = `
     INSERT INTO attendance_sessions (
@@ -149,7 +171,7 @@ function createSession(req, res) {
       id, subject, department, year, section,
       period_number, faculty_name, date,
       startTime.toISOString(), expiryTime.toISOString(), expiryTime.toISOString(), duration,
-      attendanceCode, attendanceCode, attendanceCode
+      payload.nonce, payload.nonce, token
     ],
     function (insertErr) {
       if (insertErr) {
@@ -157,7 +179,7 @@ function createSession(req, res) {
         return res.status(500).json({ error: 'Failed to create attendance session: ' + insertErr.message });
       }
 
-      console.log(`✅ [TIMETABLE QR SESSION CREATED] ID: ${id}, Subject: ${subject}, Period: ${period_number}, Initial Code: ${attendanceCode}`);
+      console.log(`✅ [TIMETABLE 5s QR SESSION CREATED] ID: ${id}, Subject: ${subject}, Initial Nonce: ${payload.nonce}`);
 
       const sessionPayload = {
         sessionId: id,
@@ -169,8 +191,9 @@ function createSession(req, res) {
         faculty: faculty_name,
         date,
         room: room_number || 'F305',
-        attendanceCode,
-        timestamp: currentTimestamp,
+        attendanceCode: payload.nonce,
+        qrPayload: payload,
+        token,
         expiryTime
       };
 
@@ -194,16 +217,17 @@ function createSession(req, res) {
           start_time: startTime.toISOString(),
           expiry_time: expiryTime.toISOString(),
           duration_minutes: duration,
-          attendance_code: attendanceCode,
+          attendance_code: payload.nonce,
           status: 'active'
         },
-        qrPayload: sessionPayload
+        qrPayload: payload,
+        token
       });
     }
   );
 }
 
-// Rotate QR Code every 25 seconds
+// Rotate QR Code every 5 seconds
 function rotateSessionQR(req, res) {
   const { id } = req.params;
 
@@ -212,23 +236,24 @@ function rotateSessionQR(req, res) {
       return res.status(404).json({ error: 'Active session not found' });
     }
 
-    const newCode = generate4DigitCode();
-    const currentTimestamp = Math.floor(Date.now() / 1000);
+    const { token, payload } = generateAndCacheLatestQR(id, session.subject, session.faculty_name || 'Faculty');
 
     db.run(
       'UPDATE attendance_sessions SET attendance_code = ?, active_token = ?, token = ? WHERE id = ?',
-      [newCode, newCode, newCode, id],
+      [payload.nonce, payload.nonce, token, id],
       function (updateErr) {
         if (updateErr) {
           return res.status(500).json({ error: 'Failed to rotate QR code' });
         }
 
-        console.log(`🔄 [QR ROTATED] Session: ${id}, New 4-Digit Code: ${newCode}`);
+        console.log(`🔄 [5s QR ROTATED] Session: ${id}, New Nonce: ${payload.nonce}`);
 
         const rotationPayload = {
           sessionId: id,
-          attendanceCode: newCode,
-          timestamp: currentTimestamp,
+          attendanceCode: payload.nonce,
+          qrPayload: payload,
+          token,
+          timestamp: payload.timestamp,
           subject: session.subject
         };
 
@@ -239,7 +264,8 @@ function rotateSessionQR(req, res) {
 
         res.json({
           success: true,
-          qrPayload: rotationPayload
+          qrPayload: payload,
+          token
         });
       }
     );
@@ -259,13 +285,17 @@ function getSessionQR(req, res) {
       return res.status(400).json({ error: 'Session has expired or is inactive', isExpired: true });
     }
 
-    const attendanceCode = session.attendance_code || '4821';
-    const currentTimestamp = Math.floor(Date.now() / 1000);
+    let payload = activeSessionQRCodes.get(id);
+    if (!payload) {
+      const generated = generateAndCacheLatestQR(id, session.subject, session.faculty_name || 'Faculty');
+      payload = generated.payload;
+    }
 
     res.json({
       sessionId: id,
-      attendanceCode,
-      timestamp: currentTimestamp,
+      attendanceCode: payload.nonce,
+      qrPayload: payload,
+      token: JSON.stringify(payload),
       subject: session.subject,
       expiresAt: expiry.getTime()
     });
@@ -538,6 +568,8 @@ function autoLaunchSession(req, res) {
 }
 
 module.exports = {
+  activeSessionQRCodes,
+  generateAndCacheLatestQR,
   getCurrentTimetableSlot,
   autoLaunchSession,
   createSession,

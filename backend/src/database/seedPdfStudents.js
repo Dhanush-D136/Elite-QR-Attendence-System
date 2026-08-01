@@ -78,21 +78,23 @@ async function seedPdfStudents() {
 
   db.serialize(() => {
     for (const st of pdfStudents) {
-      const email = `${st.name.toLowerCase().replace(/[^a-z0-9]/g, '')}.${st.roll.slice(-4)}@univ.edu`;
+      const vh = st.vh || `VH${13000 + Math.floor(Math.random() * 2000)}`;
+      const email = `${vh.toLowerCase()}@velhightech.com`;
       const photo = `https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150`;
       
       db.run(
-        `INSERT OR IGNORE INTO users (id, name, roll_number, email, role, department, year, section, phone, profile_photo, password_hash, must_change_password)
-         VALUES (?, ?, ?, ?, 'student', ?, ?, ?, ?, ?, ?, 1)`,
+        `INSERT OR IGNORE INTO users (id, name, roll_number, vh_number, email, role, department, year, section, phone, profile_photo, password_hash, must_change_password)
+         VALUES (?, ?, ?, ?, ?, 'student', ?, ?, ?, ?, ?, ?, 1)`,
         [
           uuidv4(),
           st.name,
           st.roll,
+          vh,
           email,
           'AI & Data Science',
           2,
           'A',
-          st.vh,
+          '+91 9876543210',
           photo,
           defaultPasswordHash
         ],

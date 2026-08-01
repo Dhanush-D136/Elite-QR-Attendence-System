@@ -1,10 +1,12 @@
 const { v4: uuidv4 } = require('uuid');
 const { db } = require('../database/db');
+const { verifyDynamicTokenSignature } = require('../utils/qrEncryptor');
+const { activeSessionQRCodes } = require('./sessionController');
 
 /**
- * MANDATORY QR ATTENDANCE ENGINE
- * Attendance is ONLY marked when a valid camera-scanned QR payload is submitted.
- * NO test bypasses, NO fake verifications.
+ * MANDATORY REAL-TIME DYNAMIC QR ATTENDANCE ENGINE (5-Second Dynamic Rotation)
+ * Attendance is ONLY marked when the single latest server-generated QR payload is submitted.
+ * Old QRs are rejected immediately with: "❌ QR Expired: This attendance QR is no longer valid. Please scan the latest QR."
  */
 function markAttendance(req, res) {
   const timestamp = new Date().toISOString();
@@ -14,10 +16,11 @@ function markAttendance(req, res) {
 
   const { qr_payload, sessionId: passedSessionId, attendanceCode: passedCode } = req.body;
 
+  let parsedPayload = null;
   let parsedSessionId = passedSessionId;
-  let parsedAttendanceCode = passedCode;
+  let parsedNonce = passedCode;
 
-  // Strict Payload Inspection: Requires camera-scanned QR payload string/JSON
+  // Strict Payload Inspection
   if (!qr_payload && (!passedSessionId || !passedCode)) {
     console.error(`❌ [SECURITY REJECT] Missing scanned QR payload!`);
     return res.status(400).json({
@@ -27,38 +30,39 @@ function markAttendance(req, res) {
     });
   }
 
-  // Parse QR Payload
+  // Extract JSON / String payload
   if (qr_payload) {
     if (typeof qr_payload === 'object' && qr_payload !== null) {
-      parsedSessionId = qr_payload.sessionId || parsedSessionId;
-      parsedAttendanceCode = qr_payload.attendanceCode || parsedAttendanceCode;
+      parsedPayload = qr_payload;
+      parsedSessionId = parsedPayload.sessionId || parsedSessionId;
+      parsedNonce = parsedPayload.nonce || parsedPayload.attendanceCode || parsedNonce;
     } else if (typeof qr_payload === 'string') {
-      if (qr_payload.startsWith('ATTENDANCE:')) {
-        const parts = qr_payload.split(':');
-        if (parts.length >= 3) {
-          parsedSessionId = parts[1];
-          parsedAttendanceCode = parts[2];
-        } else if (parts.length === 2) {
-          parsedAttendanceCode = parts[1];
-        }
-      } else {
-        try {
-          const json = JSON.parse(qr_payload);
-          parsedSessionId = json.sessionId || parsedSessionId;
-          parsedAttendanceCode = json.attendanceCode || parsedAttendanceCode;
-        } catch (e) {
-          parsedAttendanceCode = qr_payload;
+      try {
+        parsedPayload = JSON.parse(qr_payload);
+        parsedSessionId = parsedPayload.sessionId || parsedSessionId;
+        parsedNonce = parsedPayload.nonce || parsedPayload.attendanceCode || parsedNonce;
+      } catch (e) {
+        if (qr_payload.startsWith('ATTENDANCE:')) {
+          const parts = qr_payload.split(':');
+          if (parts.length >= 3) {
+            parsedSessionId = parts[1];
+            parsedNonce = parts[2];
+          } else if (parts.length === 2) {
+            parsedNonce = parts[1];
+          }
+        } else {
+          parsedNonce = qr_payload;
         }
       }
     }
   }
 
   console.log(`\n====================================================`);
-  console.log(`[CAMERA QR SCANNED] Timestamp: ${timestamp}`);
+  console.log(`[DYNAMIC QR SCANNED] Timestamp: ${timestamp}`);
   console.log(`[STUDENT] ${studentName} (${rollNumber})`);
-  console.log(`[DECODED PAYLOAD] Session ID: "${parsedSessionId}", Code: "${parsedAttendanceCode}"`);
+  console.log(`[DECODED PAYLOAD] Session ID: "${parsedSessionId}", Nonce: "${parsedNonce}"`);
 
-  if (!parsedAttendanceCode && !parsedSessionId) {
+  if (!parsedSessionId || parsedSessionId === 'Unknown') {
     return res.status(400).json({
       success: false,
       reason: 'INVALID_QR_PAYLOAD',
@@ -66,16 +70,21 @@ function markAttendance(req, res) {
     });
   }
 
-  // Step 1: Validate Active Session in Database
-  let sessionQuery = "SELECT * FROM attendance_sessions WHERE status = 'active'";
-  const queryParams = [];
-
-  if (parsedSessionId && parsedSessionId !== 'Unknown') {
-    sessionQuery += " AND id = ?";
-    queryParams.push(parsedSessionId);
+  // 1. Verify HMAC Signature if full payload is available
+  if (parsedPayload && parsedPayload.signature) {
+    const sigCheck = verifyDynamicTokenSignature(parsedPayload);
+    if (!sigCheck.valid) {
+      console.error(`❌ [SECURITY REJECT] Invalid HMAC signature!`);
+      return res.status(400).json({
+        success: false,
+        reason: 'INVALID_SIGNATURE',
+        message: '❌ QR Expired\nThis attendance QR is no longer valid or signature is tampered. Please scan the latest QR.'
+      });
+    }
   }
 
-  db.get(sessionQuery, queryParams, (err, session) => {
+  // 2. Validate Active Session in Database
+  db.get("SELECT * FROM attendance_sessions WHERE id = ? AND status = 'active'", [parsedSessionId], (err, session) => {
     if (err || !session) {
       const errorMsg = 'No active lecture session found for the scanned QR code!';
       console.error(`❌ [SCAN REJECTED] ${errorMsg}`);
@@ -87,17 +96,29 @@ function markAttendance(req, res) {
     }
 
     const sessionId = session.id;
-    const activeCode = session.attendance_code || parsedAttendanceCode;
 
-    // Step 2: Check Duplicate Attendance (Only prevent same student scanning twice)
+    // 3. Strict Server-Side Latest Nonce Validation (5-Second Dynamic Enforcement)
+    const latestServerPayload = activeSessionQRCodes.get(sessionId);
+    if (latestServerPayload) {
+      if (parsedNonce !== latestServerPayload.nonce) {
+        console.warn(`⚠️ [EXPIRED QR REJECTED] Scanned Nonce (${parsedNonce}) != Latest Server Nonce (${latestServerPayload.nonce})`);
+        return res.status(400).json({
+          success: false,
+          reason: 'EXPIRED_QR',
+          message: '❌ QR Expired\nThis attendance QR is no longer valid. Please scan the latest QR.'
+        });
+      }
+    }
+
+    // 4. Duplicate Scan Protection (Only prevent same student scanning twice)
     db.get('SELECT * FROM attendance_records WHERE student_id = ? AND session_id = ?', [studentId, sessionId], (err, existingRecord) => {
       if (existingRecord) {
-        const errorMsg = `Attendance already marked for ${studentName} in ${session.subject}`;
-        console.warn(`⚠️ [DUPLICATE SCAN REJECTED] ${errorMsg}`);
+        const errorMsg = 'Attendance already marked for this session.';
+        console.warn(`⚠️ [DUPLICATE SCAN REJECTED] ${studentName} - ${session.subject}`);
         return res.status(409).json({
           success: false,
           reason: 'DUPLICATE',
-          message: 'Attendance has already been marked for this session!'
+          message: errorMsg
         });
       }
 
@@ -107,7 +128,7 @@ function markAttendance(req, res) {
           return res.status(404).json({ success: false, message: 'Student account not found' });
         }
 
-        // Step 3: Insert Verified Attendance Record into Database
+        // 5. Insert Verified Attendance Record into Database
         const recordId = uuidv4();
         const attendanceTime = new Date().toISOString();
 
@@ -118,7 +139,7 @@ function markAttendance(req, res) {
             distance_meters, status, device_fingerprint
           )
           VALUES (?, ?, ?, ?, ?, 0.0, 0.0, 0.0, 'present', ?)`,
-          [recordId, studentId, sessionId, activeCode, attendanceTime, student.device_fingerprint || 'camera_scanner'],
+          [recordId, studentId, sessionId, parsedNonce, attendanceTime, student.device_fingerprint || 'camera_scanner'],
           function (insertErr) {
             if (insertErr) {
               console.error(`❌ [DB INSERT FAILED] ${insertErr.message}`);
@@ -136,32 +157,55 @@ function markAttendance(req, res) {
               student_id: studentId,
               student_name: studentName,
               roll_number: rollNumber,
+              vh_number: student.vh_number,
+              email: student.email,
               department: student.department,
               year: student.year,
               section: student.section,
               profile_photo: student.profile_photo,
               attendance_time: attendanceTime,
               distance_meters: 0,
-              attendance_code: activeCode,
+              attendance_code: parsedNonce,
               status: 'present',
               subject: session.subject
             };
 
-            // Step 4: Emit Real-Time WebSockets
+            // 6. Emit Real-Time WebSockets for Instant Sync Across All Dashboards
             const io = req.app.get('socketio');
             if (io) {
               io.emit('attendanceMarked', recordPayload);
               io.emit('attendance_marked', {
                 sessionId,
-                attendanceCode: activeCode,
+                attendanceCode: parsedNonce,
                 record: recordPayload
               });
               io.emit('attendance_updated', {
                 sessionId,
                 record: recordPayload
               });
-              console.log(`⚡ [WEBSOCKET BROADCAST] Emitted attendance update for: ${studentName}`);
+              io.emit('roster_updated', {
+                sessionId,
+                studentId,
+                status: 'present'
+              });
+              console.log(`⚡ [WEBSOCKET BROADCAST] Emitted live attendance update for: ${studentName}`);
             }
+
+            console.log(`====================================================\n`);
+
+            res.status(200).json({
+              success: true,
+              attendanceId: recordId,
+              attendanceCode: parsedNonce,
+              message: `Attendance Marked Successfully as PRESENT for ${session.subject}!`,
+              record: recordPayload
+            });
+          }
+        );
+      });
+    });
+  });
+}
 
             console.log(`====================================================\n`);
 

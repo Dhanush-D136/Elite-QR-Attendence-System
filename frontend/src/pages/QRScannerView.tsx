@@ -306,6 +306,25 @@ export const QRScannerView: React.FC<QRScannerViewProps> = ({ onSuccessReturn })
           </div>
         </div>
 
+        {scanErrorMessage && (
+          <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex flex-col items-center gap-2 animate-shake">
+            <div className="flex items-center gap-2 font-bold text-rose-800 text-sm whitespace-pre-line">
+              <AlertCircle className="w-5 h-5 shrink-0 text-rose-600" />
+              <span>{scanErrorMessage}</span>
+            </div>
+            <button
+              onClick={() => {
+                setScanErrorMessage(null);
+                setQrScanned(false);
+                isProcessingRef.current = false;
+              }}
+              className="mt-1 px-4 py-1.5 rounded-full bg-rose-600 text-white text-xs font-extrabold flex items-center gap-1.5 shadow-sm hover:bg-rose-700"
+            >
+              <RefreshCw className="w-3.5 h-3.5" /> Scan Again
+            </button>
+          </div>
+        )}
+
         {cameraError && (
           <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex flex-col items-center gap-2">
             <div className="flex items-center gap-2 font-bold">

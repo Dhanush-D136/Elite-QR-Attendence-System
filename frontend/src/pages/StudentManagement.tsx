@@ -112,6 +112,7 @@ export const StudentManagement: React.FC = () => {
   const [newStudent, setNewStudent] = useState({
     name: '',
     roll_number: '',
+    vh_number: '',
     email: '',
     department: 'AI & Data Science',
     year: '3',
@@ -721,12 +722,12 @@ export const StudentManagement: React.FC = () => {
                         className="rounded border-[#E7E7E7] text-[#6D5DFC]"
                       />
                     </th>
-                    <th className="p-4">Student Profile</th>
+                    <th className="p-4">Student Name</th>
                     <th className="p-4">Register Number</th>
-                    <th className="p-4">Department & Class</th>
-                    <th className="p-4">Phone Contact</th>
+                    <th className="p-4">VH Number</th>
+                    <th className="p-4">Official Email ID</th>
+                    <th className="p-4">Phone Number</th>
                     <th className="p-4">Attendance %</th>
-                    <th className="p-4">Password Status</th>
                     <th className="p-4">Account Status</th>
                     <th className="p-4 text-right">Actions</th>
                   </tr>
@@ -742,6 +743,8 @@ export const StudentManagement: React.FC = () => {
                     students.map((st) => {
                       const isSelected = selectedStudentIds.includes(st.id);
                       const isDefaultPass = Boolean((st as any).password_status === 'Default Password');
+                      const displayVH = (st as any).vh_number || (st.roll_number ? 'VH' + st.roll_number.slice(-5) : 'VH13936');
+                      const displayEmail = st.email || `${displayVH.toLowerCase()}@velhightech.com`;
 
                       return (
                         <tr
@@ -770,14 +773,12 @@ export const StudentManagement: React.FC = () => {
                               >
                                 {st.name}
                               </p>
-                              <p className="text-[10px] text-[#6B7280] font-medium">{st.email}</p>
+                              <span className="text-[10px] text-[#6B7280]">Yr {st.year || 3} • Sec {st.section || 'A'}</span>
                             </div>
                           </td>
-                          <td className="p-4 font-mono text-[#6D5DFC] font-bold">{st.roll_number}</td>
-                          <td className="p-4 text-[#111827] font-medium">
-                            {st.department || 'AI & DS'} <br />
-                            <span className="text-[10px] text-[#6B7280]">Yr {st.year || 3} • Sec {st.section || 'A'}</span>
-                          </td>
+                          <td className="p-4 font-mono text-[#111827] font-bold">{st.roll_number}</td>
+                          <td className="p-4 font-mono text-[#6D5DFC] font-extrabold">{displayVH}</td>
+                          <td className="p-4 font-mono text-xs text-[#12B76A] font-bold">{displayEmail}</td>
                           <td className="p-4 text-[#6B7280] font-mono text-[11px]">{st.phone || 'N/A'}</td>
                           <td className="p-4">
                             <div className="flex items-center gap-2">
@@ -1043,28 +1044,35 @@ export const StudentManagement: React.FC = () => {
 
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className="block text-[11px] font-semibold text-[#111827] mb-1">Register Number * (Unique)</label>
+                    <label className="block text-[11px] font-semibold text-[#111827] mb-1">Register Number *</label>
                     <input
                       type="text"
                       required
                       value={newStudent.roll_number}
                       onChange={(e) => setNewStudent({ ...newStudent, roll_number: e.target.value })}
-                      placeholder="1130242430302"
+                      placeholder="e.g. 113024243032"
                       className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827] font-mono"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-[11px] font-semibold text-[#111827] mb-1">Email Address * (Unique)</label>
+                    <label className="block text-[11px] font-semibold text-[#111827] mb-1">VH Number *</label>
                     <input
-                      type="email"
+                      type="text"
                       required
-                      value={newStudent.email}
-                      onChange={(e) => setNewStudent({ ...newStudent, email: e.target.value })}
-                      placeholder="abaskar@univ.edu"
-                      className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827]"
+                      value={newStudent.vh_number}
+                      onChange={(e) => setNewStudent({ ...newStudent, vh_number: e.target.value.toUpperCase() })}
+                      placeholder="e.g. VH13936"
+                      className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#6D5DFC] font-mono font-bold"
                     />
                   </div>
+                </div>
+
+                <div className="p-3 rounded-2xl bg-[#ECFDF5] border border-[#12B76A]/30 flex items-center justify-between text-xs">
+                  <span className="text-[11px] font-bold text-[#12B76A]">Official Generated Email:</span>
+                  <span className="font-mono font-extrabold text-[#12B76A]">
+                    {(newStudent.vh_number || 'VHXXXXX').toLowerCase()}@velhightech.com
+                  </span>
                 </div>
 
                 <div className="grid grid-cols-3 gap-2">

@@ -83,12 +83,12 @@ function studentLogin(req, res) {
 
   const query = `
     SELECT * FROM users 
-    WHERE (LOWER(roll_number) = ? OR LOWER(email) = ? OR LOWER(email) LIKE ?) 
+    WHERE (LOWER(roll_number) = ? OR LOWER(email) = ? OR LOWER(vh_number) = ? OR LOWER(email) LIKE ?) 
       AND role = 'student'
     LIMIT 1
   `;
 
-  db.get(query, [cleanInput, cleanInput, `${cleanInput}%`], async (err, user) => {
+  db.get(query, [cleanInput, cleanInput, cleanInput, `${cleanInput}%`], async (err, user) => {
     if (err) return res.status(500).json({ error: 'Database error' });
     if (!user) return res.status(401).json({ error: 'Invalid Password' });
 

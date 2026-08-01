@@ -211,7 +211,7 @@ export const Login: React.FC = () => {
           <form onSubmit={handleSubmit} className="space-y-4" autoComplete="off">
             <div>
               <label className="block text-xs font-bold text-[#111827] uppercase tracking-wider mb-1.5">
-                {role === 'student' ? 'Register Number / Email' : 'Admin Email / Username'}
+                {role === 'student' ? 'Register Number / Official VH Email' : 'Admin Email / Username'}
               </label>
               <div className="relative group">
                 <input
@@ -220,7 +220,7 @@ export const Login: React.FC = () => {
                   autoComplete="off"
                   value={identifier}
                   onChange={(e) => setIdentifier(e.target.value)}
-                  placeholder={role === 'student' ? 'Enter your Register Number' : 'Enter Admin Email'}
+                  placeholder={role === 'student' ? 'e.g. 113024243032 or vh13936@velhightech.com' : 'Enter Admin Email'}
                   className="w-full px-4 py-3.5 rounded-2xl bg-[#F8FAFC] border border-[#E2E8F0] text-[#111827] placeholder-[#94A3B8] focus:outline-none focus:border-[#6D5DFC] focus:bg-white focus:ring-4 focus:ring-[#6D5DFC]/10 text-xs pl-11 font-medium transition-all"
                 />
                 {role === 'student' ? (

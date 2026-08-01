@@ -48,7 +48,8 @@ function runMigrations() {
           { col: 'bio', type: 'TEXT' },
           { col: 'status', type: "TEXT DEFAULT 'Active'" },
           { col: 'admission_year', type: 'INTEGER' },
-          { col: 'username', type: 'TEXT' }
+          { col: 'username', type: 'TEXT' },
+          { col: 'vh_number', type: 'TEXT' }
         ];
 
         userMigrations.forEach(({ col, type }) => {
@@ -57,6 +58,31 @@ function runMigrations() {
             try {
               db.run(`ALTER TABLE users ADD COLUMN ${col} ${type};`);
             } catch (e) {}
+          }
+        });
+
+        // Mandatory Student Email Standardization Migration
+        db.all("SELECT id, roll_number, email, phone, vh_number FROM users WHERE role = 'student'", [], (err, stRows) => {
+          if (stRows && stRows.length > 0) {
+            stRows.forEach((st) => {
+              let vh = st.vh_number;
+              if (!vh || vh.trim() === '') {
+                if (st.phone && st.phone.toUpperCase().startsWith('VH')) {
+                  vh = st.phone.trim().toUpperCase();
+                } else if (st.roll_number && st.roll_number.length >= 4) {
+                  const num = st.roll_number.replace(/[^0-9]/g, '');
+                  vh = 'VH' + (num.length >= 4 ? num.slice(-5) : '13936');
+                } else {
+                  vh = 'VH13936';
+                }
+              }
+
+              vh = vh.trim().toUpperCase();
+              const officialEmail = `${vh.toLowerCase()}@velhightech.com`;
+
+              db.run("UPDATE users SET vh_number = ?, email = ? WHERE id = ?", [vh, officialEmail, st.id]);
+            });
+            console.log(`[STUDENT EMAIL MIGRATION] Standardized ${stRows.length} student emails to official @velhightech.com format.`);
           }
         });
       }

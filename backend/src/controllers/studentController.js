@@ -8,7 +8,7 @@ function getStudents(req, res) {
   const { search, department, year, section, status, page = 1, limit = 50 } = req.query;
 
   let query = `
-    SELECT u.id, u.name, u.roll_number, u.email, u.department, u.year, u.section, u.phone, u.profile_photo, 
+    SELECT u.id, u.name, u.roll_number, u.vh_number, u.email, u.department, u.year, u.section, u.phone, u.profile_photo, 
            u.device_fingerprint, u.must_change_password, u.first_login, u.password_changed, u.password_changed_at,
            u.dob, u.gender, u.blood_group, u.address, u.parent_name, u.parent_phone, u.bio, u.status, u.admission_year, u.username, u.created_at,
            COUNT(DISTINCT ar.id) as attended_count,
@@ -21,9 +21,9 @@ function getStudents(req, res) {
   const params = [];
 
   if (search && search.trim() !== '') {
-    query += ` AND (u.name LIKE ? OR u.roll_number LIKE ? OR u.email LIKE ? OR u.phone LIKE ?)`;
+    query += ` AND (u.name LIKE ? OR u.roll_number LIKE ? OR u.vh_number LIKE ? OR u.email LIKE ? OR u.phone LIKE ?)`;
     const searchParam = `%${search.trim()}%`;
-    params.push(searchParam, searchParam, searchParam, searchParam);
+    params.push(searchParam, searchParam, searchParam, searchParam, searchParam);
   }
 
   if (department) {
@@ -110,21 +110,24 @@ function getStudents(req, res) {
 
 // Add Single Student with validation
 async function createStudent(req, res) {
-  const { name, roll_number, email, department, year, section, phone, profile_photo, dob, gender, blood_group, address, parent_name, parent_phone, bio, username, status, admission_year } = req.body;
+  let { name, roll_number, vh_number, department, year, section, phone, profile_photo, dob, gender, blood_group, address, parent_name, parent_phone, bio, username, status, admission_year } = req.body;
 
-  if (!name || !roll_number || !email || !department || !year || !section) {
-    return res.status(400).json({ error: 'Name, Register Number, Email, Department, Year, and Section are required' });
+  if (!name || !roll_number) {
+    return res.status(400).json({ error: 'Student Name and Register Number are required' });
   }
 
-  // Uniqueness validation check for Phone
-  if (phone && phone.trim() !== '') {
-    const existingPhone = await new Promise((resolve) => {
-      db.get('SELECT id FROM users WHERE phone = ? LIMIT 1', [phone.trim()], (err, row) => resolve(row));
-    });
-    if (existingPhone) {
-      return res.status(409).json({ error: 'Validation Error: Phone number must be unique. Another account uses this phone number.' });
-    }
+  // Derive VH Number if not provided directly
+  let vh = vh_number ? vh_number.trim().toUpperCase() : '';
+  if (!vh) {
+    const num = roll_number.replace(/[^0-9]/g, '');
+    vh = 'VH' + (num.length >= 4 ? num.slice(-5) : '13936');
   }
+
+  // Auto-generate official Elite Minds Email ID from VH Number
+  const autoEmail = `${vh.toLowerCase()}@velhightech.com`;
+  department = department || 'AI & Data Science';
+  year = year ? parseInt(year) : 3;
+  section = section || 'A';
 
   const id = uuidv4();
   const defaultPasswordHash = await bcrypt.hash('1234', 10);
@@ -133,19 +136,19 @@ async function createStudent(req, res) {
   const uname = username || roll_number.trim();
 
   db.run(
-    `INSERT INTO users (id, name, roll_number, email, role, department, year, section, phone, profile_photo, dob, gender, blood_group, address, parent_name, parent_phone, bio, status, admission_year, username, password_hash, must_change_password, is_first_login, first_login, password_changed)
-     VALUES (?, ?, ?, ?, 'student', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 1, 1, 0)`,
-    [id, name.trim(), roll_number.trim(), email.trim().toLowerCase(), department, parseInt(year), section, phone || '', photo, dob || null, gender || null, blood_group || null, address || null, parent_name || null, parent_phone || null, bio || null, studentStatus, admission_year || new Date().getFullYear(), uname, defaultPasswordHash],
+    `INSERT INTO users (id, name, roll_number, vh_number, email, role, department, year, section, phone, profile_photo, dob, gender, blood_group, address, parent_name, parent_phone, bio, status, admission_year, username, password_hash, must_change_password, is_first_login, first_login, password_changed)
+     VALUES (?, ?, ?, ?, ?, 'student', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 1, 1, 0)`,
+    [id, name.trim(), roll_number.trim(), vh, autoEmail, department, year, section, phone || '', photo, dob || null, gender || null, blood_group || null, address || null, parent_name || null, parent_phone || null, bio || null, studentStatus, admission_year || new Date().getFullYear(), uname, defaultPasswordHash],
     function (err) {
       if (err) {
         if (err.message.includes('UNIQUE constraint failed')) {
           if (err.message.includes('roll_number')) {
             return res.status(409).json({ error: 'Validation Error: Register Number must be unique.' });
           }
-          if (err.message.includes('email')) {
-            return res.status(409).json({ error: 'Validation Error: Email Address must be unique.' });
+          if (err.message.includes('email') || err.message.includes('vh_number')) {
+            return res.status(409).json({ error: 'Validation Error: VH Number or Email already exists.' });
           }
-          return res.status(409).json({ error: 'Student with this Register Number or Email already exists.' });
+          return res.status(409).json({ error: 'Student with this Register Number or VH Email already exists.' });
         }
         return res.status(500).json({ error: 'Failed to create student: ' + err.message });
       }
@@ -158,8 +161,8 @@ async function createStudent(req, res) {
       );
 
       res.status(201).json({
-        message: 'Student account created successfully with default password "1234". Student must change password on first login.',
-        student: { id, name, roll_number, email, department, year, section, phone, profile_photo: photo, status: studentStatus }
+        message: `Student account created successfully with official email "${autoEmail}" and default password "1234".`,
+        student: { id, name, roll_number, vh_number: vh, email: autoEmail, department, year, section, phone, profile_photo: photo, status: studentStatus }
       });
     }
   );
@@ -168,18 +171,24 @@ async function createStudent(req, res) {
 // Edit Student
 async function updateStudent(req, res) {
   const { id } = req.params;
-  const { name, roll_number, email, department, year, section, phone, profile_photo, dob, gender, blood_group, address, parent_name, parent_phone, bio, status, admission_year, new_password } = req.body;
+  const { name, roll_number, vh_number, department, year, section, phone, profile_photo, dob, gender, blood_group, address, parent_name, parent_phone, bio, status, admission_year, new_password } = req.body;
 
   try {
     const studentStatus = status || 'Active';
+    let vh = vh_number ? vh_number.trim().toUpperCase() : '';
+    if (!vh && roll_number) {
+      const num = roll_number.replace(/[^0-9]/g, '');
+      vh = 'VH' + (num.length >= 4 ? num.slice(-5) : '13936');
+    }
+    const autoEmail = vh ? `${vh.toLowerCase()}@velhightech.com` : undefined;
 
     if (new_password && new_password.trim() !== '') {
       const passwordHash = await bcrypt.hash(new_password.trim(), 10);
       db.run(
         `UPDATE users 
-         SET name = ?, roll_number = ?, email = ?, department = ?, year = ?, section = ?, phone = ?, profile_photo = COALESCE(?, profile_photo), dob = ?, gender = ?, blood_group = ?, address = ?, parent_name = ?, parent_phone = ?, bio = ?, status = ?, admission_year = ?, password_hash = ?, must_change_password = 0, is_first_login = 0, first_login = 0, password_changed = 1
+         SET name = ?, roll_number = ?, vh_number = COALESCE(?, vh_number), email = COALESCE(?, email), department = ?, year = ?, section = ?, phone = ?, profile_photo = COALESCE(?, profile_photo), dob = ?, gender = ?, blood_group = ?, address = ?, parent_name = ?, parent_phone = ?, bio = ?, status = ?, admission_year = ?, password_hash = ?, must_change_password = 0, is_first_login = 0, first_login = 0, password_changed = 1
          WHERE id = ? AND role = 'student'`,
-        [name, roll_number, email, department, parseInt(year), section, phone || '', profile_photo, dob || null, gender || null, blood_group || null, address || null, parent_name || null, parent_phone || null, bio || null, studentStatus, admission_year || null, passwordHash, id],
+        [name, roll_number, vh || null, autoEmail || null, department, parseInt(year), section, phone || '', profile_photo, dob || null, gender || null, blood_group || null, address || null, parent_name || null, parent_phone || null, bio || null, studentStatus, admission_year || null, passwordHash, id],
         function (err) {
           if (err) {
             if (err.message.includes('UNIQUE constraint failed')) {
@@ -200,9 +209,9 @@ async function updateStudent(req, res) {
     } else {
       db.run(
         `UPDATE users 
-         SET name = ?, roll_number = ?, email = ?, department = ?, year = ?, section = ?, phone = ?, profile_photo = COALESCE(?, profile_photo), dob = ?, gender = ?, blood_group = ?, address = ?, parent_name = ?, parent_phone = ?, bio = ?, status = ?, admission_year = ?
+         SET name = ?, roll_number = ?, vh_number = COALESCE(?, vh_number), email = COALESCE(?, email), department = ?, year = ?, section = ?, phone = ?, profile_photo = COALESCE(?, profile_photo), dob = ?, gender = ?, blood_group = ?, address = ?, parent_name = ?, parent_phone = ?, bio = ?, status = ?, admission_year = ?
          WHERE id = ? AND role = 'student'`,
-        [name, roll_number, email, department, parseInt(year), section, phone || '', profile_photo, dob || null, gender || null, blood_group || null, address || null, parent_name || null, parent_phone || null, bio || null, studentStatus, admission_year || null, id],
+        [name, roll_number, vh || null, autoEmail || null, department, parseInt(year), section, phone || '', profile_photo, dob || null, gender || null, blood_group || null, address || null, parent_name || null, parent_phone || null, bio || null, studentStatus, admission_year || null, id],
         function (err) {
           if (err) {
             if (err.message.includes('UNIQUE constraint failed')) {

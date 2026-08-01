@@ -30,17 +30,19 @@ export const DynamicQRDisplay: React.FC<DynamicQRDisplayProps> = ({
   liveRecordsCount
 }) => {
   const [attendanceCode, setAttendanceCode] = useState<string>('4821');
-  const [timestamp, setTimestamp] = useState<number>(Math.floor(Date.now() / 1000));
+  const [timestamp, setTimestamp] = useState<number>(Date.now());
   const [qrSvg, setQrSvg] = useState<string>('');
+  const [rawPayload, setRawPayload] = useState<string>('');
   const [showPayloadModal, setShowPayloadModal] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [timeLeft, setTimeLeft] = useState<number>(25);
+  const [timeLeft, setTimeLeft] = useState<number>(5);
 
-  const renderQRCode = async (code: string, ts: number) => {
-    const concisePayload = `ATTENDANCE:${sessionId}:${code}`;
+  const renderQRCode = async (payloadObj: any) => {
+    const payloadStr = typeof payloadObj === 'string' ? payloadObj : JSON.stringify(payloadObj);
+    setRawPayload(payloadStr);
 
     try {
-      const svg = await QRCode.toString(concisePayload, {
+      const svg = await QRCode.toString(payloadStr, {
         type: 'svg',
         errorCorrectionLevel: 'L',
         color: {
@@ -61,13 +63,12 @@ export const DynamicQRDisplay: React.FC<DynamicQRDisplayProps> = ({
       setIsLoading(true);
       const res = await api.post(`/sessions/${sessionId}/rotate`);
       const payload = res.data.qrPayload;
-      const newCode = payload.attendanceCode;
-      const newTs = payload.timestamp;
+      const newCode = payload.nonce || payload.attendanceCode;
 
       setAttendanceCode(newCode);
-      setTimestamp(newTs);
-      setTimeLeft(25);
-      await renderQRCode(newCode, newTs);
+      setTimestamp(payload.timestamp || Date.now());
+      setTimeLeft(5);
+      await renderQRCode(payload);
     } catch (err) {
       console.error('Failed to rotate QR', err);
     } finally {
@@ -76,27 +77,26 @@ export const DynamicQRDisplay: React.FC<DynamicQRDisplayProps> = ({
   };
 
   useEffect(() => {
-    // Render immediate initial QR SVG to prevent blank display
-    renderQRCode(attendanceCode, timestamp);
     rotateQR();
 
     const timerInterval = setInterval(() => {
       setTimeLeft((prev) => {
         if (prev <= 1) {
           rotateQR();
-          return 25;
+          return 5;
         }
         return prev - 1;
       });
     }, 1000);
 
     const socket = getSocket();
-    socket.on('qr_rotated', (data: { sessionId: string; attendanceCode: string; timestamp: number }) => {
+    socket.on('qr_rotated', (data: any) => {
       if (data.sessionId === sessionId) {
-        setAttendanceCode(data.attendanceCode);
-        setTimestamp(data.timestamp);
-        setTimeLeft(25);
-        renderQRCode(data.attendanceCode, data.timestamp);
+        const payload = data.qrPayload || data;
+        setAttendanceCode(payload.nonce || data.attendanceCode);
+        setTimestamp(payload.timestamp || Date.now());
+        setTimeLeft(5);
+        renderQRCode(payload);
       }
     });
 
@@ -106,15 +106,13 @@ export const DynamicQRDisplay: React.FC<DynamicQRDisplayProps> = ({
     };
   }, [sessionId]);
 
-  const rawPayload = `ATTENDANCE:${sessionId}:${attendanceCode}`;
-
   return (
     <div className="bg-white rounded-[24px] p-6 lg:p-8 border border-[#E7E7E7] shadow-enterprise relative overflow-hidden text-center max-w-md mx-auto space-y-6 animate-fade-in">
       {/* Header Info */}
       <div className="space-y-2">
         <div className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-[#F3F0FF] border border-[#6D5DFC]/20 text-[#6D5DFC] text-xs font-bold uppercase tracking-wider">
           <Sparkles className="w-3.5 h-3.5" />
-          25s Dynamic Rotating QR
+          5s Dynamic Rotating QR
         </div>
         
         <div className="pt-1">
