@@ -285,7 +285,7 @@ function getSessionById(req, res) {
     if (err || !session) return res.status(404).json({ error: 'Session not found' });
 
     db.all(
-      `SELECT ar.*, u.name as student_name, u.roll_number, u.email as student_email, u.profile_photo, u.department, u.year, u.section 
+      `SELECT ar.*, u.name as student_name, u.name, u.roll_number, u.email as student_email, u.email, u.profile_photo, u.department, u.year, u.section 
        FROM attendance_records ar 
        JOIN users u ON ar.student_id = u.id 
        WHERE ar.session_id = ? 
@@ -294,15 +294,29 @@ function getSessionById(req, res) {
       (err, records) => {
         const recordList = records || [];
 
-        // Query all students enrolled in this session's department, year, and section
+        // Query all enrolled student accounts
         db.all(
           `SELECT id, name, roll_number, email, department, year, section, profile_photo 
            FROM users 
-           WHERE role = 'student' AND department = ? AND year = ? AND section = ?
+           WHERE role = 'student'
            ORDER BY roll_number ASC`,
-          [session.department, session.year, session.section],
+          [],
           (errStudents, allStudents) => {
             const studentRoster = allStudents || [];
+
+            // Match cohort if department specified or default to all students
+            const filteredRoster = studentRoster.filter((st) => {
+              if (!session.department || session.department === 'AI & DS' || session.department === 'AI & Data Science') {
+                return true;
+              }
+              return (
+                !st.department ||
+                st.department.toLowerCase().includes(session.department.toLowerCase()) ||
+                session.department.toLowerCase().includes(st.department.toLowerCase())
+              );
+            });
+
+            const targetRoster = filteredRoster.length > 0 ? filteredRoster : studentRoster;
 
             const presentMap = {};
             recordList.forEach((r) => {
@@ -313,30 +327,71 @@ function getSessionById(req, res) {
 
             const presentStudents = [];
             const absentStudents = [];
+            const processedIds = new Set();
 
-            studentRoster.forEach((st) => {
-              if (presentMap[st.id]) {
+            // 1. Guaranteed inclusion for all recorded scans
+            recordList.forEach((r) => {
+              if (r.status === 'present' && !processedIds.has(r.student_id)) {
+                processedIds.add(r.student_id);
                 presentStudents.push({
-                  ...st,
-                  attendance_time: presentMap[st.id].attendance_time,
-                  record_id: presentMap[st.id].id,
-                  status: 'Present'
-                });
-              } else {
-                absentStudents.push({
-                  ...st,
-                  status: 'Absent',
-                  reason: 'Uninformed Absence'
+                  id: r.student_id,
+                  name: r.student_name || r.name || 'Student',
+                  roll_number: r.roll_number,
+                  email: r.student_email || r.email,
+                  department: r.department || session.department || 'AI & DS',
+                  year: r.year || session.year || 3,
+                  section: r.section || session.section || 'A',
+                  profile_photo: r.profile_photo,
+                  attendance_time: r.attendance_time,
+                  record_id: r.id,
+                  status: 'Present',
+                  scan_method: 'QR Scan'
                 });
               }
             });
 
+            // 2. Roster check for present & absent status
+            targetRoster.forEach((st) => {
+              if (presentMap[st.id]) {
+                if (!processedIds.has(st.id)) {
+                  processedIds.add(st.id);
+                  presentStudents.push({
+                    ...st,
+                    attendance_time: presentMap[st.id].attendance_time,
+                    record_id: presentMap[st.id].id,
+                    status: 'Present',
+                    scan_method: 'QR Scan'
+                  });
+                }
+              } else {
+                if (!processedIds.has(st.id)) {
+                  absentStudents.push({
+                    ...st,
+                    status: 'Absent',
+                    reason: 'Uninformed Absence'
+                  });
+                }
+              }
+            });
+
+            const totalEnrolled = targetRoster.length > 0 ? Math.max(targetRoster.length, presentStudents.length + absentStudents.length) : (presentStudents.length + absentStudents.length);
+            const attendanceRate = totalEnrolled > 0 ? ((presentStudents.length / totalEnrolled) * 100).toFixed(2) : '0.00';
+
             res.json({
-              session,
+              session: {
+                ...session,
+                presentCount: presentStudents.length,
+                absentCount: absentStudents.length,
+                totalEnrolled,
+                attendanceRate
+              },
               records: recordList,
               presentStudents,
               absentStudents,
-              totalEnrolled: studentRoster.length
+              totalEnrolled,
+              presentCount: presentStudents.length,
+              absentCount: absentStudents.length,
+              attendanceRate
             });
           }
         );

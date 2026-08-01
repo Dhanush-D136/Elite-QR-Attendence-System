@@ -1,22 +1,30 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import api from '../services/api';
 import { getSocket } from '../services/socket';
-import { AttendanceSession, AttendanceRecord, TimetableItem } from '../types';
+import { AttendanceSession, TimetableItem } from '../types';
 import { DynamicQRDisplay } from '../components/DynamicQRDisplay';
 import { HeroBanner } from '../components/HeroBanner';
+import * as XLSX from 'xlsx';
 import {
   QrCode,
   Play,
   StopCircle,
-  UserCheck,
   Sparkles,
   Clock,
   CheckCircle2,
-  XCircle,
-  Calendar,
   UserX,
-  Plus,
-  Edit
+  BarChart3,
+  Download,
+  FileSpreadsheet,
+  FileText,
+  X,
+  Filter,
+  Users,
+  Calendar,
+  UserCheck,
+  ShieldCheck,
+  Zap,
+  ArrowUpRight
 } from 'lucide-react';
 
 interface SessionHubProps {
@@ -34,12 +42,20 @@ export const SessionHub: React.FC<SessionHubProps> = ({
 }) => {
   const [sessions, setSessions] = useState<AttendanceSession[]>([]);
   const [selectedSession, setSelectedSession] = useState<AttendanceSession | null>(null);
+  const selectedSessionRef = useRef<AttendanceSession | null>(null);
+
   const [timetables, setTimetables] = useState<TimetableItem[]>([]);
 
-  // Roster lists for selected session
+  // Roster state
   const [presentStudents, setPresentStudents] = useState<any[]>([]);
   const [absentStudents, setAbsentStudents] = useState<any[]>([]);
+  const [totalEnrolled, setTotalEnrolled] = useState<number>(0);
+  const [attendanceRate, setAttendanceRate] = useState<string>('0.00');
   const [rosterTab, setRosterTab] = useState<'present' | 'absent'>('present');
+
+  // Analyze Session Modal state
+  const [showAnalysisModal, setShowAnalysisModal] = useState<boolean>(false);
+  const [analysisFilter, setAnalysisFilter] = useState<'all' | 'present' | 'absent' | 'late'>('all');
 
   // Selected Timetable Slot for QR Generation
   const [selectedTimetableId, setSelectedTimetableId] = useState<string>('');
@@ -55,20 +71,16 @@ export const SessionHub: React.FC<SessionHubProps> = ({
 
   const [isCreating, setIsCreating] = useState(false);
 
+  useEffect(() => {
+    selectedSessionRef.current = selectedSession;
+  }, [selectedSession]);
+
   // Sync initial props when passed dynamically
   useEffect(() => {
-    if (initialSubject) {
-      setSubject(initialSubject);
-    }
-    if (initialFaculty) {
-      setFacultyName(initialFaculty);
-    }
-    if (initialSubjectCode) {
-      setSubjectCode(initialSubjectCode);
-    }
-    if (initialPeriod) {
-      setPeriodNumber(initialPeriod);
-    }
+    if (initialSubject) setSubject(initialSubject);
+    if (initialFaculty) setFacultyName(initialFaculty);
+    if (initialSubjectCode) setSubjectCode(initialSubjectCode);
+    if (initialPeriod) setPeriodNumber(initialPeriod);
   }, [initialSubject, initialFaculty, initialSubjectCode, initialPeriod]);
 
   const fetchTimetables = async () => {
@@ -112,7 +124,7 @@ export const SessionHub: React.FC<SessionHubProps> = ({
       const fetchedSessions = res.data.sessions || [];
       setSessions(fetchedSessions);
 
-      if (fetchedSessions.length > 0 && !selectedSession) {
+      if (fetchedSessions.length > 0 && !selectedSessionRef.current) {
         let targetSession = null;
         if (initialSubject) {
           targetSession = fetchedSessions.find(
@@ -138,11 +150,20 @@ export const SessionHub: React.FC<SessionHubProps> = ({
     setSelectedSession(session);
     try {
       const res = await api.get(`/sessions/${session.id}`);
-      setPresentStudents(res.data.presentStudents || []);
-      setAbsentStudents(res.data.absentStudents || []);
+      const presents = res.data.presentStudents || [];
+      const absents = res.data.absentStudents || [];
+      const enrolled = res.data.totalEnrolled || (presents.length + absents.length);
+      const rate = res.data.attendanceRate || (enrolled > 0 ? ((presents.length / enrolled) * 100).toFixed(2) : '0.00');
+
+      setPresentStudents(presents);
+      setAbsentStudents(absents);
+      setTotalEnrolled(enrolled);
+      setAttendanceRate(rate);
     } catch (e) {
       setPresentStudents([]);
       setAbsentStudents([]);
+      setTotalEnrolled(0);
+      setAttendanceRate('0.00');
     }
   };
 
@@ -153,19 +174,25 @@ export const SessionHub: React.FC<SessionHubProps> = ({
     const socket = getSocket();
     const handleUpdate = () => {
       fetchSessions();
-      if (selectedSession) selectSession(selectedSession);
+      if (selectedSessionRef.current) {
+        selectSession(selectedSessionRef.current);
+      }
     };
 
     socket.on('attendance_updated', handleUpdate);
     socket.on('attendance_marked', handleUpdate);
     socket.on('attendanceMarked', handleUpdate);
+    socket.on('new_attendance_record', handleUpdate);
+    socket.on('session_updated', handleUpdate);
 
     return () => {
       socket.off('attendance_updated', handleUpdate);
       socket.off('attendance_marked', handleUpdate);
       socket.off('attendanceMarked', handleUpdate);
+      socket.off('new_attendance_record', handleUpdate);
+      socket.off('session_updated', handleUpdate);
     };
-  }, [selectedSession?.id]);
+  }, []);
 
   // Handle Select Timetable Slot from Dropdown
   const handleTimetableSelect = (ttId: string) => {
@@ -234,7 +261,7 @@ export const SessionHub: React.FC<SessionHubProps> = ({
     }
   };
 
-  // Manually mark present student as absent/delete record
+  // Manually mark present student as absent
   const handleManualMarkAbsent = async (recordId: string, studentName: string) => {
     if (!recordId) return;
     if (!confirm(`Mark ${studentName} as ABSENT for this session?`)) return;
@@ -262,8 +289,166 @@ export const SessionHub: React.FC<SessionHubProps> = ({
     }
   };
 
+  // Calculate Late Entries (scanned > 5 minutes after session start)
+  const getLateEntries = () => {
+    if (!selectedSession?.start_time) return [];
+    const startTime = new Date(selectedSession.start_time).getTime();
+    return presentStudents.filter((st) => {
+      if (!st.attendance_time) return false;
+      const scanTime = new Date(st.attendance_time).getTime();
+      return scanTime - startTime > 5 * 60 * 1000;
+    });
+  };
+
+  const lateStudents = getLateEntries();
+
+  // Filtered Students for Analysis Modal
+  const getFilteredAnalysisList = () => {
+    if (analysisFilter === 'present') {
+      return presentStudents.map((s) => ({ ...s, status: 'Present', scan_method: 'QR Scan' }));
+    }
+    if (analysisFilter === 'absent') {
+      return absentStudents.map((s) => ({ ...s, status: 'Absent', scan_method: 'N/A' }));
+    }
+    if (analysisFilter === 'late') {
+      return lateStudents.map((s) => ({ ...s, status: 'Present (Late)', scan_method: 'QR Scan' }));
+    }
+    return [
+      ...presentStudents.map((s) => ({ ...s, status: 'Present', scan_method: 'QR Scan' })),
+      ...absentStudents.map((s) => ({ ...s, status: 'Absent', scan_method: 'N/A' }))
+    ];
+  };
+
+  // Export to Excel (.xlsx)
+  const exportExcel = () => {
+    if (!selectedSession) return;
+    const dataList = getFilteredAnalysisList().map((st) => ({
+      'Register Number': st.roll_number,
+      'Student Name': st.name,
+      Department: st.department || selectedSession.department || 'AI & DS',
+      'Time Marked': st.attendance_time ? new Date(st.attendance_time).toLocaleTimeString() : 'N/A',
+      Status: st.status,
+      'Scan Method': st.scan_method || 'QR Scan'
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(dataList);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Attendance Roster');
+    XLSX.writeFile(workbook, `Session_Roster_${selectedSession.subject.replace(/[^a-zA-Z0-9]/g, '_')}_P${selectedSession.period_number || 1}.xlsx`);
+  };
+
+  // Export to CSV (.csv)
+  const exportCSV = () => {
+    if (!selectedSession) return;
+    const list = getFilteredAnalysisList();
+    let csvContent = 'Register Number,Student Name,Department,Time Marked,Status,Scan Method\n';
+    list.forEach((st) => {
+      const time = st.attendance_time ? new Date(st.attendance_time).toLocaleTimeString() : 'N/A';
+      csvContent += `"${st.roll_number}","${st.name}","${st.department || selectedSession.department || 'AI & DS'}","${time}","${st.status}","${st.scan_method || 'QR Scan'}"\n`;
+    });
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `Session_Roster_${selectedSession.subject.replace(/[^a-zA-Z0-9]/g, '_')}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  // Export to Printable PDF Layout
+  const exportPDF = () => {
+    if (!selectedSession) return;
+    const list = getFilteredAnalysisList();
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      alert('Please allow popups to generate PDF report.');
+      return;
+    }
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Session Attendance Analysis - ${selectedSession.subject}</title>
+        <style>
+          body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 25px; color: #111827; }
+          .header { border-bottom: 2px solid #6D5DFC; padding-bottom: 15px; margin-bottom: 20px; }
+          .title { font-size: 24px; font-weight: 800; color: #111827; margin: 0; }
+          .subtitle { font-size: 13px; color: #6B7280; margin-top: 5px; }
+          .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 25px; }
+          .card { background: #F8FAFC; border: 1px solid #E2E8F0; padding: 12px; rounded: 12px; }
+          .card-title { font-size: 10px; text-transform: uppercase; color: #64748B; font-weight: 700; }
+          .card-val { font-size: 20px; font-weight: 800; color: #111827; margin-top: 4px; }
+          table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 12px; }
+          th, td { border: 1px solid #E2E8F0; padding: 8px 12px; text-align: left; }
+          th { background: #F1F5F9; font-weight: 700; color: #334155; }
+          .badge-present { background: #DCFCE7; color: #15803D; padding: 3px 8px; border-radius: 999px; font-weight: 700; font-size: 10px; }
+          .badge-absent { background: #FEE2E2; color: #B91C1C; padding: 3px 8px; border-radius: 999px; font-weight: 700; font-size: 10px; }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <h1 class="title">ELITE MINDS ATTENDANCE PORTAL</h1>
+          <p class="subtitle">Session Roster & Attendance Analysis Report</p>
+        </div>
+
+        <div style="margin-bottom: 20px; font-size: 13px; line-height: 1.6;">
+          <strong>Subject:</strong> ${selectedSession.subject}<br>
+          <strong>Faculty:</strong> ${selectedSession.faculty_name || 'Faculty Member'}<br>
+          <strong>Period:</strong> P${selectedSession.period_number || 1} &bull; <strong>Date:</strong> ${selectedSession.date || sessionDate}<br>
+          <strong>Department:</strong> ${selectedSession.department || 'AI & DS'} (Sec ${selectedSession.section || 'A'})
+        </div>
+
+        <div class="grid">
+          <div class="card"><div class="card-title">Total Strength</div><div class="card-val">${totalEnrolled}</div></div>
+          <div class="card"><div class="card-title">Present</div><div class="card-val" style="color:#12B76A">${presentStudents.length}</div></div>
+          <div class="card"><div class="card-title">Absent</div><div class="card-val" style="color:#E11D48">${absentStudents.length}</div></div>
+          <div class="card"><div class="card-title">Attendance Rate</div><div class="card-val" style="color:#6D5DFC">${attendanceRate}%</div></div>
+        </div>
+
+        <h3>Student Attendance Roster (${analysisFilter.toUpperCase()})</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Register Number</th>
+              <th>Student Name</th>
+              <th>Department</th>
+              <th>Time Marked</th>
+              <th>Status</th>
+              <th>Scan Method</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${list.map((st, idx) => `
+              <tr>
+                <td>${idx + 1}</td>
+                <td style="font-family: monospace; font-weight: bold;">${st.roll_number}</td>
+                <td style="font-weight: bold;">${st.name}</td>
+                <td>${st.department || selectedSession.department || 'AI & DS'}</td>
+                <td style="font-family: monospace;">${st.attendance_time ? new Date(st.attendance_time).toLocaleTimeString() : 'N/A'}</td>
+                <td><span class="${st.status.includes('Present') ? 'badge-present' : 'badge-absent'}">${st.status}</span></td>
+                <td>${st.scan_method || (st.status.includes('Present') ? 'QR Scan' : 'N/A')}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </body>
+      </html>
+    `;
+
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => {
+      printWindow.print();
+    }, 500);
+  };
+
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-6 animate-fade-in font-sans">
       {/* Hero Cover Banner */}
       <HeroBanner />
 
@@ -457,13 +642,21 @@ export const SessionHub: React.FC<SessionHubProps> = ({
                 liveRecordsCount={presentStudents.length}
               />
 
-              <div className="text-center">
+              <div className="flex items-center justify-center gap-3">
+                <button
+                  onClick={() => setShowAnalysisModal(true)}
+                  className="px-5 py-2.5 rounded-full bg-gradient-to-r from-[#6D5DFC] to-[#4F7CFF] text-white text-xs font-extrabold shadow-floating hover:from-[#5b4be0] hover:to-[#3b68ee] transition-all flex items-center gap-2"
+                >
+                  <BarChart3 className="w-4 h-4 text-white" />
+                  <span>Analyze Session</span>
+                </button>
+
                 <button
                   onClick={() => handleEndSession(selectedSession.id)}
-                  className="px-6 py-2.5 rounded-full bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold hover:bg-rose-100 transition-all inline-flex items-center gap-2 shadow-sm"
+                  className="px-5 py-2.5 rounded-full bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold hover:bg-rose-100 transition-all inline-flex items-center gap-2 shadow-sm"
                 >
                   <StopCircle className="w-4 h-4 text-rose-600" />
-                  <span>End & Close Attendance Session</span>
+                  <span>End Session</span>
                 </button>
               </div>
             </div>
@@ -479,7 +672,7 @@ export const SessionHub: React.FC<SessionHubProps> = ({
             </div>
           )}
 
-          {/* Present & Absent Student Lists */}
+          {/* SESSION ROSTER TABLE & CONTROLS */}
           {selectedSession && (
             <div className="bg-white p-6 rounded-[24px] border border-[#E7E7E7] shadow-enterprise space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#E7E7E7]">
@@ -492,8 +685,8 @@ export const SessionHub: React.FC<SessionHubProps> = ({
                   </p>
                 </div>
 
-                {/* Tabs: Present vs Absent */}
-                <div className="flex items-center gap-2">
+                {/* Right Side Action Badges & Analyze Button */}
+                <div className="flex flex-wrap items-center gap-2">
                   <button
                     onClick={() => setRosterTab('present')}
                     className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 ${
@@ -515,10 +708,18 @@ export const SessionHub: React.FC<SessionHubProps> = ({
                   >
                     <UserX className="w-3.5 h-3.5" /> Absent ({absentStudents.length})
                   </button>
+
+                  <button
+                    onClick={() => setShowAnalysisModal(true)}
+                    className="px-4 py-1.5 rounded-full bg-gradient-to-r from-[#6D5DFC] to-[#4F7CFF] text-white text-xs font-extrabold shadow-sm hover:from-[#5b4be0] hover:to-[#3b68ee] transition-all flex items-center gap-1.5"
+                  >
+                    <BarChart3 className="w-3.5 h-3.5" />
+                    <span>Analyze Session</span>
+                  </button>
                 </div>
               </div>
 
-              {/* PRESENT STUDENTS LIST */}
+              {/* PRESENT STUDENTS ROSTER TABLE */}
               {rosterTab === 'present' && (
                 <div className="overflow-x-auto max-h-72">
                   <table className="w-full text-left text-xs">
@@ -526,21 +727,23 @@ export const SessionHub: React.FC<SessionHubProps> = ({
                       <tr>
                         <th className="pb-3">Student Name</th>
                         <th className="pb-3">Register Number</th>
-                        <th className="pb-3">Email</th>
+                        <th className="pb-3">Department</th>
                         <th className="pb-3">Time Marked</th>
+                        <th className="pb-3">Attendance Status</th>
+                        <th className="pb-3">Scan Method</th>
                         <th className="pb-3 text-right">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-[#E7E7E7]">
                       {presentStudents.length === 0 ? (
                         <tr>
-                          <td colSpan={5} className="py-8 text-center text-[#6B7280]">
+                          <td colSpan={7} className="py-8 text-center text-[#6B7280]">
                             No students marked present yet for this session.
                           </td>
                         </tr>
                       ) : (
                         presentStudents.map((st) => (
-                          <tr key={st.id} className="hover:bg-[#FAFAFA] transition-colors">
+                          <tr key={st.id || st.record_id} className="hover:bg-[#FAFAFA] transition-colors">
                             <td className="py-3 font-bold text-[#111827] flex items-center gap-2">
                               <img
                                 src={st.profile_photo || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150'}
@@ -550,9 +753,19 @@ export const SessionHub: React.FC<SessionHubProps> = ({
                               <span>{st.name}</span>
                             </td>
                             <td className="py-3 font-mono text-[#6D5DFC] font-bold">{st.roll_number}</td>
-                            <td className="py-3 text-[#6B7280]">{st.email}</td>
+                            <td className="py-3 text-[#6B7280] font-medium">{st.department || selectedSession.department || 'AI & DS'}</td>
                             <td className="py-3 font-mono text-[#12B76A] font-bold">
                               {st.attendance_time ? new Date(st.attendance_time).toLocaleTimeString() : 'Verified'}
+                            </td>
+                            <td className="py-3">
+                              <span className="px-2.5 py-1 rounded-full bg-[#ECFDF5] border border-[#12B76A]/30 text-[#12B76A] font-extrabold text-[10px] inline-flex items-center gap-1">
+                                <CheckCircle2 className="w-3 h-3" /> Present
+                              </span>
+                            </td>
+                            <td className="py-3">
+                              <span className="px-2.5 py-1 rounded-full bg-[#F3F0FF] border border-[#6D5DFC]/30 text-[#6D5DFC] font-mono font-extrabold text-[10px] inline-flex items-center gap-1">
+                                <QrCode className="w-3 h-3" /> QR Scan
+                              </span>
                             </td>
                             <td className="py-3 text-right">
                               <button
@@ -570,7 +783,7 @@ export const SessionHub: React.FC<SessionHubProps> = ({
                 </div>
               )}
 
-              {/* ABSENT STUDENTS LIST */}
+              {/* ABSENT STUDENTS ROSTER TABLE */}
               {rosterTab === 'absent' && (
                 <div className="overflow-x-auto max-h-72">
                   <table className="w-full text-left text-xs">
@@ -578,15 +791,16 @@ export const SessionHub: React.FC<SessionHubProps> = ({
                       <tr>
                         <th className="pb-3">Student Name</th>
                         <th className="pb-3">Register Number</th>
-                        <th className="pb-3">Email</th>
-                        <th className="pb-3">Reason</th>
+                        <th className="pb-3">Department</th>
+                        <th className="pb-3">Attendance Status</th>
+                        <th className="pb-3">Scan Method</th>
                         <th className="pb-3 text-right">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-[#E7E7E7]">
                       {absentStudents.length === 0 ? (
                         <tr>
-                          <td colSpan={5} className="py-8 text-center text-[#12B76A] font-bold">
+                          <td colSpan={6} className="py-8 text-center text-[#12B76A] font-bold">
                             🎉 All enrolled students are marked Present for this session!
                           </td>
                         </tr>
@@ -602,8 +816,13 @@ export const SessionHub: React.FC<SessionHubProps> = ({
                               <span>{st.name}</span>
                             </td>
                             <td className="py-3 font-mono text-rose-600 font-bold">{st.roll_number}</td>
-                            <td className="py-3 text-[#6B7280]">{st.email}</td>
-                            <td className="py-3 text-[#6B7280] font-medium">{st.reason || 'Uninformed Absence'}</td>
+                            <td className="py-3 text-[#6B7280] font-medium">{st.department || selectedSession.department || 'AI & DS'}</td>
+                            <td className="py-3">
+                              <span className="px-2.5 py-1 rounded-full bg-rose-50 border border-rose-200 text-rose-700 font-extrabold text-[10px] inline-flex items-center gap-1">
+                                <UserX className="w-3 h-3" /> Absent
+                              </span>
+                            </td>
+                            <td className="py-3 text-[#9CA3AF] text-[11px]">N/A</td>
                             <td className="py-3 text-right">
                               <button
                                 onClick={() => handleManualMarkPresent(st.id, st.name)}
@@ -623,6 +842,237 @@ export const SessionHub: React.FC<SessionHubProps> = ({
           )}
         </div>
       </div>
+
+      {/* ================================================== */}
+      {/* ANALYZE SESSION PANEL MODAL */}
+      {/* ================================================== */}
+      {showAnalysisModal && selectedSession && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-4xl max-h-[90vh] rounded-[32px] p-6 sm:p-8 overflow-y-auto border border-[#E7E7E7] shadow-2xl space-y-6 animate-fade-in relative">
+            
+            {/* Modal Header Bar */}
+            <div className="flex items-center justify-between pb-4 border-b border-[#E7E7E7]">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-[#6D5DFC] to-[#4F7CFF] text-white flex items-center justify-center shadow-md">
+                  <BarChart3 className="w-6 h-6" />
+                </div>
+                <div>
+                  <h2 className="font-display font-extrabold text-xl text-[#111827]">
+                    Session Roster Analysis & Summary
+                  </h2>
+                  <p className="text-xs text-[#6B7280] font-medium">
+                    Detailed analytics breakdown for {selectedSession.subject}
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setShowAnalysisModal(false)}
+                className="w-9 h-9 rounded-full bg-[#F3F0FF] text-[#6D5DFC] hover:bg-[#6D5DFC] hover:text-white transition-all flex items-center justify-center font-bold"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* SESSION SUMMARY METRICS GRID */}
+            <div className="bg-[#FAF9FF] p-5 rounded-2xl border border-[#6D5DFC]/20 space-y-4">
+              <h4 className="text-xs font-bold text-[#6D5DFC] uppercase tracking-wider flex items-center gap-1.5">
+                <Sparkles className="w-4 h-4" /> Session Summary
+              </h4>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
+                <div className="bg-white p-3.5 rounded-2xl border border-[#E7E7E7] shadow-sm">
+                  <span className="text-[10px] text-[#6B7280] font-bold uppercase tracking-wider block">Total Students</span>
+                  <span className="font-display font-extrabold text-2xl text-[#111827] block mt-1">{totalEnrolled}</span>
+                </div>
+                <div className="bg-white p-3.5 rounded-2xl border border-[#ECFDF5] shadow-sm">
+                  <span className="text-[10px] text-[#12B76A] font-bold uppercase tracking-wider block">Present</span>
+                  <span className="font-display font-extrabold text-2xl text-[#12B76A] block mt-1">{presentStudents.length}</span>
+                </div>
+                <div className="bg-white p-3.5 rounded-2xl border border-rose-100 shadow-sm">
+                  <span className="text-[10px] text-rose-600 font-bold uppercase tracking-wider block">Absent</span>
+                  <span className="font-display font-extrabold text-2xl text-rose-600 block mt-1">{absentStudents.length}</span>
+                </div>
+                <div className="bg-white p-3.5 rounded-2xl border border-[#6D5DFC]/20 shadow-sm">
+                  <span className="text-[10px] text-[#6D5DFC] font-bold uppercase tracking-wider block">Attendance Rate</span>
+                  <span className="font-display font-extrabold text-2xl text-[#6D5DFC] block mt-1">{attendanceRate}%</span>
+                </div>
+              </div>
+
+              {/* Session Details Row */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-3 border-t border-[#E7E7E7] text-xs text-[#111827]">
+                <div>
+                  <span className="text-[10px] text-[#6B7280] font-bold block uppercase">Subject</span>
+                  <strong className="font-bold">{selectedSession.subject}</strong>
+                </div>
+                <div>
+                  <span className="text-[10px] text-[#6B7280] font-bold block uppercase">Faculty</span>
+                  <strong className="font-bold">{selectedSession.faculty_name || 'Mrs Nivetha P'}</strong>
+                </div>
+                <div>
+                  <span className="text-[10px] text-[#6B7280] font-bold block uppercase">Period & Date</span>
+                  <strong className="font-bold">P{selectedSession.period_number || 1} • {selectedSession.date || sessionDate}</strong>
+                </div>
+                <div>
+                  <span className="text-[10px] text-[#6B7280] font-bold block uppercase">Department & Sec</span>
+                  <strong className="font-bold">{selectedSession.department || 'AI & DS'} (Sec {selectedSession.section || 'A'})</strong>
+                </div>
+              </div>
+            </div>
+
+            {/* FILTERS & EXPORT ACTIONS BAR */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-2">
+              {/* Filter Tabs */}
+              <div className="flex flex-wrap items-center gap-1.5 bg-[#F8FAFC] p-1.5 rounded-2xl border border-[#E2E8F0] text-xs font-bold">
+                <button
+                  onClick={() => setAnalysisFilter('all')}
+                  className={`px-3.5 py-1.5 rounded-xl transition-all ${
+                    analysisFilter === 'all'
+                      ? 'bg-[#111827] text-white shadow-sm'
+                      : 'text-[#64748B] hover:text-[#111827]'
+                  }`}
+                >
+                  Show All ({totalEnrolled})
+                </button>
+                <button
+                  onClick={() => setAnalysisFilter('present')}
+                  className={`px-3.5 py-1.5 rounded-xl transition-all ${
+                    analysisFilter === 'present'
+                      ? 'bg-[#12B76A] text-white shadow-sm'
+                      : 'text-[#64748B] hover:text-[#111827]'
+                  }`}
+                >
+                  Present Only ({presentStudents.length})
+                </button>
+                <button
+                  onClick={() => setAnalysisFilter('absent')}
+                  className={`px-3.5 py-1.5 rounded-xl transition-all ${
+                    analysisFilter === 'absent'
+                      ? 'bg-rose-600 text-white shadow-sm'
+                      : 'text-[#64748B] hover:text-[#111827]'
+                  }`}
+                >
+                  Absent Only ({absentStudents.length})
+                </button>
+                <button
+                  onClick={() => setAnalysisFilter('late')}
+                  className={`px-3.5 py-1.5 rounded-xl transition-all ${
+                    analysisFilter === 'late'
+                      ? 'bg-amber-600 text-white shadow-sm'
+                      : 'text-[#64748B] hover:text-[#111827]'
+                  }`}
+                >
+                  Late Entries ({lateStudents.length})
+                </button>
+              </div>
+
+              {/* Export Action Buttons */}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={exportPDF}
+                  className="px-3.5 py-2 rounded-xl bg-white border border-[#E2E8F0] text-[#111827] hover:bg-[#F8FAFC] text-xs font-bold flex items-center gap-1.5 shadow-sm"
+                >
+                  <FileText className="w-4 h-4 text-rose-600" />
+                  <span>Export PDF</span>
+                </button>
+                <button
+                  onClick={exportExcel}
+                  className="px-3.5 py-2 rounded-xl bg-white border border-[#E2E8F0] text-[#111827] hover:bg-[#F8FAFC] text-xs font-bold flex items-center gap-1.5 shadow-sm"
+                >
+                  <FileSpreadsheet className="w-4 h-4 text-[#12B76A]" />
+                  <span>Export Excel</span>
+                </button>
+                <button
+                  onClick={exportCSV}
+                  className="px-3.5 py-2 rounded-xl bg-white border border-[#E2E8F0] text-[#111827] hover:bg-[#F8FAFC] text-xs font-bold flex items-center gap-1.5 shadow-sm"
+                >
+                  <Download className="w-4 h-4 text-[#6D5DFC]" />
+                  <span>Export CSV</span>
+                </button>
+              </div>
+            </div>
+
+            {/* ROSTER ANALYSIS TABLE */}
+            <div className="overflow-x-auto border border-[#E7E7E7] rounded-2xl max-h-80">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-[#F8FAFC] border-b border-[#E7E7E7] text-[#64748B] uppercase text-[10px] font-bold">
+                  <tr>
+                    <th className="py-3 px-4">Register Number</th>
+                    <th className="py-3 px-4">Student Name</th>
+                    <th className="py-3 px-4">Department & Section</th>
+                    <th className="py-3 px-4">Time Marked</th>
+                    <th className="py-3 px-4">Status</th>
+                    <th className="py-3 px-4">Scan Method</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#E7E7E7]">
+                  {getFilteredAnalysisList().length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="py-8 text-center text-[#6B7280] font-medium">
+                        No student records match the selected filter.
+                      </td>
+                    </tr>
+                  ) : (
+                    getFilteredAnalysisList().map((st, idx) => (
+                      <tr key={st.id || idx} className="hover:bg-[#FAFAFA] transition-colors">
+                        <td className="py-3 px-4 font-mono font-bold text-[#6D5DFC]">{st.roll_number}</td>
+                        <td className="py-3 px-4 font-bold text-[#111827] flex items-center gap-2">
+                          <img
+                            src={st.profile_photo || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150'}
+                            alt=""
+                            className="w-7 h-7 rounded-full object-cover border border-[#E7E7E7]"
+                          />
+                          <span>{st.name}</span>
+                        </td>
+                        <td className="py-3 px-4 text-[#6B7280] font-medium">
+                          {st.department || selectedSession.department || 'AI & DS'} III-{st.section || 'A'}
+                        </td>
+                        <td className="py-3 px-4 font-mono text-[#111827] font-bold">
+                          {st.attendance_time ? new Date(st.attendance_time).toLocaleTimeString() : 'N/A'}
+                        </td>
+                        <td className="py-3 px-4">
+                          <span
+                            className={`px-2.5 py-1 rounded-full font-extrabold text-[10px] inline-flex items-center gap-1 ${
+                              st.status.includes('Present')
+                                ? 'bg-[#ECFDF5] border border-[#12B76A]/30 text-[#12B76A]'
+                                : 'bg-rose-50 border border-rose-200 text-rose-700'
+                            }`}
+                          >
+                            {st.status.includes('Present') ? (
+                              <CheckCircle2 className="w-3 h-3" />
+                            ) : (
+                              <UserX className="w-3 h-3" />
+                            )}
+                            {st.status}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4">
+                          <span className="px-2.5 py-1 rounded-full bg-[#F3F0FF] border border-[#6D5DFC]/20 text-[#6D5DFC] font-mono text-[10px] font-bold">
+                            {st.scan_method || (st.status.includes('Present') ? 'QR Scan' : 'N/A')}
+                          </span>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="pt-2 flex justify-end">
+              <button
+                onClick={() => setShowAnalysisModal(false)}
+                className="px-6 py-2.5 rounded-full bg-[#111827] text-white font-bold text-xs hover:bg-black transition-all"
+              >
+                Close Summary
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
     </div>
   );
 };
+
+export default SessionHub;
