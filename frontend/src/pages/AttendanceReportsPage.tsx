@@ -310,16 +310,22 @@ export const AttendanceReportsPage: React.FC<AttendanceReportsPageProps> = ({ on
 
   // Export Attendance Log to Excel & CSV
   const handleExportExcel = (format: 'xlsx' | 'csv' = 'xlsx') => {
-    const exportData = attendanceRecords.map((r) => ({
-      'Student Name': r.student_name,
-      'Roll Number': r.roll_number,
-      Department: r.student_department,
-      Class: `Yr ${r.student_year} Sec ${r.student_section}`,
-      Subject: r.subject || 'General',
-      Status: r.status.toUpperCase(),
-      'Attendance Time': new Date(r.attendance_time).toLocaleString(),
-      Notes: r.notes || ''
-    }));
+    const exportData = attendanceRecords.map((r) => {
+      const vh = (r as any).vh_number || (r.roll_number ? 'VH' + r.roll_number.slice(-5) : 'VH13936');
+      const officialEmail = `${vh.toLowerCase()}@velhightech.com`;
+      return {
+        'Student Name': r.student_name,
+        'Register Number': r.roll_number,
+        'VH Number': vh,
+        'Official Email ID': officialEmail,
+        Department: r.student_department,
+        Class: `Yr ${r.student_year} Sec ${r.student_section}`,
+        Subject: r.subject || 'General',
+        Status: r.status.toUpperCase(),
+        'Attendance Time': new Date(r.attendance_time).toLocaleString(),
+        Notes: r.notes || ''
+      };
+    });
 
     const ws = XLSX.utils.json_to_sheet(exportData);
     const wb = XLSX.utils.book_new();
@@ -330,16 +336,22 @@ export const AttendanceReportsPage: React.FC<AttendanceReportsPageProps> = ({ on
 
   // Export Defaulters to Excel / CSV
   const handleExportDefaulters = (format: 'xlsx' | 'csv' = 'xlsx') => {
-    const exportData = defaultersList.map((d) => ({
-      'Roll Number': d.roll_number,
-      'Student Name': d.name,
-      Email: d.email,
-      'Attendance %': d.overallPercentage !== null && d.overallPercentage !== undefined ? `${d.overallPercentage}%` : '--',
-      'Classes Attended': d.classesAttended,
-      'Classes Missed': d.classesMissed,
-      'Classes Needed for 75%': d.overallPercentage !== null && d.overallPercentage < 75 ? Math.max(0, Math.ceil(3 * (d.classesAttended + d.classesMissed) - 4 * d.classesAttended)) : 0,
-      Status: d.status || 'Defaulter'
-    }));
+    const exportData = defaultersList.map((d) => {
+      const vh = (d as any).vh_number || (d.roll_number ? 'VH' + d.roll_number.slice(-5) : 'VH13936');
+      const officialEmail = `${vh.toLowerCase()}@velhightech.com`;
+      const attVal = typeof d.overallPercentage === 'number' ? d.overallPercentage : (d.attendance_percentage || 0);
+      return {
+        'Student Name': d.name,
+        'Register Number': d.roll_number,
+        'VH Number': vh,
+        'Official Email ID': officialEmail,
+        'Attendance %': `${attVal}%`,
+        'Classes Attended': d.classesAttended || 0,
+        'Classes Missed': d.classesMissed || 0,
+        'Classes Needed for 75%': attVal < 75 ? Math.max(0, Math.ceil(3 * ((d.classesAttended || 0) + (d.classesMissed || 0)) - 4 * (d.classesAttended || 0))) : 0,
+        Status: attVal < 75 ? 'DEFAULTER (< 75%)' : 'REGULAR'
+      };
+    });
 
     const ws = XLSX.utils.json_to_sheet(exportData);
     const wb = XLSX.utils.book_new();

@@ -193,10 +193,20 @@ export const ProfilePage: React.FC = () => {
                 <Lock className="w-3.5 h-3.5 text-[#6D5DFC]" />
                 <span>Institutional Credentials (Admin Managed)</span>
               </div>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs font-mono">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs font-mono">
                 <div>
-                  <span className="text-[10px] text-[#6B7280] block">Roll Number</span>
+                  <span className="text-[10px] text-[#6B7280] block">Register Number</span>
                   <span className="text-[#111827] font-bold">{user?.roll_number}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-[#6B7280] block">VH Number</span>
+                  <span className="text-[#6D5DFC] font-bold">{(user as any)?.vh_number || ('VH' + (user?.roll_number ? user.roll_number.slice(-5) : '13936'))}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-[#6B7280] block">Official Email ID</span>
+                  <span className="text-[#12B76A] font-bold">
+                    {((user as any)?.vh_number ? (user as any).vh_number.toLowerCase() : ('vh' + (user?.roll_number ? user.roll_number.slice(-5) : '13936'))) + '@velhightech.com'}
+                  </span>
                 </div>
                 <div>
                   <span className="text-[10px] text-[#6B7280] block">Department</span>

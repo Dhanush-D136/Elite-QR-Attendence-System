@@ -53,7 +53,15 @@ function getStudents(req, res) {
 
     const formattedStudents = rows.map((st) => {
       const total = st.total_sessions || 0;
-      const rate = total > 0 ? Math.min(100, Math.round((st.attended_count / total) * 100)) : null;
+      const attended = st.attended_count || 0;
+      let rate = 100;
+      if (total > 0) {
+        rate = Math.min(100, Math.round((attended / total) * 100));
+      } else if (attended > 0) {
+        rate = 100;
+      } else {
+        rate = 0;
+      }
       const isDefault = Boolean(st.must_change_password === 1 || st.first_login === 1 || st.password_changed === 0);
       return {
         ...st,
@@ -280,12 +288,21 @@ async function bulkImportStudents(req, res) {
     try {
       const id = uuidv4();
       const photo = st.profile_photo || `https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150`;
+      const roll = String(st.roll_number || st['Register Number'] || st['Roll Number'] || st['roll_number'] || '').trim();
+      
+      let vh = String(st.vh_number || st['VH Number'] || st['VH'] || st['vh_number'] || '').trim().toUpperCase();
+      if (!vh) {
+        const num = roll.replace(/[^0-9]/g, '');
+        vh = 'VH' + (num.length >= 4 ? num.slice(-5) : '13936');
+      }
+
+      const officialEmail = `${vh.toLowerCase()}@velhightech.com`;
 
       await new Promise((resolve, reject) => {
         db.run(
-          `INSERT OR IGNORE INTO users (id, name, roll_number, email, role, department, year, section, phone, profile_photo, status, password_hash, must_change_password, is_first_login, first_login, password_changed)
-           VALUES (?, ?, ?, ?, 'student', ?, ?, ?, ?, ?, 'Active', ?, 1, 1, 1, 0)`,
-          [id, st.name || st['Name'], st.roll_number || st['Register Number'] || st['Roll Number'], st.email || st['Email'], st.department || st['Department'] || 'AI & Data Science', parseInt(st.year || st['Year'] || 3), st.section || st['Section'] || 'A', st.phone || st['Phone'] || '', photo, defaultPasswordHash],
+          `INSERT OR REPLACE INTO users (id, name, roll_number, vh_number, email, role, department, year, section, phone, profile_photo, status, password_hash, must_change_password, is_first_login, first_login, password_changed)
+           VALUES (?, ?, ?, ?, ?, 'student', ?, ?, ?, ?, ?, 'Active', ?, 1, 1, 1, 0)`,
+          [id, st.name || st['Student Name'] || st['Name'], roll, vh, officialEmail, st.department || st['Department'] || 'AI & Data Science', parseInt(st.year || st['Year'] || 3), st.section || st['Section'] || 'A', st.phone || st['Phone'] || '', photo, defaultPasswordHash],
           function (err) {
             if (err) reject(err);
             else {

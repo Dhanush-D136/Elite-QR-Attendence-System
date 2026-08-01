@@ -384,25 +384,23 @@ export const StudentManagement: React.FC = () => {
     const exportData = (selectedStudentIds.length > 0
       ? students.filter((st) => selectedStudentIds.includes(st.id))
       : students
-    ).map((st) => ({
-      'Register Number': st.roll_number,
-      'Student Name': st.name,
-      Email: st.email,
-      Phone: st.phone || 'N/A',
-      Department: st.department || 'AI & DS',
-      Year: st.year || 3,
-      Section: st.section || 'A',
-      'Admission Year': (st as any).admission_year || 'N/A',
-      'DOB': st.dob || 'N/A',
-      Gender: st.gender || 'N/A',
-      'Blood Group': st.blood_group || 'N/A',
-      'Parent Name': st.parent_name || 'N/A',
-      'Parent Phone': st.parent_phone || 'N/A',
-      Address: st.address || 'N/A',
-      'Attendance %': st.attendance_percentage !== null && st.attendance_percentage !== undefined ? `${st.attendance_percentage}%` : '--',
-      'Password Status': (st as any).password_status || 'Custom Password',
-      Status: st.status || 'Active'
-    }));
+    ).map((st) => {
+      const vh = (st as any).vh_number || (st.roll_number ? 'VH' + st.roll_number.slice(-5) : 'VH13936');
+      const email = `${vh.toLowerCase()}@velhightech.com`;
+      const attPct = typeof st.attendance_percentage === 'number' ? st.attendance_percentage : 100;
+      return {
+        'Student Name': st.name,
+        'Register Number': st.roll_number,
+        'VH Number': vh,
+        'Official Email ID': email,
+        'Phone Number': st.phone || 'N/A',
+        Department: st.department || 'AI & DS',
+        Year: st.year || 3,
+        Section: st.section || 'A',
+        'Attendance %': `${attPct}%`,
+        'Account Status': st.status || 'Active'
+      };
+    });
 
     const ws = XLSX.utils.json_to_sheet(exportData);
     const wb = XLSX.utils.book_new();
@@ -416,9 +414,12 @@ export const StudentManagement: React.FC = () => {
       ? students.filter((st) => selectedStudentIds.includes(st.id))
       : students;
 
-    let csv = 'Register Number,Student Name,Email,Phone,Department,Year,Section,Attendance %,Status\n';
+    let csv = 'Student Name,Register Number,VH Number,Official Email ID,Phone Number,Department,Year,Section,Attendance %,Account Status\n';
     targetList.forEach((st) => {
-      csv += `"${st.roll_number}","${st.name}","${st.email}","${st.phone || ''}","${st.department || 'AI & DS'}","${st.year || 3}","${st.section || 'A'}","${st.attendance_percentage || 100}%","${st.status || 'Active'}"\n`;
+      const vh = (st as any).vh_number || (st.roll_number ? 'VH' + st.roll_number.slice(-5) : 'VH13936');
+      const email = `${vh.toLowerCase()}@velhightech.com`;
+      const attPct = typeof st.attendance_percentage === 'number' ? st.attendance_percentage : 100;
+      csv += `"${st.name}","${st.roll_number}","${vh}","${email}","${st.phone || ''}","${st.department || 'AI & DS'}","${st.year || 3}","${st.section || 'A'}","${attPct}%","${st.status || 'Active'}"\n`;
     });
 
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -781,21 +782,26 @@ export const StudentManagement: React.FC = () => {
                           <td className="p-4 font-mono text-xs text-[#12B76A] font-bold">{displayEmail}</td>
                           <td className="p-4 text-[#6B7280] font-mono text-[11px]">{st.phone || 'N/A'}</td>
                           <td className="p-4">
-                            <div className="flex items-center gap-2">
-                              <span className={`font-mono font-bold ${
-                                (st.attendance_percentage || 100) >= 75 ? 'text-[#12B76A]' : 'text-rose-600'
-                              }`}>
-                                {st.attendance_percentage}%
-                              </span>
-                              <div className="w-14 bg-[#FAFAFA] rounded-full h-1.5 overflow-hidden border border-[#E7E7E7]">
-                                <div
-                                  className={`h-full rounded-full ${
-                                    (st.attendance_percentage || 100) >= 75 ? 'bg-[#12B76A]' : 'bg-rose-500'
-                                  }`}
-                                  style={{ width: `${st.attendance_percentage}%` }}
-                                />
-                              </div>
-                            </div>
+                            {(() => {
+                              const attVal = typeof st.attendance_percentage === 'number' ? st.attendance_percentage : 100;
+                              return (
+                                <div className="flex items-center gap-2">
+                                  <span className={`font-mono font-bold ${
+                                    attVal >= 75 ? 'text-[#12B76A]' : 'text-rose-600'
+                                  }`}>
+                                    {attVal}%
+                                  </span>
+                                  <div className="w-14 bg-[#FAFAFA] rounded-full h-1.5 overflow-hidden border border-[#E7E7E7]">
+                                    <div
+                                      className={`h-full rounded-full ${
+                                        attVal >= 75 ? 'bg-[#12B76A]' : 'bg-rose-500'
+                                      }`}
+                                      style={{ width: `${attVal}%` }}
+                                    />
+                                  </div>
+                                </div>
+                              );
+                            })()}
                           </td>
                           <td className="p-4">
                             <span
