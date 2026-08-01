@@ -8,14 +8,14 @@ export const HeroBanner: React.FC = () => {
   const isAdmin = user?.role === 'admin';
 
   const [bannerUrl, setBannerUrl] = useState<string>(() => {
-    return localStorage.getItem('elite_minds_hero_banner') || '/hero_banner.png';
+    return localStorage.getItem('elite_minds_hero_banner') || '/family.jpg';
   });
 
   const [showSettings, setShowSettings] = useState(false);
 
   useEffect(() => {
     const handleStorageChange = () => {
-      setBannerUrl(localStorage.getItem('elite_minds_hero_banner') || '/hero_banner.png');
+      setBannerUrl(localStorage.getItem('elite_minds_hero_banner') || '/family.jpg');
     };
     window.addEventListener('hero_banner_updated', handleStorageChange);
     return () => window.removeEventListener('hero_banner_updated', handleStorageChange);
@@ -32,7 +32,7 @@ export const HeroBanner: React.FC = () => {
           className="w-full h-full object-cover object-center transform group-hover:scale-105 transition-transform duration-700 ease-out"
           onError={(e) => {
             // Fallback if custom image fails to load
-            (e.target as HTMLImageElement).src = '/hero_banner.png';
+            (e.target as HTMLImageElement).src = '/family.jpg';
           }}
         />
 

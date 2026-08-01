@@ -13,7 +13,7 @@ export const HeroBannerSettingsModal: React.FC<HeroBannerSettingsModalProps> = (
   onSave
 }) => {
   const [urlInput, setUrlInput] = useState(currentUrl);
-  const DEFAULT_BANNER = '/hero_banner.png';
+  const DEFAULT_BANNER = '/family.jpg';
 
   const handleReset = () => {
     setUrlInput(DEFAULT_BANNER);
