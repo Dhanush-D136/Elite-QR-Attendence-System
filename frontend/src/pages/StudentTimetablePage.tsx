@@ -16,6 +16,17 @@ export const StudentTimetablePage: React.FC = () => {
   const todayName = days[new Date().getDay() - 1] || 'Monday';
   const [activeDay, setActiveDay] = useState<string>(todayName);
 
+  const dayOrderMap: Record<string, string> = {
+    'Monday': 'Monday • Day Order 1',
+    'Tuesday': 'Tuesday • Day Order 2',
+    'Wednesday': 'Wednesday • Day Order 3',
+    'Thursday': 'Thursday • Day Order 4',
+    'Friday': 'Friday • Day Order 5',
+    'Saturday': 'Saturday • Off Day',
+    'Sunday': 'Sunday • Off Day'
+  };
+  const activeDayOrderLabel = dayOrderMap[activeDay] || activeDay;
+
   useEffect(() => {
     if (user?.department && user?.year && user?.section) {
       api.get(`/timetables?department=${encodeURIComponent(user.department)}&year=${user.year}&section=${user.section}`)
@@ -165,7 +176,7 @@ export const StudentTimetablePage: React.FC = () => {
 
           <div className="bg-white p-6 rounded-[24px] border border-[#E7E7E7] shadow-enterprise space-y-4">
             <h3 className="font-display font-bold text-base text-[#111827]">
-              {activeDay} Class Schedule ({activeDayClasses.length} Lectures)
+              {activeDayOrderLabel} Class Schedule ({activeDayClasses.length} Lectures)
             </h3>
 
             {activeDayClasses.length === 0 ? (

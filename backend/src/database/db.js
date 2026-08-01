@@ -184,50 +184,50 @@ function runMigrations() {
                     { day: 'Monday', period_number: 2, code: '21AI51T', name: 'Programming Language for AI', faculty: 'Dr Rajesh Kumar', start: '09:05 AM', end: '09:55 AM', room: 'F305' },
                     { day: 'Monday', period_number: 3, code: '21HI52T', name: 'Data Analytics', faculty: 'Mrs Gowthami K', start: '10:10 AM', end: '11:00 AM', room: 'F305' },
                     { day: 'Monday', period_number: 4, code: '21EE01P', name: 'Mini Project - I', faculty: 'Mr Arun Kumar', start: '11:00 AM', end: '11:50 AM', room: 'F305' },
-                    { day: 'Monday', period_number: 5, code: '21HI53IT', name: 'Web Technology', faculty: 'Mrs Vasanthapriya M J T', start: '12:40 PM', end: '01:30 PM', room: 'F305' },
-                    { day: 'Monday', period_number: 6, code: '21HI53IT', name: 'Web Technology', faculty: 'Mrs Vasanthapriya M J T', start: '01:30 PM', end: '02:20 PM', room: 'F305' },
-                    { day: 'Monday', period_number: 7, code: '21HI53IT', name: 'Web Technology', faculty: 'Mrs Vasanthapriya M J T', start: '02:20 PM', end: '03:10 PM', room: 'F305' },
-                    { day: 'Monday', period_number: 8, code: '21HI53IT', name: 'Web Technology', faculty: 'Mrs Vasanthapriya M J T', start: '03:10 PM', end: '04:00 PM', room: 'F305' },
+                    { day: 'Monday', period_number: 5, code: '21HI53IT', name: 'Web Technology', faculty: 'Mrs Vasanthapriya M J T', start: '11:50 AM', end: '12:35 PM', room: 'F305' },
+                    { day: 'Monday', period_number: 6, code: '21HI53IT', name: 'Web Technology', faculty: 'Mrs Vasanthapriya M J T', start: '01:15 PM', end: '02:00 PM', room: 'F305' },
+                    { day: 'Monday', period_number: 7, code: '21HI53IT', name: 'Web Technology', faculty: 'Mrs Vasanthapriya M J T', start: '02:00 PM', end: '02:45 PM', room: 'F305' },
+                    { day: 'Monday', period_number: 8, code: '21HI53IT', name: 'Web Technology', faculty: 'Mrs Vasanthapriya M J T', start: '02:45 PM', end: '03:30 PM', room: 'F305' },
 
                     // Tuesday
                     { day: 'Tuesday', period_number: 1, code: '21MB03OT', name: 'Open Elective Subject', faculty: 'Faculty Member', start: '08:15 AM', end: '09:05 AM', room: 'F305' },
                     { day: 'Tuesday', period_number: 2, code: '21MB03OT', name: 'Open Elective Subject', faculty: 'Faculty Member', start: '09:05 AM', end: '09:55 AM', room: 'F305' },
                     { day: 'Tuesday', period_number: 3, code: '21HI52T', name: 'Data Analytics', faculty: 'Mrs Gowthami K', start: '10:10 AM', end: '11:00 AM', room: 'F305' },
                     { day: 'Tuesday', period_number: 4, code: '21AI55T', name: 'Knowledge Engineering', faculty: 'Mrs Nivetha P', start: '11:00 AM', end: '11:50 AM', room: 'F305' },
-                    { day: 'Tuesday', period_number: 5, code: '21HC54T', name: 'Block Chain Technology', faculty: 'Mrs Deepa R', start: '12:40 PM', end: '01:30 PM', room: 'F305' },
-                    { day: 'Tuesday', period_number: 6, code: '21HI52T', name: 'Data Analytics', faculty: 'Mrs Gowthami K', start: '01:30 PM', end: '02:20 PM', room: 'F305' },
-                    { day: 'Tuesday', period_number: 7, code: '21HI53IT', name: 'Web Technology', faculty: 'Mrs Vasanthapriya M J T', start: '02:20 PM', end: '03:10 PM', room: 'F305' },
-                    { day: 'Tuesday', period_number: 8, code: '21HC54T', name: 'Block Chain Technology', faculty: 'Mrs Deepa R', start: '03:10 PM', end: '04:00 PM', room: 'F305' },
+                    { day: 'Tuesday', period_number: 5, code: '21HC54T', name: 'Block Chain Technology', faculty: 'Mrs Deepa R', start: '11:50 AM', end: '12:35 PM', room: 'F305' },
+                    { day: 'Tuesday', period_number: 6, code: '21HI52T', name: 'Data Analytics', faculty: 'Mrs Gowthami K', start: '01:15 PM', end: '02:00 PM', room: 'F305' },
+                    { day: 'Tuesday', period_number: 7, code: '21HI53IT', name: 'Web Technology', faculty: 'Mrs Vasanthapriya M J T', start: '02:00 PM', end: '02:45 PM', room: 'F305' },
+                    { day: 'Tuesday', period_number: 8, code: '21HC54T', name: 'Block Chain Technology', faculty: 'Mrs Deepa R', start: '02:45 PM', end: '03:30 PM', room: 'F305' },
 
                     // Wednesday
                     { day: 'Wednesday', period_number: 1, code: '21HI53IT', name: 'Web Technology', faculty: 'Mrs Vasanthapriya M J T', start: '08:15 AM', end: '09:05 AM', room: 'F305' },
                     { day: 'Wednesday', period_number: 2, code: '21AI57P', name: 'Data Analytics Laboratory', faculty: 'Mrs Gowthami K', start: '09:05 AM', end: '09:55 AM', room: 'Lab 2' },
                     { day: 'Wednesday', period_number: 3, code: '21AI57P', name: 'Data Analytics Laboratory', faculty: 'Mrs Gowthami K', start: '10:10 AM', end: '11:00 AM', room: 'Lab 2' },
                     { day: 'Wednesday', period_number: 4, code: '21AI57P', name: 'Data Analytics Laboratory', faculty: 'Mrs Gowthami K', start: '11:00 AM', end: '11:50 AM', room: 'Lab 2' },
-                    { day: 'Wednesday', period_number: 5, code: '21AI57P', name: 'Data Analytics Laboratory', faculty: 'Mrs Gowthami K', start: '12:40 PM', end: '01:30 PM', room: 'Lab 2' },
-                    { day: 'Wednesday', period_number: 6, code: '21AI51T', name: 'Programming Language for AI', faculty: 'Dr Rajesh Kumar', start: '01:30 PM', end: '02:20 PM', room: 'F305' },
-                    { day: 'Wednesday', period_number: 7, code: '21AI55T', name: 'Knowledge Engineering', faculty: 'Mrs Nivetha P', start: '02:20 PM', end: '03:10 PM', room: 'F305' },
-                    { day: 'Wednesday', period_number: 8, code: 'SPORTS_HOUR', name: 'Sports', faculty: 'Physical Director', start: '03:10 PM', end: '04:00 PM', room: 'Ground' },
+                    { day: 'Wednesday', period_number: 5, code: '21AI57P', name: 'Data Analytics Laboratory', faculty: 'Mrs Gowthami K', start: '11:50 AM', end: '12:35 PM', room: 'Lab 2' },
+                    { day: 'Wednesday', period_number: 6, code: '21AI51T', name: 'Programming Language for AI', faculty: 'Dr Rajesh Kumar', start: '01:15 PM', end: '02:00 PM', room: 'F305' },
+                    { day: 'Wednesday', period_number: 7, code: '21AI55T', name: 'Knowledge Engineering', faculty: 'Mrs Nivetha P', start: '02:00 PM', end: '02:45 PM', room: 'F305' },
+                    { day: 'Wednesday', period_number: 8, code: 'SPORTS_HOUR', name: 'Sports', faculty: 'Physical Director', start: '02:45 PM', end: '03:30 PM', room: 'Ground' },
 
                     // Thursday
                     { day: 'Thursday', period_number: 1, code: '21MB03OT', name: 'Open Elective Subject', faculty: 'Faculty Member', start: '08:15 AM', end: '09:05 AM', room: 'F305' },
                     { day: 'Thursday', period_number: 2, code: '21MB03OT', name: 'Open Elective Subject', faculty: 'Faculty Member', start: '09:05 AM', end: '09:55 AM', room: 'F305' },
                     { day: 'Thursday', period_number: 3, code: '21AI51T', name: 'Programming Language for AI', faculty: 'Dr Rajesh Kumar', start: '10:10 AM', end: '11:00 AM', room: 'F305' },
                     { day: 'Thursday', period_number: 4, code: '21HI52T', name: 'Data Analytics', faculty: 'Mrs Gowthami K', start: '11:00 AM', end: '11:50 AM', room: 'F305' },
-                    { day: 'Thursday', period_number: 5, code: '21HC54T', name: 'Block Chain Technology', faculty: 'Mrs Deepa R', start: '12:40 PM', end: '01:30 PM', room: 'F305' },
-                    { day: 'Thursday', period_number: 6, code: '21AI55T', name: 'Knowledge Engineering', faculty: 'Mrs Nivetha P', start: '01:30 PM', end: '02:20 PM', room: 'F305' },
-                    { day: 'Thursday', period_number: 7, code: '21HC54T', name: 'Block Chain Technology', faculty: 'Mrs Deepa R', start: '02:20 PM', end: '03:10 PM', room: 'F305' },
-                    { day: 'Thursday', period_number: 8, code: '21AI51T', name: 'Programming Language for AI', faculty: 'Dr Rajesh Kumar', start: '03:10 PM', end: '04:00 PM', room: 'F305' },
+                    { day: 'Thursday', period_number: 5, code: '21HC54T', name: 'Block Chain Technology', faculty: 'Mrs Deepa R', start: '11:50 AM', end: '12:35 PM', room: 'F305' },
+                    { day: 'Thursday', period_number: 6, code: '21AI55T', name: 'Knowledge Engineering', faculty: 'Mrs Nivetha P', start: '01:15 PM', end: '02:00 PM', room: 'F305' },
+                    { day: 'Thursday', period_number: 7, code: '21HC54T', name: 'Block Chain Technology', faculty: 'Mrs Deepa R', start: '02:00 PM', end: '02:45 PM', room: 'F305' },
+                    { day: 'Thursday', period_number: 8, code: '21AI51T', name: 'Programming Language for AI', faculty: 'Dr Rajesh Kumar', start: '02:45 PM', end: '03:30 PM', room: 'F305' },
 
                     // Friday
                     { day: 'Friday', period_number: 1, code: '21EE01P', name: 'Mini Project - I', faculty: 'Mr Arun Kumar', start: '08:15 AM', end: '09:05 AM', room: 'F305' },
                     { day: 'Friday', period_number: 2, code: '21EE01P', name: 'Mini Project - I', faculty: 'Mr Arun Kumar', start: '09:05 AM', end: '09:55 AM', room: 'F305' },
                     { day: 'Friday', period_number: 3, code: '21HI52T', name: 'Data Analytics', faculty: 'Mrs Gowthami K', start: '10:10 AM', end: '11:00 AM', room: 'F305' },
                     { day: 'Friday', period_number: 4, code: '21EE03P', name: 'Technical Seminar', faculty: 'Mr Arun Kumar', start: '11:00 AM', end: '11:50 AM', room: 'F305' },
-                    { day: 'Friday', period_number: 5, code: '21AI51T', name: 'Programming Language for AI', faculty: 'Dr Rajesh Kumar', start: '12:40 PM', end: '01:30 PM', room: 'F305' },
-                    { day: 'Friday', period_number: 6, code: '21HI52T', name: 'Data Analytics', faculty: 'Mrs Gowthami K', start: '01:30 PM', end: '02:20 PM', room: 'F305' },
-                    { day: 'Friday', period_number: 7, code: '21AI55T', name: 'Knowledge Engineering', faculty: 'Mrs Nivetha P', start: '02:20 PM', end: '03:10 PM', room: 'F305' },
-                    { day: 'Friday', period_number: 8, code: '21HC54T', name: 'Block Chain Technology', faculty: 'Mrs Deepa R', start: '03:10 PM', end: '04:00 PM', room: 'F305' }
+                    { day: 'Friday', period_number: 5, code: '21AI51T', name: 'Programming Language for AI', faculty: 'Dr Rajesh Kumar', start: '11:50 AM', end: '12:35 PM', room: 'F305' },
+                    { day: 'Friday', period_number: 6, code: '21HI52T', name: 'Data Analytics', faculty: 'Mrs Gowthami K', start: '01:15 PM', end: '02:00 PM', room: 'F305' },
+                    { day: 'Friday', period_number: 7, code: '21AI55T', name: 'Knowledge Engineering', faculty: 'Mrs Nivetha P', start: '02:00 PM', end: '02:45 PM', room: 'F305' },
+                    { day: 'Friday', period_number: 8, code: '21HC54T', name: 'Block Chain Technology', faculty: 'Mrs Deepa R', start: '02:45 PM', end: '03:30 PM', room: 'F305' }
                   ];
 
                   MASTER_TIMETABLE_SLOTS.forEach((slot) => {
@@ -240,7 +240,7 @@ function runMigrations() {
                   });
                 });
 
-                console.log('[DATABASE MIGRATION] Master Semester 5 Section A Timetable seeded cleanly.');
+                console.log('[DATABASE MIGRATION] Master Semester 5 Section A Timetable seeded cleanly with official period timings.');
                 resolve(true);
               });
             });

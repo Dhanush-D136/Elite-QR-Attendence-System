@@ -51,6 +51,17 @@ export const StudentDashboard: React.FC = () => {
   const daysOfWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
   const todayName = daysOfWeek[new Date().getDay()] === 'Sunday' || daysOfWeek[new Date().getDay()] === 'Saturday' ? 'Monday' : daysOfWeek[new Date().getDay()];
 
+  const dayOrderMap: Record<string, string> = {
+    'Monday': 'Monday • Day Order 1',
+    'Tuesday': 'Tuesday • Day Order 2',
+    'Wednesday': 'Wednesday • Day Order 3',
+    'Thursday': 'Thursday • Day Order 4',
+    'Friday': 'Friday • Day Order 5',
+    'Saturday': 'Saturday • Off Day',
+    'Sunday': 'Sunday • Off Day'
+  };
+  const todayDayOrderLabel = dayOrderMap[todayName] || todayName;
+
   // Today's classes filtering
   const todaysClasses = timetables.filter((t) => (t.day || '').toLowerCase() === todayName.toLowerCase());
 
@@ -242,7 +253,7 @@ export const StudentDashboard: React.FC = () => {
             <div>
               <h3 className="font-display font-bold text-base text-[#111827] flex items-center gap-2">
                 <Calendar className="w-5 h-5 text-[#6D5DFC]" />
-                Today's Master Schedule — {todayName} (Periods 1 to 8)
+                Today's Master Schedule — {todayDayOrderLabel} (Periods 1 to 8)
               </h3>
               <p className="text-xs text-[#6B7280] font-medium">Automatic daily schedule order with live active period tracking</p>
             </div>
