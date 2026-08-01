@@ -61,11 +61,7 @@ function adminLogin(req, res) {
 }
 
 function isValidPasswordComplexity(pwd) {
-  if (!pwd || typeof pwd !== 'string') return false;
-  if (pwd.length < 8) return false;
-  if (!/[A-Z]/.test(pwd)) return false;
-  if (!/[0-9]/.test(pwd)) return false;
-  if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(pwd)) return false;
+  if (!pwd || typeof pwd !== 'string' || pwd.trim() === '') return false;
   return true;
 }
 
@@ -159,7 +155,7 @@ async function firstTimePasswordChange(req, res) {
 
   if (!isValidPasswordComplexity(new_password)) {
     return res.status(400).json({
-      error: 'Password requirement failed: Must be at least 8 characters long, contain 1 uppercase letter, 1 number, and 1 special character (!@#$%^&*).'
+      error: 'Please enter a valid new password.'
     });
   }
 
@@ -223,7 +219,7 @@ async function changePassword(req, res) {
 
   if (!isValidPasswordComplexity(new_password)) {
     return res.status(400).json({
-      error: 'Password must be at least 6 characters long.'
+      error: 'Please enter a valid new password.'
     });
   }
 
