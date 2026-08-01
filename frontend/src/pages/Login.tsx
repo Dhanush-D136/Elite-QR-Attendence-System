@@ -132,7 +132,7 @@ export const Login: React.FC = () => {
           {/* LIVE INSTITUTION METRIC COUNTERS */}
           <div className="grid grid-cols-3 gap-4 pt-4 max-w-md border-t border-white/15">
             <div>
-              <span className="font-display font-extrabold text-2xl sm:text-3xl text-white block">63+</span>
+              <span className="font-display font-extrabold text-2xl sm:text-3xl text-white block">61+</span>
               <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider block">Students</span>
             </div>
             <div>
