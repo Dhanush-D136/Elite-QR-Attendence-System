@@ -207,22 +207,6 @@ function markAttendance(req, res) {
   });
 }
 
-            console.log(`====================================================\n`);
-
-            res.status(200).json({
-              success: true,
-              attendanceId: recordId,
-              attendanceCode: activeCode,
-              message: `Attendance Marked Successfully as PRESENT for ${session.subject}!`,
-              record: recordPayload
-            });
-          }
-        );
-      });
-    });
-  });
-}
-
 function getDebugLog(req, res) {
   res.json({ message: 'Mandatory Camera QR Engine Active' });
 }
