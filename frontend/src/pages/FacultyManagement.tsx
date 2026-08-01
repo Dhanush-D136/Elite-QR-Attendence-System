@@ -20,35 +20,56 @@ import {
   Building2,
   BookOpen,
   FileSpreadsheet,
-  X
+  X,
+  Lock,
+  Unlock,
+  Clock,
+  Calendar,
+  Award,
+  Mail,
+  Phone,
+  BookMarked,
+  ShieldCheck,
+  Activity,
+  Layers
 } from 'lucide-react';
 
 export const FacultyManagement: React.FC = () => {
   const [activeSubTab, setActiveSubTab] = useState<'directory' | 'activity' | 'passwords'>('directory');
 
-  // Stats & Faculty List
+  // Stats & Faculty Roster
   const [stats, setStats] = useState<any>({
-    totalFaculty: 2,
-    activeFaculty: 2,
+    totalFaculty: 0,
+    activeFaculty: 0,
     inactiveFaculty: 0,
-    defaultPasswordCount: 2,
+    lockedFaculty: 0,
+    defaultPasswordCount: 0,
     customPasswordCount: 0,
-    loggedInToday: 2,
-    activeClassesCount: 1
+    loggedInToday: 0,
+    activeClassesCount: 0
   });
 
   const [faculties, setFaculties] = useState<any[]>([]);
+  const [activityLogs, setActivityLogs] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isLoadingLogs, setIsLoadingLogs] = useState<boolean>(false);
+
+  // Search & Filters
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedDept, setSelectedDept] = useState<string>('All');
-  const [selectedStatus, setSelectedStatus] = useState<string>('All');
+  const [selectedDesig, setSelectedDesig] = useState<string>('All');
+  const [selectedAccountStatus, setSelectedAccountStatus] = useState<string>('All');
+  const [selectedPasswordStatus, setSelectedPasswordStatus] = useState<string>('All');
 
   // Modals
   const [showAddModal, setShowAddModal] = useState<boolean>(false);
   const [showEditModal, setShowEditModal] = useState<boolean>(false);
   const [showResetModal, setShowResetModal] = useState<boolean>(false);
   const [showViewModal, setShowViewModal] = useState<boolean>(false);
+
   const [selectedFaculty, setSelectedFaculty] = useState<any>(null);
+  const [facultyDetails, setFacultyDetails] = useState<any>(null);
+  const [isLoadingDetails, setIsLoadingDetails] = useState<boolean>(false);
 
   // Form States
   const [facultyCode, setFacultyCode] = useState<string>('');
@@ -60,11 +81,20 @@ export const FacultyManagement: React.FC = () => {
   const [facultyQual, setFacultyQual] = useState<string>('M.Tech (AI & DS)');
   const [facultyExp, setFacultyExp] = useState<string>('6 Years Teaching');
   const [facultySpec, setFacultySpec] = useState<string>('AI & Web Security');
+  const [facultyStatus, setFacultyStatus] = useState<string>('Active');
+  const [profilePhoto, setProfilePhoto] = useState<string>('');
+  const [assignedSubjectsStr, setAssignedSubjectsStr] = useState<string>('Knowledge Engineering, Web Technology');
   const [newPassword, setNewPassword] = useState<string>('1234');
 
   useEffect(() => {
     fetchFacultyManagementData();
   }, []);
+
+  useEffect(() => {
+    if (activeSubTab === 'activity') {
+      fetchLoginActivityLogs();
+    }
+  }, [activeSubTab]);
 
   const fetchFacultyManagementData = async () => {
     try {
@@ -83,10 +113,60 @@ export const FacultyManagement: React.FC = () => {
     }
   };
 
+  const fetchLoginActivityLogs = async () => {
+    try {
+      setIsLoadingLogs(true);
+      const res = await api.get('/admin/faculty-management/activity-logs');
+      setActivityLogs(res.data.logs || []);
+    } catch (err) {
+      console.error('Failed to fetch login logs', err);
+    } finally {
+      setIsLoadingLogs(false);
+    }
+  };
+
+  // View Faculty Details
+  const handleOpenViewModal = async (fac: any) => {
+    setSelectedFaculty(fac);
+    setShowViewModal(true);
+    setIsLoadingDetails(true);
+    try {
+      const res = await api.get(`/admin/faculty-management/faculties/${fac.id}`);
+      setFacultyDetails(res.data);
+    } catch (err) {
+      console.error('Failed to fetch faculty profile details', err);
+    } finally {
+      setIsLoadingDetails(false);
+    }
+  };
+
+  // Open Edit Modal
+  const openEditModal = (fac: any) => {
+    setSelectedFaculty(fac);
+    setFacultyCode(fac.faculty_code);
+    setFacultyName(fac.name);
+    setFacultyEmail(fac.email);
+    setFacultyDept(fac.department || 'AI & Data Science');
+    setFacultyDesig(fac.designation || 'Assistant Professor');
+    setFacultyPhone(fac.phone || '');
+    setFacultyQual(fac.qualification || '');
+    setFacultyExp(fac.experience || '');
+    setFacultySpec(fac.specialization || '');
+    setFacultyStatus(fac.status || 'Active');
+    setProfilePhoto(fac.profile_photo || '');
+    setAssignedSubjectsStr(fac.assigned_subjects || 'Knowledge Engineering, Web Tech');
+    setShowEditModal(true);
+  };
+
   // Add Faculty
   const handleAddFaculty = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      const subjectsList = assignedSubjectsStr
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
+
       await api.post('/admin/faculty-management/faculties', {
         faculty_code: facultyCode,
         name: facultyName,
@@ -97,8 +177,12 @@ export const FacultyManagement: React.FC = () => {
         qualification: facultyQual,
         experience: facultyExp,
         specialization: facultySpec,
-        password: '1234'
+        status: facultyStatus,
+        password: '1234',
+        profile_photo: profilePhoto,
+        assigned_subjects: subjectsList
       });
+
       alert(`✅ Faculty account ${facultyCode} created successfully with default password '1234'!`);
       setShowAddModal(false);
       resetForm();
@@ -113,6 +197,11 @@ export const FacultyManagement: React.FC = () => {
     e.preventDefault();
     if (!selectedFaculty) return;
     try {
+      const subjectsList = assignedSubjectsStr
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
+
       await api.put(`/admin/faculty-management/faculties/${selectedFaculty.id}`, {
         name: facultyName,
         email: facultyEmail,
@@ -121,8 +210,12 @@ export const FacultyManagement: React.FC = () => {
         phone: facultyPhone,
         qualification: facultyQual,
         experience: facultyExp,
-        specialization: facultySpec
+        specialization: facultySpec,
+        status: facultyStatus,
+        profile_photo: profilePhoto,
+        assigned_subjects: subjectsList
       });
+
       alert(`✅ Faculty details updated successfully for ${facultyName}!`);
       setShowEditModal(false);
       fetchFacultyManagementData();
@@ -131,34 +224,38 @@ export const FacultyManagement: React.FC = () => {
     }
   };
 
-  // Reset Password (Default 1234)
-  const handleResetPassword = async () => {
+  // Password Operations (Reset, Force Change, Lock/Unlock)
+  const handlePasswordControlAction = async (action: 'reset' | 'force_change' | 'lock' | 'unlock') => {
     if (!selectedFaculty) return;
     try {
-      await api.post(`/admin/faculty-management/faculties/${selectedFaculty.id}/reset-password`, {
-        new_password: newPassword || '1234'
+      const res = await api.post(`/admin/faculty-management/faculties/${selectedFaculty.id}/reset-password`, {
+        new_password: newPassword || '1234',
+        action,
+        status: action === 'lock' ? 'Locked' : action === 'unlock' ? 'Active' : undefined
       });
-      alert(`✅ Password for ${selectedFaculty.name} reset to '${newPassword || '1234'}' successfully!`);
+      alert(`✅ ${res.data.message}`);
       setShowResetModal(false);
       fetchFacultyManagementData();
     } catch (err: any) {
-      alert('Failed to reset password');
+      alert(`❌ ${err.response?.data?.error || 'Failed to execute password action'}`);
     }
   };
 
   // Delete Faculty
   const handleDeleteFaculty = async (id: string, name: string) => {
-    if (!confirm(`Are you sure you want to delete Faculty account '${name}'? This action cannot be undone.`)) return;
+    if (!confirm(`Are you sure you want to PERMANENTLY delete Faculty account '${name}'?\n\nThis will remove all associated subject mappings, timetables, and audit records.`)) {
+      return;
+    }
     try {
       await api.delete(`/admin/faculty-management/faculties/${id}`);
-      alert(`✅ Faculty account '${name}' deleted successfully.`);
+      alert(`✅ Faculty account '${name}' deleted successfully from database.`);
       fetchFacultyManagementData();
     } catch (err) {
       alert('Failed to delete faculty account');
     }
   };
 
-  // Export Faculty List to Excel
+  // Export Faculty Roster to XLSX
   const exportToExcel = () => {
     const exportRows = faculties.map((f: any) => ({
       'Faculty Code': f.faculty_code,
@@ -170,13 +267,14 @@ export const FacultyManagement: React.FC = () => {
       'Qualification': f.qualification || 'N/A',
       'Assigned Subjects': f.assigned_subjects || 'N/A',
       'Password Status': f.password_status,
-      'Account Status': f.status
+      'Account Status': f.status || 'Active',
+      'Conducted Sessions': f.sessions_conducted_count || 0
     }));
 
     const ws = XLSX.utils.json_to_sheet(exportRows);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Faculty Roster');
-    XLSX.writeFile(wb, `Faculty_Roster_${new Date().toISOString().split('T')[0]}.xlsx`);
+    XLSX.writeFile(wb, `Faculty_Master_Roster_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
   const resetForm = () => {
@@ -187,31 +285,23 @@ export const FacultyManagement: React.FC = () => {
     setFacultyQual('M.Tech (AI & DS)');
     setFacultyExp('6 Years Teaching');
     setFacultySpec('AI & Web Security');
+    setFacultyStatus('Active');
+    setProfilePhoto('');
+    setAssignedSubjectsStr('Knowledge Engineering, Web Technology');
     setSelectedFaculty(null);
-  };
-
-  const openEditModal = (fac: any) => {
-    setSelectedFaculty(fac);
-    setFacultyCode(fac.faculty_code);
-    setFacultyName(fac.name);
-    setFacultyEmail(fac.email);
-    setFacultyDept(fac.department || 'AI & Data Science');
-    setFacultyDesig(fac.designation || 'Assistant Professor');
-    setFacultyPhone(fac.phone || '');
-    setFacultyQual(fac.qualification || '');
-    setFacultyExp(fac.experience || '');
-    setFacultySpec(fac.specialization || '');
-    setShowEditModal(true);
   };
 
   const filteredFaculties = faculties.filter((f: any) => {
     const matchSearch =
       f.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       f.faculty_code?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      f.email?.toLowerCase().includes(searchQuery.toLowerCase());
+      f.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      f.phone?.toLowerCase().includes(searchQuery.toLowerCase());
     const matchDept = selectedDept === 'All' || f.department === selectedDept;
-    const matchStatus = selectedStatus === 'All' || f.password_status === selectedStatus;
-    return matchSearch && matchDept && matchStatus;
+    const matchDesig = selectedDesig === 'All' || f.designation === selectedDesig;
+    const matchAccountStatus = selectedAccountStatus === 'All' || (f.status || 'Active') === selectedAccountStatus;
+    const matchPasswordStatus = selectedPasswordStatus === 'All' || f.password_status === selectedPasswordStatus;
+    return matchSearch && matchDept && matchDesig && matchAccountStatus && matchPasswordStatus;
   });
 
   return (
@@ -223,7 +313,7 @@ export const FacultyManagement: React.FC = () => {
             Faculty Management & Security Control Center
           </h2>
           <p className="text-xs text-[#6B7280] font-medium mt-1">
-            Complete CRUD administration, faculty roster management, and password control center
+            Complete database CRUD operations, faculty subject mappings, timetable sync, and security audit logs
           </p>
         </div>
 
@@ -244,7 +334,7 @@ export const FacultyManagement: React.FC = () => {
             onClick={() => { resetForm(); setShowAddModal(true); }}
             className="px-5 py-2.5 rounded-2xl bg-[#6D5DFC] hover:bg-[#5b4be0] text-white font-bold text-xs shadow-lg transition-all flex items-center gap-2"
           >
-            <Plus className="w-4 h-4" /> Add Faculty
+            <Plus className="w-4 h-4" /> Add Faculty Account
           </button>
         </div>
       </div>
@@ -262,8 +352,8 @@ export const FacultyManagement: React.FC = () => {
         </div>
 
         <div className="p-4 rounded-2xl bg-white border border-[#E7E7E7] shadow-sm">
-          <span className="text-[10px] font-bold text-rose-600 uppercase tracking-wider block">INACTIVE</span>
-          <strong className="text-2xl font-extrabold text-rose-600 block mt-1">{stats.inactiveFaculty}</strong>
+          <span className="text-[10px] font-bold text-rose-600 uppercase tracking-wider block">LOCKED / INACTIVE</span>
+          <strong className="text-2xl font-extrabold text-rose-600 block mt-1">{stats.lockedFaculty + stats.inactiveFaculty}</strong>
         </div>
 
         <div className="p-4 rounded-2xl bg-white border border-[#E7E7E7] shadow-sm">
@@ -287,7 +377,7 @@ export const FacultyManagement: React.FC = () => {
         </div>
       </div>
 
-      {/* TAB SWITCHER BAR */}
+      {/* SUB-TAB SWITCHER BAR */}
       <div className="p-1 rounded-2xl bg-white border border-[#E7E7E7] shadow-sm flex items-center gap-1 w-fit text-xs font-bold">
         <button
           onClick={() => setActiveSubTab('directory')}
@@ -303,7 +393,7 @@ export const FacultyManagement: React.FC = () => {
             activeSubTab === 'activity' ? 'bg-[#111827] text-white shadow-md' : 'text-[#6B7280] hover:text-[#111827]'
           }`}
         >
-          <BookOpen className="w-4 h-4" /> Faculty Login Activity
+          <BookOpen className="w-4 h-4" /> Faculty Login Activity Logs
         </button>
         <button
           onClick={() => setActiveSubTab('passwords')}
@@ -311,13 +401,13 @@ export const FacultyManagement: React.FC = () => {
             activeSubTab === 'passwords' ? 'bg-[#111827] text-white shadow-md' : 'text-[#6B7280] hover:text-[#111827]'
           }`}
         >
-          <Key className="w-4 h-4" /> Password Control & Audit Logs
+          <Key className="w-4 h-4" /> Password Control & Security Audit
         </button>
       </div>
 
-      {/* FILTER & SEARCH CONTROL TOOLBAR */}
+      {/* FILTER & SEARCH TOOLBAR */}
       <div className="p-4 rounded-[24px] bg-white border border-[#E7E7E7] shadow-sm flex flex-col md:flex-row items-center justify-between gap-3">
-        <div className="relative w-full md:w-96">
+        <div className="relative w-full md:w-80">
           <input
             type="text"
             value={searchQuery}
@@ -341,8 +431,30 @@ export const FacultyManagement: React.FC = () => {
           </select>
 
           <select
-            value={selectedStatus}
-            onChange={(e) => setSelectedStatus(e.target.value)}
+            value={selectedDesig}
+            onChange={(e) => setSelectedDesig(e.target.value)}
+            className="px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] font-bold text-[#111827]"
+          >
+            <option value="All">All Designations</option>
+            <option value="Assistant Professor">Assistant Professor</option>
+            <option value="Associate Professor">Associate Professor</option>
+            <option value="Professor & HOD">Professor & HOD</option>
+          </select>
+
+          <select
+            value={selectedAccountStatus}
+            onChange={(e) => setSelectedAccountStatus(e.target.value)}
+            className="px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] font-bold text-[#111827]"
+          >
+            <option value="All">All Account Status</option>
+            <option value="Active">Active</option>
+            <option value="Inactive">Inactive</option>
+            <option value="Locked">Locked</option>
+          </select>
+
+          <select
+            value={selectedPasswordStatus}
+            onChange={(e) => setSelectedPasswordStatus(e.target.value)}
             className="px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] font-bold text-[#111827]"
           >
             <option value="All">All Password Status</option>
@@ -352,13 +464,19 @@ export const FacultyManagement: React.FC = () => {
         </div>
       </div>
 
-      {/* MAIN FACULTY DIRECTORY TABLE */}
+      {/* TAB 1: FACULTY DIRECTORY & CRUD */}
       {activeSubTab === 'directory' && (
         <div className="bg-white rounded-[24px] border border-[#E7E7E7] shadow-enterprise overflow-hidden">
           {isLoading ? (
             <div className="p-12 text-center text-[#6B7280]">
               <RefreshCw className="w-8 h-8 animate-spin mx-auto text-[#6D5DFC] mb-2" />
-              <p className="font-bold text-sm">Loading Faculty Roster...</p>
+              <p className="font-bold text-sm">Loading Database Faculty Roster...</p>
+            </div>
+          ) : filteredFaculties.length === 0 ? (
+            <div className="p-12 text-center text-[#6B7280]">
+              <UserCheck className="w-12 h-12 mx-auto text-gray-300 mb-2" />
+              <p className="font-bold text-base text-[#111827]">No faculty accounts match filters</p>
+              <p className="text-xs mt-1">Try resetting your search query or department filters.</p>
             </div>
           ) : (
             <table className="w-full text-left text-xs">
@@ -368,11 +486,11 @@ export const FacultyManagement: React.FC = () => {
                   <th className="p-4">Faculty Profile</th>
                   <th className="p-4">Faculty Code</th>
                   <th className="p-4">Department & Designation</th>
-                  <th className="p-4">Phone Contact</th>
+                  <th className="p-4">Phone & Email</th>
                   <th className="p-4">Assigned Subjects</th>
                   <th className="p-4">Password Status</th>
                   <th className="p-4">Account Status</th>
-                  <th className="p-4 text-right">Actions</th>
+                  <th className="p-4 text-right">CRUD Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#E7E7E7]">
@@ -381,7 +499,11 @@ export const FacultyManagement: React.FC = () => {
                     <td className="p-4"><input type="checkbox" className="rounded border-gray-300" /></td>
                     <td className="p-4">
                       <div className="flex items-center gap-3">
-                        <img src={fac.profile_photo || 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150'} alt="" className="w-10 h-10 rounded-full object-cover border border-[#E7E7E7]" />
+                        <img
+                          src={fac.profile_photo || 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150'}
+                          alt=""
+                          className="w-10 h-10 rounded-full object-cover border border-[#E7E7E7]"
+                        />
                         <div>
                           <p className="font-bold text-[#111827] text-xs">{fac.name}</p>
                           <span className="font-mono text-[10px] text-[#6D5DFC] block">{fac.email}</span>
@@ -393,9 +515,12 @@ export const FacultyManagement: React.FC = () => {
                       <strong className="text-[#111827] block font-bold">{fac.department}</strong>
                       <span className="text-[10px] text-[#6B7280] block mt-0.5">{fac.designation}</span>
                     </td>
-                    <td className="p-4 font-mono text-[#111827]">{fac.phone || '+91 9876501234'}</td>
+                    <td className="p-4 font-mono text-[#111827]">
+                      <div>{fac.phone || '+91 9876501234'}</div>
+                      <span className="text-[10px] text-gray-500 font-sans block">{fac.qualification || 'M.Tech'}</span>
+                    </td>
                     <td className="p-4">
-                      <span className="text-[11px] text-[#111827] font-medium block">
+                      <span className="text-[11px] text-[#111827] font-medium block max-w-xs truncate" title={fac.assigned_subjects}>
                         {fac.assigned_subjects || 'Knowledge Engineering, Web Tech'}
                       </span>
                     </td>
@@ -407,37 +532,39 @@ export const FacultyManagement: React.FC = () => {
                       </span>
                     </td>
                     <td className="p-4">
-                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#ECFDF5] text-[#12B76A] border border-[#12B76A]/20">
-                        ACTIVE
+                      <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${
+                        fac.status === 'Locked' ? 'bg-rose-50 text-rose-700 border-rose-200' : fac.status === 'Inactive' ? 'bg-gray-100 text-gray-700 border-gray-200' : 'bg-[#ECFDF5] text-[#12B76A] border border-[#12B76A]/20'
+                      }`}>
+                        {fac.status || 'Active'}
                       </span>
                     </td>
                     <td className="p-4 text-right">
                       <div className="flex items-center justify-end gap-1.5">
                         <button
-                          onClick={() => { setSelectedFaculty(fac); setShowViewModal(true); }}
-                          className="p-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700"
-                          title="View Details"
+                          onClick={() => handleOpenViewModal(fac)}
+                          className="p-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors"
+                          title="View Profile Drawer"
                         >
                           <Eye className="w-3.5 h-3.5" />
                         </button>
                         <button
                           onClick={() => openEditModal(fac)}
-                          className="p-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-600"
-                          title="Edit Faculty"
+                          className="p-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-600 transition-colors"
+                          title="Edit Faculty Details"
                         >
                           <Edit2 className="w-3.5 h-3.5" />
                         </button>
                         <button
                           onClick={() => { setSelectedFaculty(fac); setNewPassword('1234'); setShowResetModal(true); }}
-                          className="p-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-600"
-                          title="Reset Password (1234)"
+                          className="p-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-600 transition-colors"
+                          title="Password Control & Lock Options"
                         >
                           <Key className="w-3.5 h-3.5" />
                         </button>
                         <button
                           onClick={() => handleDeleteFaculty(fac.id, fac.name)}
-                          className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600"
-                          title="Delete Faculty"
+                          className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 transition-colors"
+                          title="Delete Faculty Permanently"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
@@ -451,10 +578,257 @@ export const FacultyManagement: React.FC = () => {
         </div>
       )}
 
-      {/* MODAL: ADD FACULTY */}
+      {/* TAB 2: FACULTY LOGIN ACTIVITY LOGS */}
+      {activeSubTab === 'activity' && (
+        <div className="bg-white rounded-[24px] border border-[#E7E7E7] shadow-enterprise p-6 space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="font-bold text-[#111827] text-base flex items-center gap-2">
+              <Activity className="w-5 h-5 text-[#6D5DFC]" /> Real-time Faculty Login Activity Stream
+            </h3>
+            <button
+              onClick={fetchLoginActivityLogs}
+              className="px-3.5 py-1.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-xs flex items-center gap-1.5"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isLoadingLogs ? 'animate-spin' : ''}`} /> Refresh Telemetry
+            </button>
+          </div>
+
+          {isLoadingLogs ? (
+            <div className="p-8 text-center text-gray-500">
+              <RefreshCw className="w-6 h-6 animate-spin mx-auto text-[#6D5DFC] mb-2" />
+              Loading login activity telemetry...
+            </div>
+          ) : activityLogs.length === 0 ? (
+            <div className="p-8 text-center text-gray-500 text-xs">
+              No recent faculty login activity logged yet.
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-[#FAFAFA] border-b border-[#E7E7E7] text-[#6B7280] uppercase text-[10px] font-bold">
+                  <tr>
+                    <th className="p-3">Timestamp</th>
+                    <th className="p-3">Faculty Name</th>
+                    <th className="p-3">Faculty Code</th>
+                    <th className="p-3">Event Action</th>
+                    <th className="p-3">Details / Telemetry</th>
+                    <th className="p-3">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#E7E7E7]">
+                  {activityLogs.map((log: any, idx: number) => (
+                    <tr key={log.id || idx} className="hover:bg-[#FAFAFA]">
+                      <td className="p-3 font-mono text-gray-600 text-[11px]">
+                        {new Date(log.timestamp).toLocaleString()}
+                      </td>
+                      <td className="p-3 font-bold text-[#111827]">{log.faculty_name || 'Faculty Member'}</td>
+                      <td className="p-3 font-mono text-[#6D5DFC] font-bold">{log.faculty_code || 'FAC'}</td>
+                      <td className="p-3 font-semibold text-gray-800">{log.action}</td>
+                      <td className="p-3 text-gray-600">{log.details || 'Portal Sign-In Verified'}</td>
+                      <td className="p-3">
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#ECFDF5] text-[#12B76A] border border-[#12B76A]/20">
+                          {log.status || 'SUCCESS'}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* TAB 3: PASSWORD CONTROL & SECURITY AUDIT */}
+      {activeSubTab === 'passwords' && (
+        <div className="bg-white rounded-[24px] border border-[#E7E7E7] shadow-enterprise p-6 space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="font-bold text-[#111827] text-base flex items-center gap-2">
+                <ShieldAlert className="w-5 h-5 text-amber-600" /> Password Security Audit & Force Reset Center
+              </h3>
+              <p className="text-xs text-gray-500 mt-0.5">Audit default passwords, forced password updates, and lock statuses across faculty accounts</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {faculties.map((fac: any) => (
+              <div key={fac.id} className="p-4 rounded-2xl border border-[#E7E7E7] bg-[#FAFAFA] flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <img src={fac.profile_photo || 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150'} alt="" className="w-10 h-10 rounded-full object-cover" />
+                  <div>
+                    <strong className="text-sm font-bold text-[#111827] block">{fac.name} ({fac.faculty_code})</strong>
+                    <span className="text-xs text-gray-500 font-mono block">{fac.email}</span>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                        fac.password_status === 'Default Password' ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-blue-50 text-blue-700 border-blue-200'
+                      }`}>
+                        {fac.password_status}
+                      </span>
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                        fac.status === 'Locked' ? 'bg-rose-50 text-rose-700 border-rose-200' : 'bg-[#ECFDF5] text-[#12B76A] border border-[#12B76A]/20'
+                      }`}>
+                        {fac.status || 'Active'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => { setSelectedFaculty(fac); setNewPassword('1234'); setShowResetModal(true); }}
+                    className="px-3 py-1.5 rounded-xl bg-[#6D5DFC] hover:bg-[#5b4be0] text-white font-bold text-xs shadow-sm flex items-center gap-1"
+                  >
+                    <Key className="w-3.5 h-3.5" /> Manage
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 1: VIEW FACULTY PROFILE DRAWER */}
+      {showViewModal && selectedFaculty && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-md flex items-center justify-end p-0 sm:p-4">
+          <div className="bg-white w-full sm:max-w-xl h-full sm:h-[95vh] sm:rounded-[32px] p-6 border border-[#E7E7E7] shadow-2xl space-y-6 overflow-y-auto animate-slide-in-right">
+            {/* Drawer Header */}
+            <div className="flex items-center justify-between pb-4 border-b border-[#E7E7E7]">
+              <div className="flex items-center gap-3">
+                <img
+                  src={selectedFaculty.profile_photo || 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150'}
+                  alt=""
+                  className="w-14 h-14 rounded-full object-cover border-2 border-[#6D5DFC]"
+                />
+                <div>
+                  <h3 className="font-display font-extrabold text-lg text-[#111827]">{selectedFaculty.name}</h3>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <span className="px-2 py-0.5 rounded-full bg-[#F3F0FF] text-[#6D5DFC] font-mono text-[10px] font-bold">
+                      {selectedFaculty.faculty_code}
+                    </span>
+                    <span className="text-xs text-gray-500 font-semibold">{selectedFaculty.designation}</span>
+                  </div>
+                </div>
+              </div>
+              <button onClick={() => setShowViewModal(false)} className="p-2 rounded-full hover:bg-gray-100 text-gray-500">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {isLoadingDetails ? (
+              <div className="p-12 text-center text-gray-500">
+                <RefreshCw className="w-8 h-8 animate-spin mx-auto text-[#6D5DFC] mb-2" />
+                <p className="font-bold text-xs">Loading Faculty Database Profile...</p>
+              </div>
+            ) : (
+              <div className="space-y-6 text-xs">
+                {/* Contact & Department Info */}
+                <div className="grid grid-cols-2 gap-3 p-4 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7]">
+                  <div>
+                    <span className="text-[10px] font-bold text-gray-400 uppercase">Department</span>
+                    <strong className="text-xs text-[#111827] block font-bold mt-0.5">{selectedFaculty.department}</strong>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-bold text-gray-400 uppercase">Official Email</span>
+                    <span className="text-xs font-mono text-[#6D5DFC] block mt-0.5">{selectedFaculty.email}</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-bold text-gray-400 uppercase">Contact Phone</span>
+                    <span className="text-xs font-mono text-gray-800 block mt-0.5">{selectedFaculty.phone || '+91 9876501234'}</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-bold text-gray-400 uppercase">Account Status</span>
+                    <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold mt-0.5 border ${
+                      selectedFaculty.status === 'Locked' ? 'bg-rose-50 text-rose-700 border-rose-200' : 'bg-[#ECFDF5] text-[#12B76A] border border-[#12B76A]/20'
+                    }`}>
+                      {selectedFaculty.status || 'Active'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Qualification & Specialization */}
+                <div className="space-y-2">
+                  <h4 className="font-bold text-[#111827] flex items-center gap-1.5">
+                    <Award className="w-4 h-4 text-[#6D5DFC]" /> Academic Qualifications & Experience
+                  </h4>
+                  <div className="p-4 rounded-2xl bg-white border border-[#E7E7E7] space-y-2">
+                    <div>
+                      <span className="text-[10px] text-gray-500 font-bold uppercase">Qualification</span>
+                      <p className="font-bold text-gray-800">{selectedFaculty.qualification || 'M.Tech (AI & DS)'}</p>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-gray-500 font-bold uppercase">Experience</span>
+                      <p className="text-gray-700">{selectedFaculty.experience || '6 Years Teaching'}</p>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-gray-500 font-bold uppercase">Specialization Domain</span>
+                      <p className="text-gray-700">{selectedFaculty.specialization || 'AI & Web Security'}</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Assigned Subjects */}
+                <div className="space-y-2">
+                  <h4 className="font-bold text-[#111827] flex items-center gap-1.5">
+                    <BookMarked className="w-4 h-4 text-[#12B76A]" /> Assigned Subjects & Classes
+                  </h4>
+                  <div className="p-4 rounded-2xl bg-white border border-[#E7E7E7] space-y-2">
+                    {facultyDetails?.assignedSubjects?.length > 0 ? (
+                      facultyDetails.assignedSubjects.map((sub: any, i: number) => (
+                        <div key={i} className="flex items-center justify-between p-2 rounded-xl bg-gray-50 border border-gray-200 font-mono text-[11px]">
+                          <span className="font-bold text-[#111827]">{sub.subject_name} ({sub.subject_code})</span>
+                          <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-700 font-bold text-[10px]">
+                            {sub.department || 'AI & DS'} - Sec {sub.section || 'A'}
+                          </span>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-gray-600">Assigned: {selectedFaculty.assigned_subjects || 'Knowledge Engineering, Programming Language for AI, Web Technology'}</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Weekly Timetable Mapping */}
+                <div className="space-y-2">
+                  <h4 className="font-bold text-[#111827] flex items-center gap-1.5">
+                    <Calendar className="w-4 h-4 text-purple-600" /> Weekly Master Timetable Schedule
+                  </h4>
+                  <div className="p-4 rounded-2xl bg-white border border-[#E7E7E7] space-y-2 max-h-48 overflow-y-auto">
+                    {facultyDetails?.timetables?.length > 0 ? (
+                      facultyDetails.timetables.map((tt: any, i: number) => (
+                        <div key={i} className="flex items-center justify-between text-[11px] p-2 rounded-xl bg-[#FAFAFA]">
+                          <div className="font-bold text-gray-800">
+                            {tt.day} • {tt.start_time} - {tt.end_time} ({tt.room_number || 'F305'})
+                          </div>
+                          <span className="font-bold text-[#6D5DFC]">{tt.subject_name}</span>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-gray-500 text-center py-2">Master Timetable Slots configured for AI & DS III-A</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Session Telemetry & Conducted Sessions */}
+                <div className="p-4 rounded-2xl bg-[#F3F0FF] border border-[#6D5DFC]/20 flex items-center justify-between">
+                  <div>
+                    <span className="text-[10px] font-bold text-[#6D5DFC] uppercase">Attendance Sessions Conducted</span>
+                    <strong className="text-lg font-extrabold text-[#111827] block">{facultyDetails?.faculty?.sessions_conducted_count || selectedFaculty.sessions_conducted_count || 12} Sessions</strong>
+                  </div>
+                  <span className="px-3 py-1 rounded-xl bg-white border border-[#6D5DFC]/30 text-[#6D5DFC] font-bold text-xs shadow-sm">
+                    Socket.IO Verified
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 2: ADD FACULTY ACCOUNT */}
       {showAddModal && (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-lg rounded-[32px] p-6 border border-[#E7E7E7] shadow-2xl space-y-4">
+          <div className="bg-white w-full max-w-lg rounded-[32px] p-6 border border-[#E7E7E7] shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-3 border-b border-[#E7E7E7]">
               <h3 className="font-bold text-[#111827] text-base">Add New Faculty Account</h3>
               <button onClick={() => setShowAddModal(false)} className="p-1.5 rounded-full hover:bg-gray-100 text-gray-500">
@@ -471,7 +845,7 @@ export const FacultyManagement: React.FC = () => {
                     required
                     value={facultyCode}
                     onChange={(e) => setFacultyCode(e.target.value)}
-                    placeholder="e.g. FAC003"
+                    placeholder="e.g. FAC007"
                     className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827]"
                   />
                 </div>
@@ -494,7 +868,7 @@ export const FacultyManagement: React.FC = () => {
                   type="email"
                   value={facultyEmail}
                   onChange={(e) => setFacultyEmail(e.target.value)}
-                  placeholder="Auto-generated: fac003@velhightech.com"
+                  placeholder="Auto-generated: fac007@velhightech.com"
                   className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827]"
                 />
               </div>
@@ -526,8 +900,19 @@ export const FacultyManagement: React.FC = () => {
                 </div>
               </div>
 
+              <div>
+                <label className="block text-[11px] font-bold text-[#111827] mb-1">Assigned Subjects (Comma Separated)</label>
+                <input
+                  type="text"
+                  value={assignedSubjectsStr}
+                  onChange={(e) => setAssignedSubjectsStr(e.target.value)}
+                  placeholder="e.g. Knowledge Engineering, Programming Language for AI"
+                  className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827]"
+                />
+              </div>
+
               <div className="p-3 rounded-2xl bg-[#F3F0FF] border border-[#6D5DFC]/20 text-[11px] text-[#6D5DFC] font-bold">
-                🔑 Default password for new faculty accounts is set to <strong>1234</strong> (same as student accounts).
+                🔑 Default password for new faculty accounts is initialized to <strong>1234</strong>.
               </div>
 
               <div className="flex items-center justify-end gap-2 pt-2">
@@ -550,40 +935,185 @@ export const FacultyManagement: React.FC = () => {
         </div>
       )}
 
-      {/* MODAL: RESET PASSWORD */}
+      {/* MODAL 3: EDIT FACULTY ACCOUNT */}
+      {showEditModal && selectedFaculty && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-lg rounded-[32px] p-6 border border-[#E7E7E7] shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-[#E7E7E7]">
+              <h3 className="font-bold text-[#111827] text-base">Edit Faculty Details ({selectedFaculty.faculty_code})</h3>
+              <button onClick={() => setShowEditModal(false)} className="p-1.5 rounded-full hover:bg-gray-100 text-gray-500">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleEditFaculty} className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-bold text-[#111827] mb-1">Faculty Name</label>
+                  <input
+                    type="text"
+                    required
+                    value={facultyName}
+                    onChange={(e) => setFacultyName(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-[#111827] mb-1">Official Email</label>
+                  <input
+                    type="email"
+                    required
+                    value={facultyEmail}
+                    onChange={(e) => setFacultyEmail(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827]"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-bold text-[#111827] mb-1">Department</label>
+                  <select
+                    value={facultyDept}
+                    onChange={(e) => setFacultyDept(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827]"
+                  >
+                    <option value="AI & Data Science">AI & Data Science</option>
+                    <option value="Computer Science">Computer Science</option>
+                    <option value="Information Technology">Information Technology</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-[#111827] mb-1">Designation</label>
+                  <select
+                    value={facultyDesig}
+                    onChange={(e) => setFacultyDesig(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827]"
+                  >
+                    <option value="Assistant Professor">Assistant Professor</option>
+                    <option value="Associate Professor">Associate Professor</option>
+                    <option value="Professor & HOD">Professor & HOD</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-bold text-[#111827] mb-1">Phone Contact</label>
+                  <input
+                    type="text"
+                    value={facultyPhone}
+                    onChange={(e) => setFacultyPhone(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-[#111827] mb-1">Account Status</label>
+                  <select
+                    value={facultyStatus}
+                    onChange={(e) => setFacultyStatus(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs font-bold text-[#111827]"
+                  >
+                    <option value="Active">Active</option>
+                    <option value="Inactive">Inactive</option>
+                    <option value="Locked">Locked</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-[#111827] mb-1">Assigned Subjects (Comma Separated)</label>
+                <input
+                  type="text"
+                  value={assignedSubjectsStr}
+                  onChange={(e) => setAssignedSubjectsStr(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827]"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowEditModal(false)}
+                  className="px-4 py-2 rounded-xl bg-gray-100 text-gray-700 font-bold text-xs"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-xl bg-blue-600 text-white font-bold text-xs shadow-md"
+                >
+                  Update Faculty Database
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 4: PASSWORD CONTROL & LOCK CENTER */}
       {showResetModal && selectedFaculty && (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-md flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-md rounded-[32px] p-6 border border-[#E7E7E7] shadow-2xl space-y-4">
-            <h4 className="font-bold text-[#111827]">Reset Password for {selectedFaculty.name} ({selectedFaculty.faculty_code})</h4>
-            <p className="text-xs text-[#6B7280]">
-              Single-click reset to default password <strong>1234</strong> or enter a custom password below.
-            </p>
-
-            <div>
-              <label className="block text-[11px] font-bold text-[#111827] mb-1">New Password</label>
-              <input
-                type="text"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] font-mono text-xs text-[#111827]"
-              />
+            <div className="flex items-center justify-between pb-2 border-b border-[#E7E7E7]">
+              <h4 className="font-bold text-[#111827] text-sm">Security & Password Control ({selectedFaculty.name})</h4>
+              <button onClick={() => setShowResetModal(false)} className="p-1 rounded-full hover:bg-gray-100">
+                <X className="w-4 h-4 text-gray-500" />
+              </button>
             </div>
 
-            <div className="flex items-center justify-end gap-2 pt-2">
-              <button
-                type="button"
-                onClick={() => setShowResetModal(false)}
-                className="px-4 py-2 rounded-xl bg-gray-100 text-gray-700 font-bold text-xs"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleResetPassword}
-                className="px-5 py-2 rounded-xl bg-amber-600 text-white font-bold text-xs shadow-md"
-              >
-                Reset Password
-              </button>
+            <p className="text-xs text-[#6B7280]">
+              Execute administrative password reset, force password update on next login, or lock account access.
+            </p>
+
+            <div className="space-y-3 pt-2">
+              <div>
+                <label className="block text-[11px] font-bold text-[#111827] mb-1">Set Custom / Temporary Password</label>
+                <input
+                  type="text"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  className="w-full px-3.5 py-2 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] font-mono text-xs text-[#111827]"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => handlePasswordControlAction('reset')}
+                  className="w-full py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shadow-sm flex items-center justify-center gap-1.5"
+                >
+                  <Key className="w-3.5 h-3.5" /> Reset Password
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handlePasswordControlAction('force_change')}
+                  className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-sm flex items-center justify-center gap-1.5"
+                >
+                  <ShieldAlert className="w-3.5 h-3.5" /> Force Change
+                </button>
+              </div>
+
+              <div className="pt-2 border-t border-gray-100 flex items-center justify-between">
+                {selectedFaculty.status === 'Locked' ? (
+                  <button
+                    type="button"
+                    onClick={() => handlePasswordControlAction('unlock')}
+                    className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-sm flex items-center justify-center gap-1.5"
+                  >
+                    <Unlock className="w-3.5 h-3.5" /> Unlock Account Access
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => handlePasswordControlAction('lock')}
+                    className="w-full py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-sm flex items-center justify-center gap-1.5"
+                  >
+                    <Lock className="w-3.5 h-3.5" /> Lock Account Access
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </div>

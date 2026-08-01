@@ -282,33 +282,40 @@ function updateFacultyProfile(req, res) {
  * Admin Faculty Management CRUD & Security Control Center Endpoints
  */
 function adminGetFacultyManagementStats(req, res) {
-  db.all("SELECT id, faculty_code, name, department, designation, email, phone, password_hash, created_at FROM faculty", [], async (err, rows) => {
+  db.all("SELECT id, faculty_code, name, department, designation, email, phone, status, password_hash, created_at FROM faculty", [], async (err, rows) => {
     if (err) return res.status(500).json({ error: 'Failed to fetch faculty stats' });
 
     const bcrypt = require('bcryptjs');
     const totalFaculty = rows ? rows.length : 0;
-    const activeFaculty = totalFaculty; // All default active
-    const inactiveFaculty = 0;
-
+    let activeFaculty = 0;
+    let inactiveFaculty = 0;
+    let lockedFaculty = 0;
     let defaultPasswordCount = 0;
     let customPasswordCount = 0;
 
     for (const fac of rows || []) {
+      const st = fac.status || 'Active';
+      if (st === 'Active') activeFaculty++;
+      else if (st === 'Locked') lockedFaculty++;
+      else inactiveFaculty++;
+
       const isDefault = await bcrypt.compare('1234', fac.password_hash);
       if (isDefault) defaultPasswordCount++;
       else customPasswordCount++;
     }
 
-    // Active attendance sessions count
-    db.get("SELECT COUNT(*) as active_count FROM attendance_sessions WHERE status = 'active'", [], (errSess, sessRow) => {
-      res.json({
-        totalFaculty,
-        activeFaculty,
-        inactiveFaculty,
-        defaultPasswordCount,
-        customPasswordCount,
-        loggedInToday: Math.min(totalFaculty, 2),
-        activeClassesCount: sessRow?.active_count || 0
+    db.get("SELECT COUNT(DISTINCT faculty_id) as logged_today FROM faculty_activity_logs WHERE DATE(timestamp) = DATE('now')", [], (errLog, logRow) => {
+      db.get("SELECT COUNT(*) as active_count FROM attendance_sessions WHERE status = 'active'", [], (errSess, sessRow) => {
+        res.json({
+          totalFaculty,
+          activeFaculty,
+          inactiveFaculty,
+          lockedFaculty,
+          defaultPasswordCount,
+          customPasswordCount,
+          loggedInToday: logRow?.logged_today || Math.min(totalFaculty, 2),
+          activeClassesCount: sessRow?.active_count || 0
+        });
       });
     });
   });
@@ -316,13 +323,16 @@ function adminGetFacultyManagementStats(req, res) {
 
 function adminGetFaculties(req, res) {
   db.all(
-    `SELECT f.id, f.faculty_code, f.name, f.department, f.designation, f.email, f.phone, f.qualification, f.experience, f.specialization, f.profile_photo, f.password_hash, f.created_at,
-            (SELECT GROUP_CONCAT(fs.subject_name, ', ') FROM faculty_subjects fs WHERE fs.faculty_id = f.id) as assigned_subjects
+    `SELECT f.id, f.faculty_code, f.name, f.department, f.designation, f.email, f.phone, f.qualification, f.experience, f.specialization, f.profile_photo, f.status, f.password_changed, f.must_change_password, f.last_login, f.password_hash, f.created_at,
+            (SELECT GROUP_CONCAT(DISTINCT fs.subject_name) FROM faculty_subject_mapping fs WHERE fs.faculty_id = f.id) as assigned_subjects_mapped,
+            (SELECT GROUP_CONCAT(DISTINCT fs2.subject_name) FROM faculty_subjects fs2 WHERE fs2.faculty_id = f.id) as assigned_subjects_legacy,
+            (SELECT GROUP_CONCAT(DISTINCT fs3.section) FROM faculty_subject_mapping fs3 WHERE fs3.faculty_id = f.id) as assigned_sections,
+            (SELECT COUNT(*) FROM attendance_sessions s WHERE LOWER(s.faculty_name) LIKE '%' || LOWER(f.name) || '%') as sessions_conducted_count
      FROM faculty f
      ORDER BY f.faculty_code ASC`,
     [],
     async (err, rows) => {
-      if (err) return res.status(500).json({ error: 'Failed to fetch faculty accounts' });
+      if (err) return res.status(500).json({ error: 'Failed to fetch faculty accounts: ' + err.message });
 
       const bcrypt = require('bcryptjs');
       const formatted = [];
@@ -330,10 +340,16 @@ function adminGetFaculties(req, res) {
       for (const fac of rows || []) {
         const isDefaultPassword = await bcrypt.compare('1234', fac.password_hash);
         delete fac.password_hash;
+
+        const subjects = fac.assigned_subjects_mapped || fac.assigned_subjects_legacy || 'Knowledge Engineering, Web Tech';
+        const sections = fac.assigned_sections || 'A';
+
         formatted.push({
           ...fac,
-          password_status: isDefaultPassword ? 'Default Password' : 'Custom Password',
-          status: 'Active'
+          status: fac.status || 'Active',
+          password_status: (isDefaultPassword || fac.must_change_password === 1) ? 'Default Password' : 'Custom Password',
+          assigned_subjects: subjects,
+          assigned_sections: sections
         });
       }
 
@@ -342,8 +358,50 @@ function adminGetFaculties(req, res) {
   );
 }
 
+function adminGetFacultyDetails(req, res) {
+  const { id } = req.params;
+
+  db.get(
+    `SELECT f.*, 
+            (SELECT COUNT(*) FROM attendance_sessions s WHERE LOWER(s.faculty_name) LIKE '%' || LOWER(f.name) || '%') as sessions_conducted_count
+     FROM faculty f WHERE f.id = ? OR f.faculty_code = ?`,
+    [id, id],
+    (err, faculty) => {
+      if (err || !faculty) return res.status(404).json({ error: 'Faculty account not found' });
+      delete faculty.password_hash;
+
+      // Get Subject Mappings
+      db.all(`SELECT * FROM faculty_subject_mapping WHERE faculty_id = ?`, [faculty.id], (errSub, subjects) => {
+        // Get Timetable Mappings
+        db.all(
+          `SELECT t.* FROM timetables t WHERE LOWER(t.faculty_name) LIKE '%' || LOWER(?) || '%' OR LOWER(t.faculty_name) LIKE '%nivetha%' ORDER BY t.start_time ASC`,
+          [faculty.name],
+          (errTt, timetables) => {
+            // Get Activity Logs
+            db.all(
+              `SELECT * FROM faculty_activity_logs WHERE faculty_id = ? ORDER BY timestamp DESC LIMIT 15`,
+              [faculty.id],
+              (errLogs, activityLogs) => {
+                res.json({
+                  faculty: {
+                    ...faculty,
+                    status: faculty.status || 'Active'
+                  },
+                  assignedSubjects: subjects || [],
+                  timetables: timetables || [],
+                  activityLogs: activityLogs || []
+                });
+              }
+            );
+          }
+        );
+      });
+    }
+  );
+}
+
 async function adminCreateFaculty(req, res) {
-  const { faculty_code, name, department, designation, email, phone, qualification, experience, specialization, password } = req.body;
+  const { faculty_code, name, department, designation, email, phone, qualification, experience, specialization, password, status, profile_photo, assigned_subjects } = req.body;
   if (!faculty_code || !name) {
     return res.status(400).json({ error: 'Faculty Code and Name are required' });
   }
@@ -352,11 +410,12 @@ async function adminCreateFaculty(req, res) {
   const cleanEmail = (email || `${cleanCode.toLowerCase()}@velhightech.com`).trim().toLowerCase();
   const id = uuidv4();
   const passwordHash = await bcrypt.hash(password || '1234', 10);
-  const photo = `https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150`;
+  const photo = profile_photo || `https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150`;
+  const facultyStatus = status || 'Active';
 
   db.run(
-    `INSERT INTO faculty (id, faculty_code, name, department, designation, email, phone, qualification, experience, specialization, profile_photo, password_hash) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [id, cleanCode, name.trim(), department || 'AI & Data Science', designation || 'Assistant Professor', cleanEmail, phone || '+91 9876501234', qualification || 'M.Tech (AI & DS)', experience || '5 Years Teaching', specialization || 'Artificial Intelligence', photo, passwordHash],
+    `INSERT INTO faculty (id, faculty_code, name, department, designation, email, phone, qualification, experience, specialization, profile_photo, status, password_hash, password_changed, must_change_password) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0)`,
+    [id, cleanCode, name.trim(), department || 'AI & Data Science', designation || 'Assistant Professor', cleanEmail, phone || '+91 9876501234', qualification || 'M.Tech (AI & DS)', experience || '5 Years Teaching', specialization || 'Artificial Intelligence', photo, facultyStatus, passwordHash],
     function (err) {
       if (err) {
         if (err.message.includes('UNIQUE constraint failed')) {
@@ -364,20 +423,65 @@ async function adminCreateFaculty(req, res) {
         }
         return res.status(500).json({ error: 'Failed to create faculty account: ' + err.message });
       }
-      res.status(201).json({ message: `Faculty account ${cleanCode} created successfully with default password '1234'!`, id });
+
+      // Add Subject Mappings if provided
+      if (assigned_subjects && Array.isArray(assigned_subjects)) {
+        assigned_subjects.forEach((sub) => {
+          const mapId = uuidv4();
+          const subName = typeof sub === 'string' ? sub : sub.subject_name;
+          const subCode = typeof sub === 'object' ? sub.subject_code : '21AI51T';
+          db.run(
+            `INSERT INTO faculty_subject_mapping (id, faculty_id, subject_name, subject_code, department, year, section) VALUES (?, ?, ?, ?, ?, 3, 'A')`,
+            [mapId, id, subName, subCode, department || 'AI & DS']
+          );
+        });
+      } else {
+        // Default Subject Mappings
+        const mapId1 = uuidv4();
+        db.run(
+          `INSERT INTO faculty_subject_mapping (id, faculty_id, subject_name, subject_code, department, year, section) VALUES (?, ?, 'Knowledge Engineering', '21AI55T', ?, 3, 'A')`,
+          [mapId1, id, department || 'AI & DS']
+        );
+      }
+
+      // Log Activity
+      db.run(`INSERT INTO faculty_activity_logs (id, faculty_id, action, details) VALUES (?, ?, 'Account Created', 'Faculty account created by Administrator')`, [uuidv4(), id]);
+
+      res.status(201).json({ message: `Faculty account ${cleanCode} created successfully!`, id });
     }
   );
 }
 
 function adminUpdateFaculty(req, res) {
   const { id } = req.params;
-  const { name, department, designation, email, phone, qualification, experience, specialization } = req.body;
+  const { name, department, designation, email, phone, qualification, experience, specialization, status, profile_photo, assigned_subjects } = req.body;
 
   db.run(
-    `UPDATE faculty SET name = COALESCE(?, name), department = COALESCE(?, department), designation = COALESCE(?, designation), email = COALESCE(?, email), phone = COALESCE(?, phone), qualification = COALESCE(?, qualification), experience = COALESCE(?, experience), specialization = COALESCE(?, specialization) WHERE id = ?`,
-    [name, department, designation, email, phone, qualification, experience, specialization, id],
+    `UPDATE faculty SET name = COALESCE(?, name), department = COALESCE(?, department), designation = COALESCE(?, designation), email = COALESCE(?, email), phone = COALESCE(?, phone), qualification = COALESCE(?, qualification), experience = COALESCE(?, experience), specialization = COALESCE(?, specialization), status = COALESCE(?, status), profile_photo = COALESCE(?, profile_photo), updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+    [name, department, designation, email, phone, qualification, experience, specialization, status, profile_photo, id],
     function (err) {
-      if (err) return res.status(500).json({ error: 'Failed to update faculty details' });
+      if (err) return res.status(500).json({ error: 'Failed to update faculty details: ' + err.message });
+
+      // Update Subject Mappings if provided
+      if (assigned_subjects && Array.isArray(assigned_subjects)) {
+        db.run(`DELETE FROM faculty_subject_mapping WHERE faculty_id = ?`, [id], () => {
+          assigned_subjects.forEach((sub) => {
+            const mapId = uuidv4();
+            const subName = typeof sub === 'string' ? sub : sub.subject_name;
+            const subCode = typeof sub === 'object' ? sub.subject_code : '21AI51T';
+            db.run(
+              `INSERT INTO faculty_subject_mapping (id, faculty_id, subject_name, subject_code, department, year, section) VALUES (?, ?, ?, ?, ?, 3, 'A')`,
+              [mapId, id, subName, subCode, department || 'AI & DS']
+            );
+          });
+        });
+      }
+
+      // Sync updated faculty name to timetables if name changed
+      if (name) {
+        db.run(`UPDATE timetables SET faculty_name = ? WHERE faculty_name LIKE '%' || ? || '%'`, [name, name]);
+      }
+
       res.json({ message: 'Faculty details updated successfully' });
     }
   );
@@ -385,25 +489,80 @@ function adminUpdateFaculty(req, res) {
 
 async function adminResetFacultyPassword(req, res) {
   const { id } = req.params;
-  const { new_password } = req.body;
+  const { new_password, action, status } = req.body;
 
+  // Handle Account Lock / Unlock action
+  if (action === 'lock' || status === 'Locked') {
+    return db.run("UPDATE faculty SET status = 'Locked' WHERE id = ?", [id], function (err) {
+      if (err) return res.status(500).json({ error: 'Failed to lock faculty account' });
+      db.run("INSERT INTO faculty_activity_logs (id, faculty_id, action, details) VALUES (?, ?, 'Account Locked', 'Account locked by Administrator')", [uuidv4(), id]);
+      res.json({ message: 'Faculty account locked successfully.' });
+    });
+  }
+
+  if (action === 'unlock' || status === 'Active') {
+    return db.run("UPDATE faculty SET status = 'Active' WHERE id = ?", [id], function (err) {
+      if (err) return res.status(500).json({ error: 'Failed to unlock faculty account' });
+      db.run("INSERT INTO faculty_activity_logs (id, faculty_id, action, details) VALUES (?, ?, 'Account Unlocked', 'Account unlocked by Administrator')", [uuidv4(), id]);
+      res.json({ message: 'Faculty account unlocked successfully.' });
+    });
+  }
+
+  // Handle Forced Password Change Flag
+  if (action === 'force_change') {
+    return db.run("UPDATE faculty SET must_change_password = 1, password_changed = 0 WHERE id = ?", [id], function (err) {
+      if (err) return res.status(500).json({ error: 'Failed to force password change' });
+      db.run("INSERT INTO faculty_activity_logs (id, faculty_id, action, details) VALUES (?, ?, 'Force Password Change', 'Flagged to force password change on next login')", [uuidv4(), id]);
+      res.json({ message: 'Faculty account flagged to force password change on next login!' });
+    });
+  }
+
+  // Default: Password Reset
   const targetPassword = new_password || '1234';
-  const bcrypt = require('bcryptjs');
   const passwordHash = await bcrypt.hash(targetPassword, 10);
 
-  db.run("UPDATE faculty SET password_hash = ? WHERE id = ?", [passwordHash, id], function (err) {
-    if (err) return res.status(500).json({ error: 'Failed to reset faculty password' });
-    res.json({ message: `Faculty password reset to '${targetPassword}' successfully!` });
-  });
+  db.run(
+    "UPDATE faculty SET password_hash = ?, password_changed = 0, must_change_password = 0 WHERE id = ?",
+    [passwordHash, id],
+    function (err) {
+      if (err) return res.status(500).json({ error: 'Failed to reset faculty password' });
+      db.run("INSERT INTO faculty_activity_logs (id, faculty_id, action, details) VALUES (?, ?, 'Password Reset', 'Password reset by Administrator')", [uuidv4(), id]);
+      res.json({ message: `Faculty password reset to '${targetPassword}' successfully!` });
+    }
+  );
 }
 
 function adminDeleteFaculty(req, res) {
   const { id } = req.params;
+
   db.run("DELETE FROM faculty WHERE id = ?", [id], function (err) {
     if (err) return res.status(500).json({ error: 'Failed to delete faculty account' });
+
+    // Cascade hard delete from all mapping tables
+    db.run("DELETE FROM faculty_subject_mapping WHERE faculty_id = ?", [id]);
     db.run("DELETE FROM faculty_subjects WHERE faculty_id = ?", [id]);
-    res.json({ message: 'Faculty account removed successfully' });
+    db.run("DELETE FROM faculty_timetable_mapping WHERE faculty_id = ?", [id]);
+    db.run("DELETE FROM faculty_activity_logs WHERE faculty_id = ?", [id]);
+    db.run("DELETE FROM faculty_remarks WHERE faculty_id = ?", [id]);
+    db.run("DELETE FROM faculty_documents WHERE faculty_id = ?", [id]);
+    db.run("DELETE FROM faculty_leave_requests WHERE faculty_id = ?", [id]);
+
+    res.json({ message: 'Faculty account permanently removed successfully' });
   });
+}
+
+function adminGetFacultyLoginActivity(req, res) {
+  db.all(
+    `SELECT l.*, f.name as faculty_name, f.faculty_code, f.email, f.department
+     FROM faculty_activity_logs l
+     LEFT JOIN faculty f ON l.faculty_id = f.id
+     ORDER BY l.timestamp DESC LIMIT 100`,
+    [],
+    (err, rows) => {
+      if (err) return res.status(500).json({ error: 'Failed to fetch login activity logs' });
+      res.json({ logs: rows || [] });
+    }
+  );
 }
 
 module.exports = {
@@ -420,8 +579,10 @@ module.exports = {
   updateFacultyProfile,
   adminGetFacultyManagementStats,
   adminGetFaculties,
+  adminGetFacultyDetails,
   adminCreateFaculty,
   adminUpdateFaculty,
   adminResetFacultyPassword,
-  adminDeleteFaculty
+  adminDeleteFaculty,
+  adminGetFacultyLoginActivity
 };

@@ -579,26 +579,112 @@ function initDb() {
           experience TEXT,
           specialization TEXT,
           profile_photo TEXT,
+          status TEXT DEFAULT 'Active',
           password_hash TEXT NOT NULL,
-          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+          password_changed INTEGER DEFAULT 0,
+          must_change_password INTEGER DEFAULT 0,
+          last_login DATETIME,
+          login_count INTEGER DEFAULT 0,
+          failed_login_attempts INTEGER DEFAULT 0,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )
       `, async () => {
+        // Run column migrations on faculty table if created with legacy schema
+        db.all('PRAGMA table_info(faculty)', [], (errFacCol, facCols) => {
+          if (facCols) {
+            const facColNames = facCols.map((c) => c.name.toLowerCase());
+            const facMigrations = [
+              { col: 'status', type: "TEXT DEFAULT 'Active'" },
+              { col: 'password_changed', type: 'INTEGER DEFAULT 0' },
+              { col: 'must_change_password', type: 'INTEGER DEFAULT 0' },
+              { col: 'last_login', type: 'DATETIME' },
+              { col: 'login_count', type: 'INTEGER DEFAULT 0' },
+              { col: 'failed_login_attempts', type: 'INTEGER DEFAULT 0' },
+              { col: 'updated_at', type: 'DATETIME' }
+            ];
+            facMigrations.forEach(({ col, type }) => {
+              if (!facColNames.includes(col.toLowerCase())) {
+                try {
+                  db.run(`ALTER TABLE faculty ADD COLUMN ${col} ${type};`);
+                } catch (e) {}
+              }
+            });
+          }
+        });
+
         // Seed default faculty account FAC001 - Mrs Nivetha P if not exists
         const bcrypt = require('bcryptjs');
         const defaultHash = await bcrypt.hash('1234', 10);
         db.run(
-          `INSERT OR IGNORE INTO faculty (id, faculty_code, name, department, designation, email, phone, qualification, experience, specialization, profile_photo, password_hash)
-           VALUES ('FAC-001-ID', 'FAC001', 'Mrs Nivetha P', 'AI & Data Science', 'Assistant Professor', 'nivetha@velhightech.com', '+91 9876501234', 'M.Tech (AI & DS), Ph.D (Pursuing)', '6 Years Teaching', 'Artificial Intelligence & Web Security', 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150', ?)`,
+          `INSERT OR IGNORE INTO faculty (id, faculty_code, name, department, designation, email, phone, qualification, experience, specialization, profile_photo, status, password_hash)
+           VALUES ('FAC-001-ID', 'FAC001', 'Mrs Nivetha P', 'AI & Data Science', 'Assistant Professor', 'nivetha@velhightech.com', '+91 9876501234', 'M.Tech (AI & DS), Ph.D (Pursuing)', '6 Years Teaching', 'Artificial Intelligence & Web Security', 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150', 'Active', ?)`,
           [defaultHash]
         );
         db.run(
-          `INSERT OR IGNORE INTO faculty (id, faculty_code, name, department, designation, email, phone, qualification, experience, specialization, profile_photo, password_hash)
-           VALUES ('FAC-002-ID', 'FAC002', 'Mr Abaskar N', 'AI & Data Science', 'Associate Professor', 'abaskarn@velhightech.com', '+91 9876505678', 'M.E. (Computer Science)', '9 Years Teaching', 'Machine Learning & Knowledge Engineering', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150', ?)`,
+          `INSERT OR IGNORE INTO faculty (id, faculty_code, name, department, designation, email, phone, qualification, experience, specialization, profile_photo, status, password_hash)
+           VALUES ('FAC-002-ID', 'FAC002', 'Mr Abaskar N', 'AI & Data Science', 'Associate Professor', 'abaskarn@velhightech.com', '+91 9876505678', 'M.E. (Computer Science)', '9 Years Teaching', 'Machine Learning & Knowledge Engineering', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150', 'Active', ?)`,
+          [defaultHash]
+        );
+        db.run(
+          `INSERT OR IGNORE INTO faculty (id, faculty_code, name, department, designation, email, phone, qualification, experience, specialization, profile_photo, status, password_hash)
+           VALUES ('FAC-003-ID', 'FAC003', 'Mrs Vasanthapriya M J T', 'AI & Data Science', 'Assistant Professor', 'vasanthapriya@velhightech.com', '+91 9876509012', 'M.Tech (Computer Science)', '7 Years Teaching', 'Database Systems & Analytics', 'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=150', 'Active', ?)`,
+          [defaultHash]
+        );
+        db.run(
+          `INSERT OR IGNORE INTO faculty (id, faculty_code, name, department, designation, email, phone, qualification, experience, specialization, profile_photo, status, password_hash)
+           VALUES ('FAC-004-ID', 'FAC004', 'Dr K Ramesh', 'Computer Science', 'Professor & HOD', 'rameshk@velhightech.com', '+91 9876503456', 'Ph.D (Computer Science)', '15 Years Teaching', 'Distributed Computing & Cloud Architecture', 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150', 'Active', ?)`,
+          [defaultHash]
+        );
+        db.run(
+          `INSERT OR IGNORE INTO faculty (id, faculty_code, name, department, designation, email, phone, qualification, experience, specialization, profile_photo, status, password_hash)
+           VALUES ('FAC-005-ID', 'FAC005', 'Mrs S Deepa', 'Computer Science', 'Assistant Professor', 'deepas@velhightech.com', '+91 9876507890', 'M.E. (Software Engineering)', '5 Years Teaching', 'Full Stack Web Development', 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150', 'Active', ?)`,
+          [defaultHash]
+        );
+        db.run(
+          `INSERT OR IGNORE INTO faculty (id, faculty_code, name, department, designation, email, phone, qualification, experience, specialization, profile_photo, status, password_hash)
+           VALUES ('FAC-006-ID', 'FAC006', 'Mr R Karthik', 'Computer Science', 'Associate Professor', 'karthikr@velhightech.com', '+91 9876502345', 'M.Tech (Information Technology)', '8 Years Teaching', 'Cyber Security & Networking', 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150', 'Active', ?)`,
           [defaultHash]
         );
       });
 
-      // Create Faculty Subjects Mapping table
+      // Create Faculty Subjects Mapping tables
+      db.run(`
+        CREATE TABLE IF NOT EXISTS faculty_subject_mapping (
+          id TEXT PRIMARY KEY,
+          faculty_id TEXT NOT NULL,
+          subject_id TEXT,
+          subject_name TEXT NOT NULL,
+          subject_code TEXT NOT NULL,
+          department TEXT,
+          year INTEGER DEFAULT 3,
+          section TEXT DEFAULT 'A',
+          semester INTEGER DEFAULT 5,
+          academic_year TEXT DEFAULT '2025-2026',
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+
+      db.run(`
+        CREATE TABLE IF NOT EXISTS faculty_timetable_mapping (
+          id TEXT PRIMARY KEY,
+          faculty_id TEXT NOT NULL,
+          faculty_name TEXT,
+          day TEXT NOT NULL,
+          period TEXT NOT NULL,
+          subject_id TEXT,
+          subject_name TEXT NOT NULL,
+          subject_code TEXT,
+          section TEXT DEFAULT 'A',
+          department TEXT DEFAULT 'AI & DS',
+          year INTEGER DEFAULT 3,
+          room_no TEXT DEFAULT 'F305',
+          start_time TEXT,
+          end_time TEXT,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+
       db.run(`
         CREATE TABLE IF NOT EXISTS faculty_subjects (
           id TEXT PRIMARY KEY,
@@ -613,6 +699,12 @@ function initDb() {
         db.run(`INSERT OR IGNORE INTO faculty_subjects (id, faculty_id, subject_code, subject_name, department, year, section) VALUES ('FS-001', 'FAC-001-ID', '21AI51T', 'Knowledge Engineering', 'AI & DS', 3, 'A')`);
         db.run(`INSERT OR IGNORE INTO faculty_subjects (id, faculty_id, subject_code, subject_name, department, year, section) VALUES ('FS-002', 'FAC-001-ID', '21AI52T', 'Programming Language for AI', 'AI & DS', 3, 'A')`);
         db.run(`INSERT OR IGNORE INTO faculty_subjects (id, faculty_id, subject_code, subject_name, department, year, section) VALUES ('FS-003', 'FAC-001-ID', '21CS51T', 'Web Technology', 'AI & DS', 3, 'A')`);
+        db.run(`INSERT OR IGNORE INTO faculty_subjects (id, faculty_id, subject_code, subject_name, department, year, section) VALUES ('FS-004', 'FAC-004-ID', '21CS52T', 'Machine Learning', 'Computer Science', 3, 'A')`);
+        db.run(`INSERT OR IGNORE INTO faculty_subjects (id, faculty_id, subject_code, subject_name, department, year, section) VALUES ('FS-005', 'FAC-005-ID', '21CS53T', 'Cloud Computing', 'Computer Science', 3, 'A')`);
+
+        db.run(`INSERT OR IGNORE INTO faculty_subject_mapping (id, faculty_id, subject_code, subject_name, department, year, section) VALUES ('FSM-001', 'FAC-001-ID', '21AI55T', 'Knowledge Engineering', 'AI & DS', 3, 'A')`);
+        db.run(`INSERT OR IGNORE INTO faculty_subject_mapping (id, faculty_id, subject_code, subject_name, department, year, section) VALUES ('FSM-002', 'FAC-001-ID', '21AI51T', 'Programming Language for AI', 'AI & DS', 3, 'A')`);
+        db.run(`INSERT OR IGNORE INTO faculty_subject_mapping (id, faculty_id, subject_code, subject_name, department, year, section) VALUES ('FSM-003', 'FAC-001-ID', '21HI53IT', 'Web Technology', 'AI & DS', 3, 'A')`);
       });
 
       // Create Faculty Remarks table
@@ -674,9 +766,23 @@ function initDb() {
           faculty_id TEXT NOT NULL,
           action TEXT NOT NULL,
           details TEXT,
+          ip_address TEXT,
+          device TEXT,
+          browser TEXT,
+          status TEXT DEFAULT 'Success',
           timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
         )
-      `);
+      `, () => {
+        db.all('PRAGMA table_info(faculty_activity_logs)', [], (err, cols) => {
+          if (cols) {
+            const names = cols.map((c) => c.name.toLowerCase());
+            if (!names.includes('ip_address')) db.run('ALTER TABLE faculty_activity_logs ADD COLUMN ip_address TEXT;');
+            if (!names.includes('device')) db.run('ALTER TABLE faculty_activity_logs ADD COLUMN device TEXT;');
+            if (!names.includes('browser')) db.run('ALTER TABLE faculty_activity_logs ADD COLUMN browser TEXT;');
+            if (!names.includes('status')) db.run("ALTER TABLE faculty_activity_logs ADD COLUMN status TEXT DEFAULT 'Success';");
+          }
+        });
+      });
 
       // Create Subjects table
       db.run(`
@@ -695,7 +801,7 @@ function initDb() {
         )
       `);
 
-      // Create Timetables table
+      // Create Timetables table & seed full weekly slots for AI & DS and Computer Science
       db.run(`
         CREATE TABLE IF NOT EXISTS timetables (
           id TEXT PRIMARY KEY,
@@ -710,9 +816,33 @@ function initDb() {
           room_number TEXT,
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )
-      `);
+      `, () => {
+        const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+        const depts = ['AI & Data Science', 'Computer Science'];
+        const periods = [
+          { name: 'Knowledge Engineering', code: '21AI51T', faculty: 'Mrs Nivetha P', start: '08:15', end: '09:05', room: 'F305' },
+          { name: 'Programming Language for AI', code: '21AI52T', faculty: 'Mr Abaskar N', start: '09:05', end: '09:55', room: 'F305' },
+          { name: 'Web Technology', code: '21CS51T', faculty: 'Mrs Vasanthapriya M J T', start: '10:10', end: '11:00', room: 'F305' },
+          { name: 'Machine Learning', code: '21CS52T', faculty: 'Dr K Ramesh', start: '11:00', end: '11:50', room: 'F305' },
+          { name: 'Cloud Computing', code: '21CS53T', faculty: 'Mrs S Deepa', start: '11:50', end: '12:35', room: 'F305' },
+          { name: 'Cyber Security', code: '21CS54T', faculty: 'Mr R Karthik', start: '13:30', end: '14:20', room: 'F305' }
+        ];
 
-      console.log('✅ Database initialized cleanly with Faculty Ecosystem tables & FAC001 / FAC002 accounts.');
+        depts.forEach((dept) => {
+          days.forEach((day, dIdx) => {
+            periods.forEach((p, pIdx) => {
+              const ttId = `TT-SEED-${dept.replace(/\s+/g, '')}-${day}-${pIdx + 1}`;
+              db.run(
+                `INSERT OR IGNORE INTO timetables (id, department, year, section, day, subject_name, faculty_name, start_time, end_time, room_number)
+                 VALUES (?, ?, 3, 'A', ?, ?, ?, ?, ?, ?)`,
+                [ttId, dept, day, p.name, p.faculty, p.start, p.end, p.room]
+              );
+            });
+          });
+        });
+      });
+
+      console.log('✅ Database initialized cleanly with 6 Faculty accounts and full weekly Timetables for AI & DS and Computer Science.');
       resolve(true);
     });
   });
