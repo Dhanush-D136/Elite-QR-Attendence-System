@@ -45,7 +45,10 @@ function runMigrations() {
           { col: 'address', type: 'TEXT' },
           { col: 'parent_name', type: 'TEXT' },
           { col: 'parent_phone', type: 'TEXT' },
-          { col: 'bio', type: 'TEXT' }
+          { col: 'bio', type: 'TEXT' },
+          { col: 'status', type: "TEXT DEFAULT 'Active'" },
+          { col: 'admission_year', type: 'INTEGER' },
+          { col: 'username', type: 'TEXT' }
         ];
 
         userMigrations.forEach(({ col, type }) => {
@@ -362,6 +365,31 @@ function initDb() {
           violation_type TEXT NOT NULL,
           details TEXT NOT NULL,
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+
+      // Create Login Logs table
+      db.run(`
+        CREATE TABLE IF NOT EXISTS login_logs (
+          id TEXT PRIMARY KEY,
+          student_id TEXT NOT NULL,
+          login_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+          ip_address TEXT,
+          device TEXT,
+          browser TEXT,
+          FOREIGN KEY (student_id) REFERENCES users(id)
+        )
+      `);
+
+      // Create Password Audit Logs table
+      db.run(`
+        CREATE TABLE IF NOT EXISTS password_audit_logs (
+          id TEXT PRIMARY KEY,
+          student_id TEXT NOT NULL,
+          changed_by TEXT NOT NULL,
+          action TEXT NOT NULL,
+          changed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (student_id) REFERENCES users(id)
         )
       `);
 

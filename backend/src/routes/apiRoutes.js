@@ -83,11 +83,15 @@ router.delete('/attendance/records/:id', verifyToken, requireRole('admin'), atte
 // --- Student Management Routes (Admin Only) ---
 router.get('/students', verifyToken, requireRole('admin'), studentController.getStudents);
 router.post('/students', verifyToken, requireRole('admin'), studentController.createStudent);
+router.post('/students/bulk-delete', verifyToken, requireRole('admin'), studentController.bulkDeleteStudents);
+router.post('/students/bulk-import', verifyToken, requireRole('admin'), studentController.bulkImportStudents);
+router.get('/students/login-activity', verifyToken, requireRole('admin'), studentController.getLoginActivity);
+router.get('/students/password-audit-logs', verifyToken, requireRole('admin'), studentController.getPasswordAuditLogs);
+router.get('/students/:id/profile-details', verifyToken, requireRole('admin'), studentController.getStudentProfileDetails);
 router.put('/students/:id', verifyToken, requireRole('admin'), studentController.updateStudent);
 router.delete('/students/:id', verifyToken, requireRole('admin'), studentController.deleteStudent);
 router.post('/students/:id/reset-device', verifyToken, requireRole('admin'), studentController.resetStudentDevice);
 router.post('/students/:id/reset-password', verifyToken, requireRole('admin'), studentController.resetStudentPassword);
-router.post('/students/bulk-import', verifyToken, requireRole('admin'), studentController.bulkImportStudents);
 
 // --- Analytics & Dashboard Routes ---
 router.get('/analytics/dashboard', verifyToken, requireRole('admin'), analyticsController.getDashboardMetrics);

@@ -23,23 +23,68 @@ import {
   Shield,
   BookOpen,
   Mail,
-  User as UserIcon
+  User as UserIcon,
+  Key,
+  Lock,
+  Activity,
+  CheckCircle2,
+  AlertTriangle,
+  FileText,
+  Filter,
+  RefreshCw,
+  Clock,
+  Laptop,
+  Globe,
+  Users
 } from 'lucide-react';
 
 export const StudentManagement: React.FC = () => {
+  const [activeTab, setActiveTab] = useState<'directory' | 'login_activity' | 'password_center'>('directory');
+
+  // Main Data States
   const [students, setStudents] = useState<User[]>([]);
+  const [summaryStats, setSummaryStats] = useState({
+    totalStudents: 0,
+    activeStudents: 0,
+    inactiveStudents: 0,
+    defaultPasswordCount: 0,
+    customPasswordCount: 0,
+    loggedInToday: 0,
+    activeSessions: 0
+  });
+
+  // Filter & Search States
   const [search, setSearch] = useState('');
   const [department, setDepartment] = useState('');
   const [year, setYear] = useState('');
   const [section, setSection] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
 
-  const [isLoading, setIsLoading] = useState(true);
+  // Bulk Selection State
+  const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
+
+  // Modals Visibility
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
+  const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
+  const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
+  const [showResetPasswordModal, setShowResetPasswordModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
 
-  const [viewingStudent, setViewingStudent] = useState<User | null>(null);
+  // Active Target Objects for Modals
+  const [viewingStudentProfile, setViewingStudentProfile] = useState<{
+    profile: User;
+    attendanceSummary: { overallRate: number; presentCount: number; absentCount: number; lastAttendanceDate: string | null };
+    qrScanHistory: any[];
+    loginHistory: any[];
+  } | null>(null);
+
+  const [studentToDelete, setStudentToDelete] = useState<User | null>(null);
+
+  const [resetPassTarget, setResetPassTarget] = useState<User | null>(null);
+  const [resetPassType, setResetPassType] = useState<'default' | 'custom'>('default');
+  const [customGeneratedPassword, setCustomGeneratedPassword] = useState('');
 
   const [editingStudent, setEditingStudent] = useState<{
     id: string;
@@ -58,6 +103,8 @@ export const StudentManagement: React.FC = () => {
     parent_name: string;
     parent_phone: string;
     bio: string;
+    status: string;
+    admission_year: string;
     new_password?: string;
   } | null>(null);
 
@@ -77,32 +124,83 @@ export const StudentManagement: React.FC = () => {
     address: '',
     parent_name: '',
     parent_phone: '',
-    bio: ''
+    bio: '',
+    status: 'Active',
+    admission_year: new Date().getFullYear().toString(),
+    username: ''
   });
 
+  // Login Activity & Audit Logs
+  const [loginLogs, setLoginLogs] = useState<any[]>([]);
+  const [loginStats, setLoginStats] = useState({ totalStudents: 0, loggedInToday: 0, activeRightNow: 0 });
+  const [passwordAuditLogs, setPasswordAuditLogs] = useState<any[]>([]);
+
+  // Fetch Main Student List and Dashboard Summary Stats
   const fetchStudents = async () => {
     try {
-      setIsLoading(true);
       const params = new URLSearchParams();
       if (search) params.append('search', search);
       if (department) params.append('department', department);
       if (year) params.append('year', year);
       if (section) params.append('section', section);
+      if (statusFilter) params.append('status', statusFilter);
 
       const res = await api.get(`/students?${params.toString()}`);
       setStudents(res.data.students || []);
+      if (res.data.summaryStats) {
+        setSummaryStats(res.data.summaryStats);
+      }
     } catch (err) {
       console.error('Failed to load students', err);
-    } finally {
-      setIsLoading(false);
+    }
+  };
+
+  // Fetch Login Monitoring Activity
+  const fetchLoginActivity = async () => {
+    try {
+      const res = await api.get('/students/login-activity');
+      setLoginLogs(res.data.logs || []);
+      if (res.data.stats) setLoginStats(res.data.stats);
+    } catch (err) {
+      console.error('Failed to load login activity', err);
+    }
+  };
+
+  // Fetch Password Audit Logs History
+  const fetchPasswordAuditLogs = async () => {
+    try {
+      const res = await api.get('/students/password-audit-logs');
+      setPasswordAuditLogs(res.data.logs || []);
+    } catch (err) {
+      console.error('Failed to load password audit logs', err);
     }
   };
 
   useEffect(() => {
     fetchStudents();
-  }, [search, department, year, section]);
+  }, [search, department, year, section, statusFilter]);
 
-  // Handle Add Student
+  useEffect(() => {
+    if (activeTab === 'login_activity') fetchLoginActivity();
+    if (activeTab === 'password_center') fetchPasswordAuditLogs();
+  }, [activeTab]);
+
+  // Bulk Selection Checkbox Handlers
+  const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.checked) {
+      setSelectedStudentIds(students.map((st) => st.id));
+    } else {
+      setSelectedStudentIds([]);
+    }
+  };
+
+  const handleSelectOne = (id: string) => {
+    setSelectedStudentIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  };
+
+  // Add Single Student
   const handleAddStudent = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
@@ -124,18 +222,26 @@ export const StudentManagement: React.FC = () => {
         address: '',
         parent_name: '',
         parent_phone: '',
-        bio: ''
+        bio: '',
+        status: 'Active',
+        admission_year: new Date().getFullYear().toString(),
+        username: ''
       });
       fetchStudents();
     } catch (err: any) {
-      alert(err.response?.data?.error || 'Failed to add student');
+      alert(`❌ ${err.response?.data?.error || 'Failed to add student'}`);
     }
   };
 
-  // Open View Details Modal
-  const openViewModal = (st: User) => {
-    setViewingStudent(st);
-    setShowViewModal(true);
+  // Open Full Profile View Modal (Fetches full record + attendance summary + QR scan history + login logs)
+  const openFullProfileView = async (st: User) => {
+    try {
+      const res = await api.get(`/students/${st.id}/profile-details`);
+      setViewingStudentProfile(res.data);
+      setShowViewModal(true);
+    } catch (err: any) {
+      alert('Failed to load full student profile details.');
+    }
   };
 
   // Open Edit Modal
@@ -157,18 +263,20 @@ export const StudentManagement: React.FC = () => {
       parent_name: st.parent_name || '',
       parent_phone: st.parent_phone || '',
       bio: st.bio || '',
+      status: st.status || 'Active',
+      admission_year: (st as any).admission_year ? String((st as any).admission_year) : new Date().getFullYear().toString(),
       new_password: ''
     });
     setShowEditModal(true);
   };
 
-  // Handle Submit Edit Student
+  // Handle Update Student Submit
   const handleUpdateStudent = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingStudent) return;
     try {
       await api.put(`/students/${editingStudent.id}`, editingStudent);
-      alert('✅ Student details updated successfully');
+      alert('✅ Student details updated successfully!');
       setShowEditModal(false);
       setEditingStudent(null);
       fetchStudents();
@@ -177,21 +285,70 @@ export const StudentManagement: React.FC = () => {
     }
   };
 
-  // Handle Delete Student
-  const handleDeleteStudent = async (id: string) => {
-    if (confirm('Are you sure you want to delete this student account?')) {
-      try {
-        await api.delete(`/students/${id}`);
-        alert('✅ Student removed successfully');
-        setShowViewModal(false);
-        fetchStudents();
-      } catch (err) {
-        alert('Failed to delete student');
-      }
+  // Trigger Single Student Permanent Delete Warning
+  const triggerDeleteStudent = (st: User) => {
+    setStudentToDelete(st);
+    setShowDeleteConfirmModal(true);
+  };
+
+  // Confirm Single Student Permanent Delete
+  const confirmDeleteStudent = async () => {
+    if (!studentToDelete) return;
+    try {
+      await api.delete(`/students/${studentToDelete.id}`);
+      alert(`✅ Permanently deleted account and all records for ${studentToDelete.name}`);
+      setShowDeleteConfirmModal(false);
+      setStudentToDelete(null);
+      setShowViewModal(false);
+      fetchStudents();
+    } catch (err: any) {
+      alert(`❌ ${err.response?.data?.error || 'Failed to delete student'}`);
     }
   };
 
-  // Handle Excel Bulk Import Parsing
+  // Confirm Bulk Delete
+  const confirmBulkDelete = async () => {
+    if (selectedStudentIds.length === 0) return;
+    try {
+      const res = await api.post('/students/bulk-delete', { studentIds: selectedStudentIds });
+      alert(`✅ ${res.data.message}`);
+      setSelectedStudentIds([]);
+      setShowBulkDeleteModal(false);
+      fetchStudents();
+    } catch (err: any) {
+      alert(`❌ ${err.response?.data?.error || 'Failed to bulk delete students'}`);
+    }
+  };
+
+  // Open Reset Password Modal
+  const openResetPasswordModal = (st: User) => {
+    setResetPassTarget(st);
+    setResetPassType('default');
+    setCustomGeneratedPassword('');
+    setShowResetPasswordModal(true);
+  };
+
+  // Submit Password Reset
+  const handleResetPasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resetPassTarget) return;
+
+    try {
+      const res = await api.post(`/students/${resetPassTarget.id}/reset-password`, {
+        resetType: resetPassType,
+        customPassword: customGeneratedPassword
+      });
+      alert(`✅ ${res.data.message}`);
+      setShowResetPasswordModal(false);
+      setResetPassTarget(null);
+      fetchStudents();
+      if (activeTab === 'password_center') fetchPasswordAuditLogs();
+    } catch (err: any) {
+      alert(`❌ ${err.response?.data?.error || 'Failed to reset password'}`);
+    }
+  };
+
+  // Excel Bulk Import Parsing
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -221,59 +378,156 @@ export const StudentManagement: React.FC = () => {
     reader.readAsBinaryString(file);
   };
 
-  // Export Students to Excel
+  // Export to Excel (.xlsx)
   const handleExportExcel = () => {
-    const exportData = students.map((st) => ({
-      Name: st.name,
-      'Roll Number': st.roll_number,
+    const exportData = (selectedStudentIds.length > 0
+      ? students.filter((st) => selectedStudentIds.includes(st.id))
+      : students
+    ).map((st) => ({
+      'Register Number': st.roll_number,
+      'Student Name': st.name,
       Email: st.email,
-      Department: st.department,
-      Year: st.year,
-      Section: st.section,
-      Phone: st.phone,
-      DOB: st.dob || 'N/A',
+      Phone: st.phone || 'N/A',
+      Department: st.department || 'AI & DS',
+      Year: st.year || 3,
+      Section: st.section || 'A',
+      'Admission Year': (st as any).admission_year || 'N/A',
+      'DOB': st.dob || 'N/A',
       Gender: st.gender || 'N/A',
       'Blood Group': st.blood_group || 'N/A',
-      Address: st.address || 'N/A',
       'Parent Name': st.parent_name || 'N/A',
       'Parent Phone': st.parent_phone || 'N/A',
+      Address: st.address || 'N/A',
       'Attendance %': st.attendance_percentage !== null && st.attendance_percentage !== undefined ? `${st.attendance_percentage}%` : '--',
-      Status: st.status
+      'Password Status': (st as any).password_status || 'Custom Password',
+      Status: st.status || 'Active'
     }));
 
     const ws = XLSX.utils.json_to_sheet(exportData);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Students');
-    XLSX.writeFile(wb, `EliteMinds_Students_Export_${new Date().toISOString().split('T')[0]}.xlsx`);
+    XLSX.writeFile(wb, `EliteMinds_Students_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
-  // Reset Hardware Device
-  const handleResetDevice = async (studentId: string, name: string) => {
-    if (!confirm(`Are you sure you want to reset registered hardware device for ${name}?`)) return;
-    try {
-      const res = await api.post(`/students/${studentId}/reset-device`);
-      alert(`✅ ${res.data.message}`);
-      fetchStudents();
-    } catch (err: any) {
-      alert(`❌ ${err.response?.data?.error || 'Failed to reset device'}`);
+  // Export to CSV (.csv)
+  const handleExportCSV = () => {
+    const targetList = selectedStudentIds.length > 0
+      ? students.filter((st) => selectedStudentIds.includes(st.id))
+      : students;
+
+    let csv = 'Register Number,Student Name,Email,Phone,Department,Year,Section,Attendance %,Status\n';
+    targetList.forEach((st) => {
+      csv += `"${st.roll_number}","${st.name}","${st.email}","${st.phone || ''}","${st.department || 'AI & DS'}","${st.year || 3}","${st.section || 'A'}","${st.attendance_percentage || 100}%","${st.status || 'Active'}"\n`;
+    });
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `Students_Export_${new Date().toISOString().split('T')[0]}.csv`;
+    link.click();
+  };
+
+  // Export to Printable PDF
+  const handleExportPDF = () => {
+    const targetList = selectedStudentIds.length > 0
+      ? students.filter((st) => selectedStudentIds.includes(st.id))
+      : students;
+
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      alert('Please allow popups to generate PDF report.');
+      return;
     }
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Student Directory Export - Elite Minds</title>
+        <style>
+          body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 25px; color: #111827; }
+          .header { border-bottom: 2px solid #6D5DFC; padding-bottom: 15px; margin-bottom: 20px; }
+          .title { font-size: 24px; font-weight: 800; color: #111827; margin: 0; }
+          .subtitle { font-size: 13px; color: #6B7280; margin-top: 5px; }
+          table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 11px; }
+          th, td { border: 1px solid #E2E8F0; padding: 8px 10px; text-align: left; }
+          th { background: #F1F5F9; font-weight: 700; color: #334155; }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <h1 class="title">ELITE MINDS ATTENDANCE PORTAL</h1>
+          <p class="subtitle">Official Enrolled Student Directory Report (${targetList.length} Students)</p>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Register Number</th>
+              <th>Student Name</th>
+              <th>Email</th>
+              <th>Department</th>
+              <th>Class</th>
+              <th>Contact Phone</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${targetList.map((st, idx) => `
+              <tr>
+                <td>${idx + 1}</td>
+                <td style="font-family: monospace; font-weight: bold;">${st.roll_number}</td>
+                <td style="font-weight: bold;">${st.name}</td>
+                <td>${st.email}</td>
+                <td>${st.department || 'AI & DS'}</td>
+                <td>Yr ${st.year || 3} • Sec ${st.section || 'A'}</td>
+                <td>${st.phone || 'N/A'}</td>
+                <td>${st.status || 'Active'}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </body>
+      </html>
+    `;
+
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => {
+      printWindow.print();
+    }, 500);
   };
 
   return (
     <div className="space-y-6 animate-fade-in font-sans">
-      {/* Header & Primary Actions */}
+      {/* Header & Sub-Tabs Navigation */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="font-display font-extrabold text-2xl text-[#111827]">Student Directory & CRUD Management</h1>
+          <h1 className="font-display font-extrabold text-2xl text-[#111827]">
+            Student Management & Security Control Center
+          </h1>
           <p className="text-xs text-[#6B7280] font-medium mt-1">
-            Create, view full profile details, edit student records, and manage hardware bindings
+            Complete CRUD administration, login monitoring, and password audit center
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2.5">
+        {/* Action Buttons */}
+        <div className="flex flex-wrap items-center gap-2">
+          {selectedStudentIds.length > 0 && (
+            <button
+              onClick={() => setShowBulkDeleteModal(true)}
+              className="px-4 py-2 rounded-full bg-rose-600 text-xs font-extrabold text-white hover:bg-rose-700 shadow-floating transition-all flex items-center gap-1.5"
+            >
+              <Trash2 className="w-4 h-4" />
+              <span>Delete Selected ({selectedStudentIds.length})</span>
+            </button>
+          )}
+
           <button
             onClick={() => setShowImportModal(true)}
-            className="px-4 py-2 rounded-full bg-white border border-[#E7E7E7] text-xs font-bold text-[#111827] hover:bg-[#FAFAFA] transition-all flex items-center gap-2 shadow-sm"
+            className="px-3.5 py-2 rounded-full bg-white border border-[#E7E7E7] text-xs font-bold text-[#111827] hover:bg-[#FAFAFA] transition-all flex items-center gap-1.5 shadow-sm"
           >
             <FileSpreadsheet className="w-4 h-4 text-[#12B76A]" />
             <span>Import Excel</span>
@@ -281,7 +535,7 @@ export const StudentManagement: React.FC = () => {
 
           <button
             onClick={handleExportExcel}
-            className="px-4 py-2 rounded-full bg-white border border-[#E7E7E7] text-xs font-bold text-[#111827] hover:bg-[#FAFAFA] transition-all flex items-center gap-2 shadow-sm"
+            className="px-3.5 py-2 rounded-full bg-white border border-[#E7E7E7] text-xs font-bold text-[#111827] hover:bg-[#FAFAFA] transition-all flex items-center gap-1.5 shadow-sm"
           >
             <Download className="w-4 h-4 text-[#4F7CFF]" />
             <span>Export XLSX</span>
@@ -289,500 +543,721 @@ export const StudentManagement: React.FC = () => {
 
           <button
             onClick={() => setShowAddModal(true)}
-            className="px-4 py-2 rounded-full bg-gradient-to-r from-[#6D5DFC] to-[#4F7CFF] text-xs font-extrabold text-white shadow-floating hover:from-[#5b4be0] hover:to-[#3b68ee] transition-all flex items-center gap-2"
+            className="px-4 py-2 rounded-full bg-gradient-to-r from-[#6D5DFC] to-[#4F7CFF] text-xs font-extrabold text-white shadow-floating hover:from-[#5b4be0] hover:to-[#3b68ee] transition-all flex items-center gap-1.5 active:scale-98"
           >
             <UserPlus className="w-4 h-4" />
-            <span>Add New Student</span>
+            <span>Add Student</span>
           </button>
         </div>
       </div>
 
-      {/* Filters & Search Bar */}
-      <div className="bg-white p-4 rounded-[24px] border border-[#E7E7E7] shadow-enterprise flex flex-col md:flex-row items-center gap-3">
-        <div className="relative w-full md:w-80">
-          <input
-            type="text"
-            placeholder="Search student name, register no, email..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full px-4 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827] placeholder-[#9CA3AF] pl-9 focus:outline-none focus:border-[#6D5DFC] focus:bg-white font-medium"
-          />
-          <Search className="w-4 h-4 text-[#9CA3AF] absolute left-3 top-3" />
+      {/* PREMIUM ADMIN DASHBOARD STATS CARDS GRID */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
+        <div className="bg-white p-3.5 rounded-2xl border border-[#E7E7E7] shadow-enterprise text-center">
+          <span className="text-[10px] text-[#6B7280] font-extrabold uppercase tracking-wider block">👨🎓 Total Students</span>
+          <span className="font-display font-extrabold text-xl text-[#111827] block mt-1">{summaryStats.totalStudents}</span>
         </div>
-
-        <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
-          <select
-            value={department}
-            onChange={(e) => setDepartment(e.target.value)}
-            className="px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827] focus:outline-none focus:border-[#6D5DFC] font-medium"
-          >
-            <option value="">All Departments</option>
-            <option value="AI & Data Science">AI & Data Science</option>
-            <option value="Computer Science">Computer Science</option>
-            <option value="Electronics">Electronics</option>
-            <option value="Mechanical">Mechanical</option>
-          </select>
-
-          <select
-            value={year}
-            onChange={(e) => setYear(e.target.value)}
-            className="px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827] focus:outline-none focus:border-[#6D5DFC] font-medium"
-          >
-            <option value="">All Years</option>
-            <option value="1">1st Year</option>
-            <option value="2">2nd Year</option>
-            <option value="3">3rd Year</option>
-            <option value="4">4th Year</option>
-          </select>
-
-          <select
-            value={section}
-            onChange={(e) => setSection(e.target.value)}
-            className="px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827] focus:outline-none focus:border-[#6D5DFC] font-medium"
-          >
-            <option value="">All Sections</option>
-            <option value="A">Section A</option>
-            <option value="B">Section B</option>
-            <option value="C">Section C</option>
-          </select>
+        <div className="bg-white p-3.5 rounded-2xl border border-[#ECFDF5] shadow-enterprise text-center">
+          <span className="text-[10px] text-[#12B76A] font-extrabold uppercase tracking-wider block">🟢 Active</span>
+          <span className="font-display font-extrabold text-xl text-[#12B76A] block mt-1">{summaryStats.activeStudents}</span>
+        </div>
+        <div className="bg-white p-3.5 rounded-2xl border border-rose-100 shadow-enterprise text-center">
+          <span className="text-[10px] text-rose-600 font-extrabold uppercase tracking-wider block">🔴 Inactive</span>
+          <span className="font-display font-extrabold text-xl text-rose-600 block mt-1">{summaryStats.inactiveStudents}</span>
+        </div>
+        <div className="bg-white p-3.5 rounded-2xl border border-amber-200 shadow-enterprise text-center">
+          <span className="text-[10px] text-amber-600 font-extrabold uppercase tracking-wider block">🔐 Default Password</span>
+          <span className="font-display font-extrabold text-xl text-amber-600 block mt-1">{summaryStats.defaultPasswordCount}</span>
+        </div>
+        <div className="bg-white p-3.5 rounded-2xl border border-[#6D5DFC]/20 shadow-enterprise text-center">
+          <span className="text-[10px] text-[#6D5DFC] font-extrabold uppercase tracking-wider block">🛡 Custom Password</span>
+          <span className="font-display font-extrabold text-xl text-[#6D5DFC] block mt-1">{summaryStats.customPasswordCount}</span>
+        </div>
+        <div className="bg-white p-3.5 rounded-2xl border border-blue-200 shadow-enterprise text-center">
+          <span className="text-[10px] text-blue-600 font-extrabold uppercase tracking-wider block">🟢 Logged In Today</span>
+          <span className="font-display font-extrabold text-xl text-blue-600 block mt-1">{summaryStats.loggedInToday}</span>
+        </div>
+        <div className="bg-white p-3.5 rounded-2xl border border-purple-200 shadow-enterprise text-center">
+          <span className="text-[10px] text-purple-600 font-extrabold uppercase tracking-wider block">🟣 Active Sessions</span>
+          <span className="font-display font-extrabold text-xl text-purple-600 block mt-1">{summaryStats.activeSessions}</span>
         </div>
       </div>
 
-      {/* Main Table Container */}
-      <div className="bg-white rounded-[24px] border border-[#E7E7E7] shadow-enterprise overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead className="bg-[#FAFAFA] border-b border-[#E7E7E7] text-[#6B7280] uppercase text-[10px] tracking-wider sticky top-0 font-bold">
-              <tr>
-                <th className="p-4">Student Profile</th>
-                <th className="p-4">Roll / Register No</th>
-                <th className="p-4">Department & Class</th>
-                <th className="p-4">Contact</th>
-                <th className="p-4">Attendance %</th>
-                <th className="p-4">Device Binding</th>
-                <th className="p-4">Status</th>
-                <th className="p-4 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[#E7E7E7]">
-              {students.length === 0 ? (
-                <tr>
-                  <td colSpan={8} className="p-10 text-center text-[#6B7280]">
-                    No student records found matching your active filters.
-                  </td>
-                </tr>
-              ) : (
-                students.map((st) => (
-                  <tr key={st.id} className="hover:bg-[#FAFAFA] transition-colors">
-                    <td className="p-4 flex items-center gap-3">
-                      <img
-                        src={st.profile_photo || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150'}
-                        alt=""
-                        className="w-9 h-9 rounded-full border border-[#E7E7E7] object-cover shadow-sm"
+      {/* NAVIGATION SUB-TABS */}
+      <div className="flex items-center gap-2 border-b border-[#E7E7E7] pb-2 text-xs font-bold">
+        <button
+          onClick={() => setActiveTab('directory')}
+          className={`px-4 py-2 rounded-xl transition-all flex items-center gap-2 ${
+            activeTab === 'directory'
+              ? 'bg-[#111827] text-white shadow-sm'
+              : 'bg-[#FAFAFA] text-[#6B7280] hover:text-[#111827]'
+          }`}
+        >
+          <Users className="w-4 h-4" />
+          <span>Student Directory & CRUD</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('login_activity')}
+          className={`px-4 py-2 rounded-xl transition-all flex items-center gap-2 ${
+            activeTab === 'login_activity'
+              ? 'bg-[#6D5DFC] text-white shadow-sm'
+              : 'bg-[#FAFAFA] text-[#6B7280] hover:text-[#111827]'
+          }`}
+        >
+          <Activity className="w-4 h-4" />
+          <span>Student Login Activity</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('password_center')}
+          className={`px-4 py-2 rounded-xl transition-all flex items-center gap-2 ${
+            activeTab === 'password_center'
+              ? 'bg-amber-600 text-white shadow-sm'
+              : 'bg-[#FAFAFA] text-[#6B7280] hover:text-[#111827]'
+          }`}
+        >
+          <Key className="w-4 h-4" />
+          <span>Password Control & Audit Logs</span>
+        </button>
+      </div>
+
+      {/* ================================================== */}
+      {/* TAB 1: STUDENT DIRECTORY & CRUD */}
+      {/* ================================================== */}
+      {activeTab === 'directory' && (
+        <div className="space-y-4">
+          {/* Filters & Search Bar */}
+          <div className="bg-white p-4 rounded-[24px] border border-[#E7E7E7] shadow-enterprise flex flex-col md:flex-row items-center justify-between gap-3">
+            <div className="relative w-full md:w-80">
+              <input
+                type="text"
+                placeholder="Search by student name, register no, email, phone..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full px-4 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827] placeholder-[#9CA3AF] pl-9 focus:outline-none focus:border-[#6D5DFC] focus:bg-white font-medium"
+              />
+              <Search className="w-4 h-4 text-[#9CA3AF] absolute left-3 top-3" />
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
+              <select
+                value={department}
+                onChange={(e) => setDepartment(e.target.value)}
+                className="px-3 py-2 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827] focus:outline-none font-medium"
+              >
+                <option value="">All Departments</option>
+                <option value="AI & Data Science">AI & Data Science</option>
+                <option value="Computer Science">Computer Science</option>
+                <option value="Electronics">Electronics</option>
+                <option value="Mechanical">Mechanical</option>
+              </select>
+
+              <select
+                value={year}
+                onChange={(e) => setYear(e.target.value)}
+                className="px-3 py-2 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827] focus:outline-none font-medium"
+              >
+                <option value="">All Years</option>
+                <option value="1">1st Year</option>
+                <option value="2">2nd Year</option>
+                <option value="3">3rd Year</option>
+                <option value="4">4th Year</option>
+              </select>
+
+              <select
+                value={section}
+                onChange={(e) => setSection(e.target.value)}
+                className="px-3 py-2 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827] focus:outline-none font-medium"
+              >
+                <option value="">All Sections</option>
+                <option value="A">Section A</option>
+                <option value="B">Section B</option>
+                <option value="C">Section C</option>
+              </select>
+
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="px-3 py-2 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827] focus:outline-none font-medium"
+              >
+                <option value="">All Account Status</option>
+                <option value="Active">Active</option>
+                <option value="Inactive">Inactive</option>
+                <option value="Suspended">Suspended</option>
+              </select>
+
+              {/* Export Buttons */}
+              <div className="flex items-center gap-1.5 ml-auto sm:ml-0">
+                <button
+                  onClick={handleExportCSV}
+                  className="p-2 rounded-xl bg-[#FAFAFA] border border-[#E7E7E7] text-[#111827] hover:bg-[#F3F0FF] text-xs font-bold"
+                  title="Export CSV"
+                >
+                  CSV
+                </button>
+                <button
+                  onClick={handleExportPDF}
+                  className="p-2 rounded-xl bg-[#FAFAFA] border border-[#E7E7E7] text-[#111827] hover:bg-[#F3F0FF] text-xs font-bold"
+                  title="Export PDF"
+                >
+                  PDF
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Main Table Container */}
+          <div className="bg-white rounded-[24px] border border-[#E7E7E7] shadow-enterprise overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-[#FAFAFA] border-b border-[#E7E7E7] text-[#6B7280] uppercase text-[10px] tracking-wider sticky top-0 font-bold">
+                  <tr>
+                    <th className="p-4 w-10">
+                      <input
+                        type="checkbox"
+                        checked={students.length > 0 && selectedStudentIds.length === students.length}
+                        onChange={handleSelectAll}
+                        className="rounded border-[#E7E7E7] text-[#6D5DFC]"
                       />
-                      <div>
-                        <p className="font-bold text-[#111827]">{st.name}</p>
-                        <p className="text-[10px] text-[#6B7280] font-medium">{st.email}</p>
-                      </div>
-                    </td>
-                    <td className="p-4 font-mono text-[#6D5DFC] font-bold">{st.roll_number}</td>
-                    <td className="p-4 text-[#111827] font-medium">
-                      {st.department || 'AI & DS'} <br />
-                      <span className="text-[10px] text-[#6B7280]">Yr {st.year || 3} • Sec {st.section || 'A'}</span>
-                    </td>
-                    <td className="p-4 text-[#6B7280] font-mono text-[11px]">{st.phone || 'N/A'}</td>
-                    <td className="p-4">
-                      <div className="flex items-center gap-2">
-                        <span className={`font-mono font-bold ${
-                          (st.attendance_percentage || 100) >= 75 ? 'text-[#12B76A]' : 'text-rose-600'
-                        }`}>
-                          {st.attendance_percentage}%
-                        </span>
-                        <div className="w-16 bg-[#FAFAFA] rounded-full h-1.5 overflow-hidden border border-[#E7E7E7]">
-                          <div
-                            className={`h-full rounded-full ${
-                              (st.attendance_percentage || 100) >= 75 ? 'bg-[#12B76A]' : 'bg-rose-500'
-                            }`}
-                            style={{ width: `${st.attendance_percentage}%` }}
-                          />
-                        </div>
-                      </div>
-                    </td>
-                    <td className="p-4 font-mono text-[10px]">
-                      {st.device_fingerprint ? (
-                        <span className="text-[#12B76A] flex items-center gap-1 font-bold">
-                          <Check className="w-3.5 h-3.5" /> Bound ({st.device_fingerprint.substring(0, 8)}...)
-                        </span>
-                      ) : (
-                        <span className="text-amber-500 font-semibold">Unbound</span>
-                      )}
-                    </td>
-                    <td className="p-4">
-                      <span className={`px-2.5 py-0.5 rounded-full text-[10px] uppercase font-bold border ${
-                        st.must_change_password === 1
-                          ? 'bg-amber-50 text-amber-600 border-amber-200'
-                          : 'bg-[#ECFDF5] text-[#12B76A] border-[#12B76A]/20'
-                      }`}>
-                        {st.must_change_password === 1 ? 'Pending Reset' : 'Active'}
-                      </span>
-                    </td>
-                    <td className="p-4 text-right">
-                      <div className="flex items-center justify-end gap-1.5">
-                        <button
-                          onClick={() => openViewModal(st)}
-                          className="px-2.5 py-1 rounded-full bg-[#F3F0FF] border border-[#6D5DFC]/20 text-[10px] font-bold text-[#6D5DFC] hover:bg-[#6D5DFC] hover:text-white transition-all flex items-center gap-1"
-                          title="View complete student details"
-                        >
-                          <Eye className="w-3 h-3" />
-                          <span>View Details</span>
-                        </button>
-
-                        <button
-                          onClick={() => openEditModal(st)}
-                          className="px-2.5 py-1 rounded-full bg-blue-50 border border-blue-200 text-[10px] font-bold text-blue-600 hover:bg-blue-100 transition-colors flex items-center gap-1"
-                          title="Edit student details"
-                        >
-                          <Edit className="w-3 h-3 text-blue-600" />
-                          <span>Edit</span>
-                        </button>
-
-                        <button
-                          onClick={() => handleDeleteStudent(st.id)}
-                          className="p-1.5 rounded-full text-[#6B7280] hover:text-rose-600 hover:bg-rose-50 transition-colors"
-                          title="Delete Student Account"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </td>
+                    </th>
+                    <th className="p-4">Student Profile</th>
+                    <th className="p-4">Register Number</th>
+                    <th className="p-4">Department & Class</th>
+                    <th className="p-4">Phone Contact</th>
+                    <th className="p-4">Attendance %</th>
+                    <th className="p-4">Password Status</th>
+                    <th className="p-4">Account Status</th>
+                    <th className="p-4 text-right">Actions</th>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+                </thead>
+                <tbody className="divide-y divide-[#E7E7E7]">
+                  {students.length === 0 ? (
+                    <tr>
+                      <td colSpan={9} className="p-10 text-center text-[#6B7280]">
+                        No student accounts found matching your active filters.
+                      </td>
+                    </tr>
+                  ) : (
+                    students.map((st) => {
+                      const isSelected = selectedStudentIds.includes(st.id);
+                      const isDefaultPass = Boolean((st as any).password_status === 'Default Password');
 
-      {/* ================================================== */}
-      {/* 1. VIEW STUDENT FULL PROFILE DETAILS MODAL */}
-      {/* ================================================== */}
-      {showViewModal && viewingStudent && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-2xl rounded-[32px] p-6 sm:p-8 border border-[#E7E7E7] shadow-2xl space-y-6 animate-fade-in relative">
-            <div className="flex items-center justify-between pb-4 border-b border-[#E7E7E7]">
-              <div className="flex items-center gap-3">
-                <img
-                  src={viewingStudent.profile_photo || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150'}
-                  alt=""
-                  className="w-14 h-14 rounded-full border-2 border-[#6D5DFC]/30 object-cover shadow-sm"
-                />
-                <div>
-                  <h3 className="font-display font-extrabold text-xl text-[#111827]">{viewingStudent.name}</h3>
-                  <span className="px-2.5 py-0.5 rounded-full bg-[#F3F0FF] text-[#6D5DFC] border border-[#6D5DFC]/20 text-[10px] font-mono font-bold">
-                    {viewingStudent.roll_number}
-                  </span>
-                </div>
-              </div>
-
-              <button
-                onClick={() => setShowViewModal(false)}
-                className="w-9 h-9 rounded-full bg-[#FAFAFA] text-[#6B7280] hover:text-[#111827] flex items-center justify-center border border-[#E7E7E7]"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Profile Detail Cards Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-              {/* Academic Info */}
-              <div className="p-4 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] space-y-2">
-                <span className="text-[10px] font-bold text-[#6D5DFC] uppercase tracking-wider flex items-center gap-1.5">
-                  <BookOpen className="w-3.5 h-3.5" /> Academic Information
-                </span>
-                <div className="space-y-1 font-medium text-[#111827]">
-                  <p><strong>Department:</strong> {viewingStudent.department || 'AI & Data Science'}</p>
-                  <p><strong>Class:</strong> Year {viewingStudent.year || 3} • Section {viewingStudent.section || 'A'}</p>
-                  <p><strong>Email:</strong> {viewingStudent.email}</p>
-                  <p><strong>Attendance Rate:</strong> <span className="font-bold text-[#12B76A]">{viewingStudent.attendance_percentage || 100}%</span></p>
-                </div>
-              </div>
-
-              {/* Personal Info */}
-              <div className="p-4 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] space-y-2">
-                <span className="text-[10px] font-bold text-[#6D5DFC] uppercase tracking-wider flex items-center gap-1.5">
-                  <UserIcon className="w-3.5 h-3.5" /> Personal Details
-                </span>
-                <div className="space-y-1 font-medium text-[#111827]">
-                  <p><strong>Phone:</strong> {viewingStudent.phone || 'Not provided'}</p>
-                  <p><strong>DOB:</strong> {viewingStudent.dob || 'Not provided'}</p>
-                  <p><strong>Gender:</strong> {viewingStudent.gender || 'Not specified'}</p>
-                  <p><strong>Blood Group:</strong> {viewingStudent.blood_group || 'Not specified'}</p>
-                </div>
-              </div>
-
-              {/* Parent / Guardian Contact */}
-              <div className="p-4 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] space-y-2">
-                <span className="text-[10px] font-bold text-[#6D5DFC] uppercase tracking-wider flex items-center gap-1.5">
-                  <Heart className="w-3.5 h-3.5 text-rose-500" /> Parent / Guardian Info
-                </span>
-                <div className="space-y-1 font-medium text-[#111827]">
-                  <p><strong>Parent Name:</strong> {viewingStudent.parent_name || 'Not provided'}</p>
-                  <p><strong>Parent Contact:</strong> {viewingStudent.parent_phone || 'Not provided'}</p>
-                </div>
-              </div>
-
-              {/* Hardware Security Binding */}
-              <div className="p-4 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] space-y-2">
-                <span className="text-[10px] font-bold text-[#6D5DFC] uppercase tracking-wider flex items-center gap-1.5">
-                  <Smartphone className="w-3.5 h-3.5 text-[#12B76A]" /> Hardware Device Security
-                </span>
-                <div className="space-y-1.5">
-                  <p className="font-mono text-[11px] text-[#6B7280]">
-                    Device ID: <strong className="text-[#111827]">{viewingStudent.device_fingerprint || 'Unbound Hardware'}</strong>
-                  </p>
-                  <button
-                    onClick={() => handleResetDevice(viewingStudent.id, viewingStudent.name)}
-                    className="px-3 py-1.5 rounded-full bg-[#F3F0FF] text-[#6D5DFC] text-[10px] font-bold border border-[#6D5DFC]/20 hover:bg-[#6D5DFC] hover:text-white transition-all flex items-center gap-1"
-                  >
-                    <Smartphone className="w-3 h-3" /> Reset Bound Device
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* Residential Address & Bio */}
-            {(viewingStudent.address || viewingStudent.bio) && (
-              <div className="p-4 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] space-y-2 text-xs">
-                {viewingStudent.address && (
-                  <p className="text-[#111827]">
-                    <strong className="text-[#6D5DFC]">Home Address:</strong> {viewingStudent.address}
-                  </p>
-                )}
-                {viewingStudent.bio && (
-                  <p className="text-[#111827]">
-                    <strong className="text-[#6D5DFC]">Bio / Notes:</strong> {viewingStudent.bio}
-                  </p>
-                )}
-              </div>
-            )}
-
-            {/* Modal Actions */}
-            <div className="flex items-center justify-between pt-4 border-t border-[#E7E7E7]">
-              <button
-                onClick={() => handleDeleteStudent(viewingStudent.id)}
-                className="px-4 py-2 rounded-full bg-rose-50 border border-rose-200 text-rose-600 text-xs font-bold hover:bg-rose-100 transition-colors flex items-center gap-1"
-              >
-                <Trash2 className="w-3.5 h-3.5" /> Delete Student Account
-              </button>
-
-              <button
-                onClick={() => {
-                  setShowViewModal(false);
-                  openEditModal(viewingStudent);
-                }}
-                className="px-5 py-2.5 rounded-full bg-[#6D5DFC] text-white text-xs font-bold shadow-floating hover:bg-[#5b4be0] transition-all flex items-center gap-1.5"
-              >
-                <Edit className="w-4 h-4" /> Edit Student Details
-              </button>
+                      return (
+                        <tr
+                          key={st.id}
+                          className={`transition-colors ${isSelected ? 'bg-[#F3F0FF]/40' : 'hover:bg-[#FAFAFA]'}`}
+                        >
+                          <td className="p-4">
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => handleSelectOne(st.id)}
+                              className="rounded border-[#E7E7E7] text-[#6D5DFC]"
+                            />
+                          </td>
+                          <td className="p-4 flex items-center gap-3">
+                            <img
+                              src={st.profile_photo || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150'}
+                              alt=""
+                              className="w-9 h-9 rounded-full border border-[#E7E7E7] object-cover shadow-sm cursor-pointer"
+                              onClick={() => openFullProfileView(st)}
+                            />
+                            <div>
+                              <p
+                                onClick={() => openFullProfileView(st)}
+                                className="font-bold text-[#111827] hover:text-[#6D5DFC] cursor-pointer"
+                              >
+                                {st.name}
+                              </p>
+                              <p className="text-[10px] text-[#6B7280] font-medium">{st.email}</p>
+                            </div>
+                          </td>
+                          <td className="p-4 font-mono text-[#6D5DFC] font-bold">{st.roll_number}</td>
+                          <td className="p-4 text-[#111827] font-medium">
+                            {st.department || 'AI & DS'} <br />
+                            <span className="text-[10px] text-[#6B7280]">Yr {st.year || 3} • Sec {st.section || 'A'}</span>
+                          </td>
+                          <td className="p-4 text-[#6B7280] font-mono text-[11px]">{st.phone || 'N/A'}</td>
+                          <td className="p-4">
+                            <div className="flex items-center gap-2">
+                              <span className={`font-mono font-bold ${
+                                (st.attendance_percentage || 100) >= 75 ? 'text-[#12B76A]' : 'text-rose-600'
+                              }`}>
+                                {st.attendance_percentage}%
+                              </span>
+                              <div className="w-14 bg-[#FAFAFA] rounded-full h-1.5 overflow-hidden border border-[#E7E7E7]">
+                                <div
+                                  className={`h-full rounded-full ${
+                                    (st.attendance_percentage || 100) >= 75 ? 'bg-[#12B76A]' : 'bg-rose-500'
+                                  }`}
+                                  style={{ width: `${st.attendance_percentage}%` }}
+                                />
+                              </div>
+                            </div>
+                          </td>
+                          <td className="p-4">
+                            <span
+                              className={`px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold border ${
+                                isDefaultPass
+                                  ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                  : 'bg-[#F3F0FF] text-[#6D5DFC] border-[#6D5DFC]/20'
+                              }`}
+                            >
+                              {isDefaultPass ? 'Default Password' : 'Custom Password'}
+                            </span>
+                          </td>
+                          <td className="p-4">
+                            <span
+                              className={`px-2.5 py-0.5 rounded-full text-[10px] uppercase font-extrabold border ${
+                                st.status === 'Inactive'
+                                  ? 'bg-gray-100 text-gray-700 border-gray-200'
+                                  : st.status === 'Suspended'
+                                  ? 'bg-rose-50 text-rose-700 border-rose-200'
+                                  : 'bg-[#ECFDF5] text-[#12B76A] border-[#12B76A]/20'
+                              }`}
+                            >
+                              {st.status || 'Active'}
+                            </span>
+                          </td>
+                          <td className="p-4 text-right">
+                            <div className="flex items-center justify-end gap-1.5">
+                              <button
+                                onClick={() => openFullProfileView(st)}
+                                className="p-1.5 rounded-full text-[#6D5DFC] bg-[#F3F0FF] hover:bg-[#6D5DFC] hover:text-white transition-all"
+                                title="View Full Profile Details"
+                              >
+                                <Eye className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => openEditModal(st)}
+                                className="p-1.5 rounded-full text-blue-600 bg-blue-50 hover:bg-blue-100 transition-colors"
+                                title="Edit Student Details"
+                              >
+                                <Edit className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => openResetPasswordModal(st)}
+                                className="p-1.5 rounded-full text-amber-600 bg-amber-50 hover:bg-amber-100 transition-colors"
+                                title="Reset Student Password"
+                              >
+                                <Key className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => triggerDeleteStudent(st)}
+                                className="p-1.5 rounded-full text-[#6B7280] hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                                title="Delete Student Account"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
             </div>
           </div>
         </div>
       )}
 
       {/* ================================================== */}
-      {/* 2. ADD NEW STUDENT MODAL */}
+      {/* TAB 2: STUDENT LOGIN ACTIVITY MONITORING */}
+      {/* ================================================== */}
+      {activeTab === 'login_activity' && (
+        <div className="space-y-4">
+          <div className="bg-white p-5 rounded-[24px] border border-[#E7E7E7] shadow-enterprise space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-display font-bold text-base text-[#111827]">Real-Time Student Login Activity Monitor</h3>
+                <p className="text-xs text-[#6B7280] font-medium">Tracks every student authentication session, browser user-agent, and IP address</p>
+              </div>
+              <button
+                onClick={fetchLoginActivity}
+                className="px-3.5 py-1.5 rounded-full bg-[#F3F0FF] text-[#6D5DFC] text-xs font-bold hover:bg-[#6D5DFC] hover:text-white transition-all flex items-center gap-1.5"
+              >
+                <RefreshCw className="w-3.5 h-3.5" /> Refresh Activity
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
+              <div className="bg-[#FAF9FF] p-4 rounded-2xl border border-[#6D5DFC]/20 text-center">
+                <span className="text-xs text-[#6D5DFC] font-bold block">Total Enrolled Students</span>
+                <span className="font-display font-extrabold text-2xl text-[#111827] block mt-1">{loginStats.totalStudents}</span>
+              </div>
+              <div className="bg-[#ECFDF5] p-4 rounded-2xl border border-[#12B76A]/20 text-center">
+                <span className="text-xs text-[#12B76A] font-bold block">Logged In Today</span>
+                <span className="font-display font-extrabold text-2xl text-[#12B76A] block mt-1">{loginStats.loggedInToday}</span>
+              </div>
+              <div className="bg-blue-50 p-4 rounded-2xl border border-blue-200 text-center">
+                <span className="text-xs text-blue-600 font-bold block">Active Right Now (30m)</span>
+                <span className="font-display font-extrabold text-2xl text-blue-600 block mt-1">{loginStats.activeRightNow}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-[24px] border border-[#E7E7E7] shadow-enterprise overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-[#FAFAFA] border-b border-[#E7E7E7] text-[#6B7280] uppercase text-[10px] font-bold">
+                  <tr>
+                    <th className="p-4">Student Name</th>
+                    <th className="p-4">Register Number</th>
+                    <th className="p-4">Class</th>
+                    <th className="p-4">Login Time</th>
+                    <th className="p-4">Device</th>
+                    <th className="p-4">Browser</th>
+                    <th className="p-4">IP Address</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#E7E7E7]">
+                  {loginLogs.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="p-8 text-center text-[#6B7280]">
+                        No student login activity recorded yet.
+                      </td>
+                    </tr>
+                  ) : (
+                    loginLogs.map((log) => (
+                      <tr key={log.id} className="hover:bg-[#FAFAFA] transition-colors">
+                        <td className="p-4 font-bold text-[#111827] flex items-center gap-2">
+                          <img
+                            src={log.profile_photo || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150'}
+                            alt=""
+                            className="w-7 h-7 rounded-full border border-[#E7E7E7] object-cover"
+                          />
+                          <span>{log.student_name}</span>
+                        </td>
+                        <td className="p-4 font-mono text-[#6D5DFC] font-bold">{log.roll_number}</td>
+                        <td className="p-4 text-[#6B7280]">Yr {log.year || 3} • Sec {log.section || 'A'}</td>
+                        <td className="p-4 font-mono text-[#111827]">{new Date(log.login_time).toLocaleString()}</td>
+                        <td className="p-4 flex items-center gap-1.5 font-medium">
+                          <Laptop className="w-3.5 h-3.5 text-[#6B7280]" />
+                          <span>{log.device}</span>
+                        </td>
+                        <td className="p-4 font-medium">{log.browser}</td>
+                        <td className="p-4 font-mono text-[11px] text-[#6D5DFC] font-bold">{log.ip_address}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================================================== */}
+      {/* TAB 3: PASSWORD CONTROL CENTER & AUDIT LOGS */}
+      {/* ================================================== */}
+      {activeTab === 'password_center' && (
+        <div className="space-y-6">
+          <div className="bg-white p-6 rounded-[24px] border border-[#E7E7E7] shadow-enterprise space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-display font-bold text-base text-[#111827]">Password Security & Audit Center</h3>
+                <p className="text-xs text-[#6B7280] font-medium">Enforces bcrypt hashing, default password tracking, and password reset logs</p>
+              </div>
+              <button
+                onClick={fetchPasswordAuditLogs}
+                className="px-3.5 py-1.5 rounded-full bg-[#F3F0FF] text-[#6D5DFC] text-xs font-bold hover:bg-[#6D5DFC] hover:text-white transition-all flex items-center gap-1.5"
+              >
+                <RefreshCw className="w-3.5 h-3.5" /> Refresh Audit Logs
+              </button>
+            </div>
+
+            {/* Audit Log History Table */}
+            <div className="overflow-x-auto border border-[#E7E7E7] rounded-2xl">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-[#FAFAFA] border-b border-[#E7E7E7] text-[#6B7280] uppercase text-[10px] font-bold">
+                  <tr>
+                    <th className="p-3.5">Student Name</th>
+                    <th className="p-3.5">Register Number</th>
+                    <th className="p-3.5">Action Event</th>
+                    <th className="p-3.5">Changed By</th>
+                    <th className="p-3.5">Date & Time</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#E7E7E7]">
+                  {passwordAuditLogs.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="p-8 text-center text-[#6B7280]">
+                        No password change or reset audit logs recorded yet.
+                      </td>
+                    </tr>
+                  ) : (
+                    passwordAuditLogs.map((log) => (
+                      <tr key={log.id} className="hover:bg-[#FAFAFA] transition-colors">
+                        <td className="p-3.5 font-bold text-[#111827]">{log.student_name}</td>
+                        <td className="p-3.5 font-mono text-[#6D5DFC] font-bold">{log.roll_number}</td>
+                        <td className="p-3.5">
+                          <span className="px-2.5 py-0.5 rounded-full bg-[#F3F0FF] text-[#6D5DFC] border border-[#6D5DFC]/20 text-[10px] font-bold">
+                            {log.action}
+                          </span>
+                        </td>
+                        <td className="p-3.5 font-semibold text-[#111827]">{log.changed_by}</td>
+                        <td className="p-3.5 font-mono text-[#6B7280]">{new Date(log.changed_at).toLocaleString()}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================================================== */}
+      {/* MODAL 1: ADD NEW STUDENT MODAL */}
       {/* ================================================== */}
       {showAddModal && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-lg rounded-[28px] p-6 border border-[#E7E7E7] shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-xl rounded-[32px] p-6 sm:p-8 border border-[#E7E7E7] shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto relative animate-fade-in">
             <div className="flex items-center justify-between pb-3 border-b border-[#E7E7E7]">
-              <h3 className="font-display font-bold text-lg text-[#111827]">Add New Student Account</h3>
+              <div>
+                <h3 className="font-display font-extrabold text-lg text-[#111827]">Add New Student Account</h3>
+                <p className="text-xs text-[#6B7280] font-medium">Create a student profile with mandatory unique register & email validation</p>
+              </div>
               <button onClick={() => setShowAddModal(false)} className="text-[#6B7280] hover:text-[#111827]">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             <form onSubmit={handleAddStudent} className="space-y-3">
-              <div>
-                <label className="block text-[11px] font-semibold text-[#111827] mb-1">Student Full Name *</label>
-                <input
-                  type="text"
-                  required
-                  value={newStudent.name}
-                  onChange={(e) => setNewStudent({ ...newStudent, name: e.target.value })}
-                  placeholder="e.g. DHANUSH D"
-                  className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827]"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
+              {/* Student Details */}
+              <div className="space-y-2">
+                <h4 className="text-xs font-bold text-[#6D5DFC] uppercase tracking-wider">Student Details</h4>
                 <div>
-                  <label className="block text-[11px] font-semibold text-[#111827] mb-1">Register Number *</label>
+                  <label className="block text-[11px] font-semibold text-[#111827] mb-1">Student Full Name *</label>
                   <input
                     type="text"
                     required
-                    value={newStudent.roll_number}
-                    onChange={(e) => setNewStudent({ ...newStudent, roll_number: e.target.value })}
-                    placeholder="1130242430302"
-                    className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827] font-mono"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[11px] font-semibold text-[#111827] mb-1">Email Address *</label>
-                  <input
-                    type="email"
-                    required
-                    value={newStudent.email}
-                    onChange={(e) => setNewStudent({ ...newStudent, email: e.target.value })}
-                    placeholder="student@univ.edu"
+                    value={newStudent.name}
+                    onChange={(e) => setNewStudent({ ...newStudent, name: e.target.value })}
+                    placeholder="e.g. ABASKAR N"
                     className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827]"
                   />
                 </div>
-              </div>
 
-              <div className="grid grid-cols-3 gap-2">
-                <div>
-                  <label className="block text-[11px] font-semibold text-[#111827] mb-1">Department</label>
-                  <select
-                    value={newStudent.department}
-                    onChange={(e) => setNewStudent({ ...newStudent, department: e.target.value })}
-                    className="w-full px-2.5 py-2 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827]"
-                  >
-                    <option value="AI & Data Science">AI & Data Science</option>
-                    <option value="Computer Science">Computer Science</option>
-                    <option value="Electronics">Electronics</option>
-                    <option value="Mechanical">Mechanical</option>
-                  </select>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[11px] font-semibold text-[#111827] mb-1">Register Number * (Unique)</label>
+                    <input
+                      type="text"
+                      required
+                      value={newStudent.roll_number}
+                      onChange={(e) => setNewStudent({ ...newStudent, roll_number: e.target.value })}
+                      placeholder="1130242430302"
+                      className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827] font-mono"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-semibold text-[#111827] mb-1">Email Address * (Unique)</label>
+                    <input
+                      type="email"
+                      required
+                      value={newStudent.email}
+                      onChange={(e) => setNewStudent({ ...newStudent, email: e.target.value })}
+                      placeholder="abaskar@univ.edu"
+                      className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827]"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2">
+                  <div>
+                    <label className="block text-[11px] font-semibold text-[#111827] mb-1">Department</label>
+                    <select
+                      value={newStudent.department}
+                      onChange={(e) => setNewStudent({ ...newStudent, department: e.target.value })}
+                      className="w-full px-2.5 py-2 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827]"
+                    >
+                      <option value="AI & Data Science">AI & Data Science</option>
+                      <option value="Computer Science">Computer Science</option>
+                      <option value="Electronics">Electronics</option>
+                      <option value="Mechanical">Mechanical</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-semibold text-[#111827] mb-1">Year</label>
+                    <select
+                      value={newStudent.year}
+                      onChange={(e) => setNewStudent({ ...newStudent, year: e.target.value })}
+                      className="w-full px-2.5 py-2 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827]"
+                    >
+                      <option value="1">1st Year</option>
+                      <option value="2">2nd Year</option>
+                      <option value="3">3rd Year</option>
+                      <option value="4">4th Year</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-semibold text-[#111827] mb-1">Section</label>
+                    <select
+                      value={newStudent.section}
+                      onChange={(e) => setNewStudent({ ...newStudent, section: e.target.value })}
+                      className="w-full px-2.5 py-2 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827]"
+                    >
+                      <option value="A">Sec A</option>
+                      <option value="B">Sec B</option>
+                      <option value="C">Sec C</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[11px] font-semibold text-[#111827] mb-1">Phone Number (Unique)</label>
+                    <input
+                      type="text"
+                      value={newStudent.phone}
+                      onChange={(e) => setNewStudent({ ...newStudent, phone: e.target.value })}
+                      placeholder="+91-9876543210"
+                      className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-semibold text-[#111827] mb-1">Date of Birth</label>
+                    <input
+                      type="date"
+                      value={newStudent.dob}
+                      onChange={(e) => setNewStudent({ ...newStudent, dob: e.target.value })}
+                      className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827]"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[11px] font-semibold text-[#111827] mb-1">Gender</label>
+                    <select
+                      value={newStudent.gender}
+                      onChange={(e) => setNewStudent({ ...newStudent, gender: e.target.value })}
+                      className="w-full px-2.5 py-2 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827]"
+                    >
+                      <option value="Male">Male</option>
+                      <option value="Female">Female</option>
+                      <option value="Other">Other</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-semibold text-[#111827] mb-1">Admission Year</label>
+                    <input
+                      type="number"
+                      value={newStudent.admission_year}
+                      onChange={(e) => setNewStudent({ ...newStudent, admission_year: e.target.value })}
+                      className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827]"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[11px] font-semibold text-[#111827] mb-1">Parent Name</label>
+                    <input
+                      type="text"
+                      value={newStudent.parent_name}
+                      onChange={(e) => setNewStudent({ ...newStudent, parent_name: e.target.value })}
+                      placeholder="Parent Name"
+                      className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-semibold text-[#111827] mb-1">Parent Phone</label>
+                    <input
+                      type="text"
+                      value={newStudent.parent_phone}
+                      onChange={(e) => setNewStudent({ ...newStudent, parent_phone: e.target.value })}
+                      placeholder="Parent Phone"
+                      className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827]"
+                    />
+                  </div>
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-semibold text-[#111827] mb-1">Year</label>
-                  <select
-                    value={newStudent.year}
-                    onChange={(e) => setNewStudent({ ...newStudent, year: e.target.value })}
-                    className="w-full px-2.5 py-2 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827]"
-                  >
-                    <option value="1">1st Year</option>
-                    <option value="2">2nd Year</option>
-                    <option value="3">3rd Year</option>
-                    <option value="4">4th Year</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-[11px] font-semibold text-[#111827] mb-1">Section</label>
-                  <select
-                    value={newStudent.section}
-                    onChange={(e) => setNewStudent({ ...newStudent, section: e.target.value })}
-                    className="w-full px-2.5 py-2 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827]"
-                  >
-                    <option value="A">Sec A</option>
-                    <option value="B">Sec B</option>
-                    <option value="C">Sec C</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-[11px] font-semibold text-[#111827] mb-1">Phone Number</label>
+                  <label className="block text-[11px] font-semibold text-[#111827] mb-1">Address</label>
                   <input
                     type="text"
-                    value={newStudent.phone}
-                    onChange={(e) => setNewStudent({ ...newStudent, phone: e.target.value })}
-                    placeholder="+1-555-0199"
-                    className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827]"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[11px] font-semibold text-[#111827] mb-1">Date of Birth</label>
-                  <input
-                    type="date"
-                    value={newStudent.dob}
-                    onChange={(e) => setNewStudent({ ...newStudent, dob: e.target.value })}
+                    value={newStudent.address}
+                    onChange={(e) => setNewStudent({ ...newStudent, address: e.target.value })}
+                    placeholder="Full Address"
                     className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827]"
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-[11px] font-semibold text-[#111827] mb-1">Blood Group</label>
-                  <select
-                    value={newStudent.blood_group}
-                    onChange={(e) => setNewStudent({ ...newStudent, blood_group: e.target.value })}
-                    className="w-full px-2.5 py-2 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827]"
-                  >
-                    <option value="A+">A+</option>
-                    <option value="A-">A-</option>
-                    <option value="B+">B+</option>
-                    <option value="B-">B-</option>
-                    <option value="O+">O+</option>
-                    <option value="O-">O-</option>
-                    <option value="AB+">AB+</option>
-                    <option value="AB-">AB-</option>
-                  </select>
+              {/* Account Details */}
+              <div className="space-y-2 pt-2 border-t border-[#E7E7E7]">
+                <h4 className="text-xs font-bold text-[#6D5DFC] uppercase tracking-wider">Account Details</h4>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[11px] font-semibold text-[#111827] mb-1">Account Status</label>
+                    <select
+                      value={newStudent.status}
+                      onChange={(e) => setNewStudent({ ...newStudent, status: e.target.value })}
+                      className="w-full px-2.5 py-2 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827]"
+                    >
+                      <option value="Active">Active</option>
+                      <option value="Inactive">Inactive</option>
+                      <option value="Suspended">Suspended</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-semibold text-[#111827] mb-1">Default Password</label>
+                    <input
+                      type="text"
+                      disabled
+                      value="1234 (Auto Generated)"
+                      className="w-full px-3.5 py-2.5 rounded-2xl bg-[#F3F0FF] border border-[#6D5DFC]/20 text-xs font-mono font-bold text-[#6D5DFC]"
+                    />
+                  </div>
                 </div>
 
-                <div>
-                  <label className="block text-[11px] font-semibold text-[#111827] mb-1">Parent Phone</label>
-                  <input
-                    type="text"
-                    value={newStudent.parent_phone}
-                    onChange={(e) => setNewStudent({ ...newStudent, parent_phone: e.target.value })}
-                    placeholder="+1-555-0999"
-                    className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827]"
-                  />
+                <div className="p-3 rounded-2xl bg-[#F3F0FF] border border-[#6D5DFC]/20 text-[11px] text-[#6D5DFC] font-medium">
+                  Auto-generates default password <code className="font-mono bg-white px-1.5 py-0.5 rounded font-bold border border-[#6D5DFC]/30">1234</code> hashed with bcrypt. Force password setup is triggered automatically on first login.
                 </div>
               </div>
 
-              <div>
-                <label className="block text-[11px] font-semibold text-[#111827] mb-1">Parent / Guardian Name</label>
-                <input
-                  type="text"
-                  value={newStudent.parent_name}
-                  onChange={(e) => setNewStudent({ ...newStudent, parent_name: e.target.value })}
-                  placeholder="Parent Name"
-                  className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827]"
-                />
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-[#E7E7E7]">
+                <button
+                  type="button"
+                  onClick={() => setShowAddModal(false)}
+                  className="px-5 py-2.5 rounded-full bg-[#FAFAFA] border border-[#E7E7E7] text-xs font-bold text-[#111827] hover:bg-gray-100"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-6 py-2.5 rounded-full bg-[#6D5DFC] font-extrabold text-xs text-white shadow-floating hover:bg-[#5b4be0]"
+                >
+                  Save Student
+                </button>
               </div>
-
-              <div>
-                <label className="block text-[11px] font-semibold text-[#111827] mb-1">Home Address</label>
-                <input
-                  type="text"
-                  value={newStudent.address}
-                  onChange={(e) => setNewStudent({ ...newStudent, address: e.target.value })}
-                  placeholder="Residential Address"
-                  className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827]"
-                />
-              </div>
-
-              <div className="p-3.5 rounded-2xl bg-[#F3F0FF] border border-[#6D5DFC]/20 text-[11px] text-[#6D5DFC] font-medium">
-                Default initial password is <code className="font-mono bg-white px-1.5 py-0.5 rounded border border-[#6D5DFC]/30 font-bold">1234</code>. Password change is enforced on first login.
-              </div>
-
-              <button
-                type="submit"
-                className="w-full py-3.5 rounded-full bg-[#6D5DFC] font-bold text-xs text-white shadow-floating hover:bg-[#5b4be0]"
-              >
-                Create Student Account
-              </button>
             </form>
           </div>
         </div>
       )}
 
       {/* ================================================== */}
-      {/* 3. EDIT STUDENT MODAL */}
+      {/* MODAL 2: EDIT STUDENT MODAL */}
       {/* ================================================== */}
       {showEditModal && editingStudent && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-lg rounded-[28px] p-6 border border-[#E7E7E7] shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-xl rounded-[32px] p-6 sm:p-8 border border-[#E7E7E7] shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto relative animate-fade-in">
             <div className="flex items-center justify-between pb-3 border-b border-[#E7E7E7]">
-              <h3 className="font-display font-bold text-lg text-[#111827]">Edit Student Profile Details</h3>
+              <div>
+                <h3 className="font-display font-extrabold text-lg text-[#111827]">Edit Student Account</h3>
+                <p className="text-xs text-[#6B7280] font-medium">Modify credentials, section, department, and status</p>
+              </div>
               <button onClick={() => setShowEditModal(false)} className="text-[#6B7280] hover:text-[#111827]">
                 <X className="w-5 h-5" />
               </button>
@@ -802,7 +1277,7 @@ export const StudentManagement: React.FC = () => {
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block text-[11px] font-semibold text-[#111827] mb-1">Roll / Register No</label>
+                  <label className="block text-[11px] font-semibold text-[#111827] mb-1">Register Number</label>
                   <input
                     type="text"
                     required
@@ -874,109 +1349,402 @@ export const StudentManagement: React.FC = () => {
                     type="text"
                     value={editingStudent.phone}
                     onChange={(e) => setEditingStudent({ ...editingStudent, phone: e.target.value })}
-                    placeholder="+1-555-0199"
                     className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827]"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-semibold text-[#111827] mb-1">Date of Birth</label>
-                  <input
-                    type="date"
-                    value={editingStudent.dob}
-                    onChange={(e) => setEditingStudent({ ...editingStudent, dob: e.target.value })}
-                    className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827]"
-                  />
+                  <label className="block text-[11px] font-semibold text-[#111827] mb-1">Account Status</label>
+                  <select
+                    value={editingStudent.status}
+                    onChange={(e) => setEditingStudent({ ...editingStudent, status: e.target.value })}
+                    className="w-full px-2.5 py-2 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827]"
+                  >
+                    <option value="Active">Active</option>
+                    <option value="Inactive">Inactive</option>
+                    <option value="Suspended">Suspended</option>
+                  </select>
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block text-[11px] font-semibold text-[#111827] mb-1">Blood Group</label>
-                  <select
-                    value={editingStudent.blood_group}
-                    onChange={(e) => setEditingStudent({ ...editingStudent, blood_group: e.target.value })}
-                    className="w-full px-2.5 py-2 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827]"
-                  >
-                    <option value="A+">A+</option>
-                    <option value="A-">A-</option>
-                    <option value="B+">B+</option>
-                    <option value="B-">B-</option>
-                    <option value="O+">O+</option>
-                    <option value="O-">O-</option>
-                    <option value="AB+">AB+</option>
-                    <option value="AB-">AB-</option>
-                  </select>
+                  <label className="block text-[11px] font-semibold text-[#111827] mb-1">Parent Name</label>
+                  <input
+                    type="text"
+                    value={editingStudent.parent_name}
+                    onChange={(e) => setEditingStudent({ ...editingStudent, parent_name: e.target.value })}
+                    className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827]"
+                  />
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-semibold text-[#111827] mb-1">Parent Contact</label>
+                  <label className="block text-[11px] font-semibold text-[#111827] mb-1">Parent Phone</label>
                   <input
                     type="text"
                     value={editingStudent.parent_phone}
                     onChange={(e) => setEditingStudent({ ...editingStudent, parent_phone: e.target.value })}
-                    placeholder="+1-555-0999"
                     className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827]"
                   />
                 </div>
               </div>
 
-              <div>
-                <label className="block text-[11px] font-semibold text-[#111827] mb-1">Parent / Guardian Name</label>
-                <input
-                  type="text"
-                  value={editingStudent.parent_name}
-                  onChange={(e) => setEditingStudent({ ...editingStudent, parent_name: e.target.value })}
-                  placeholder="Parent Name"
-                  className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827]"
-                />
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-[#E7E7E7]">
+                <button
+                  type="button"
+                  onClick={() => setShowEditModal(false)}
+                  className="px-5 py-2.5 rounded-full bg-[#FAFAFA] border border-[#E7E7E7] text-xs font-bold text-[#111827]"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-6 py-2.5 rounded-full bg-[#6D5DFC] font-extrabold text-xs text-white shadow-floating hover:bg-[#5b4be0]"
+                >
+                  Save Changes
+                </button>
               </div>
-
-              <div>
-                <label className="block text-[11px] font-semibold text-[#111827] mb-1">Home Address</label>
-                <input
-                  type="text"
-                  value={editingStudent.address}
-                  onChange={(e) => setEditingStudent({ ...editingStudent, address: e.target.value })}
-                  placeholder="Residential Address"
-                  className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827]"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-semibold text-[#111827] mb-1">Bio / Personal Notes</label>
-                <textarea
-                  rows={2}
-                  value={editingStudent.bio}
-                  onChange={(e) => setEditingStudent({ ...editingStudent, bio: e.target.value })}
-                  placeholder="Bio or notes..."
-                  className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827]"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-semibold text-[#111827] mb-1">Reset Password (Optional)</label>
-                <input
-                  type="password"
-                  placeholder="Leave empty to keep current password"
-                  value={editingStudent.new_password || ''}
-                  onChange={(e) => setEditingStudent({ ...editingStudent, new_password: e.target.value })}
-                  className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827]"
-                />
-              </div>
-
-              <button
-                type="submit"
-                className="w-full py-3.5 rounded-full bg-[#6D5DFC] font-bold text-xs text-white shadow-floating hover:bg-[#5b4be0] mt-2"
-              >
-                Save Updated Profile Details
-              </button>
             </form>
           </div>
         </div>
       )}
 
-      {/* Bulk Import Excel Modal */}
+      {/* ================================================== */}
+      {/* MODAL 3: FULL STUDENT PROFILE VIEW MODAL */}
+      {/* ================================================== */}
+      {showViewModal && viewingStudentProfile && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-3xl rounded-[32px] p-6 sm:p-8 border border-[#E7E7E7] shadow-2xl space-y-6 max-h-[90vh] overflow-y-auto relative animate-fade-in">
+            <div className="flex items-center justify-between pb-4 border-b border-[#E7E7E7]">
+              <div className="flex items-center gap-3">
+                <img
+                  src={viewingStudentProfile.profile.profile_photo || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150'}
+                  alt=""
+                  className="w-16 h-16 rounded-full border-2 border-[#6D5DFC]/30 object-cover shadow-sm"
+                />
+                <div>
+                  <h3 className="font-display font-extrabold text-xl text-[#111827]">{viewingStudentProfile.profile.name}</h3>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="px-2.5 py-0.5 rounded-full bg-[#F3F0FF] text-[#6D5DFC] border border-[#6D5DFC]/20 text-[10px] font-mono font-bold">
+                      {viewingStudentProfile.profile.roll_number}
+                    </span>
+                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase border ${
+                      viewingStudentProfile.profile.status === 'Suspended' ? 'bg-rose-50 text-rose-700 border-rose-200' : 'bg-[#ECFDF5] text-[#12B76A] border-[#12B76A]/20'
+                    }`}>
+                      {viewingStudentProfile.profile.status || 'Active'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setShowViewModal(false)}
+                className="w-9 h-9 rounded-full bg-[#FAFAFA] text-[#6B7280] hover:text-[#111827] flex items-center justify-center border border-[#E7E7E7]"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Attendance Summary Panel */}
+            <div className="bg-[#FAF9FF] p-4 rounded-2xl border border-[#6D5DFC]/20 space-y-3">
+              <h4 className="text-xs font-extrabold text-[#6D5DFC] uppercase tracking-wider flex items-center gap-1.5">
+                <Sparkles className="w-4 h-4" /> Attendance Summary
+              </h4>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
+                <div className="bg-white p-3 rounded-2xl border border-[#E7E7E7]">
+                  <span className="text-[10px] text-[#6B7280] font-bold uppercase block">Overall Rate</span>
+                  <span className="font-display font-extrabold text-xl text-[#6D5DFC] block mt-0.5">{viewingStudentProfile.attendanceSummary.overallRate}%</span>
+                </div>
+                <div className="bg-white p-3 rounded-2xl border border-[#ECFDF5]">
+                  <span className="text-[10px] text-[#12B76A] font-bold uppercase block">Present Count</span>
+                  <span className="font-display font-extrabold text-xl text-[#12B76A] block mt-0.5">{viewingStudentProfile.attendanceSummary.presentCount}</span>
+                </div>
+                <div className="bg-white p-3 rounded-2xl border border-rose-100">
+                  <span className="text-[10px] text-rose-600 font-bold uppercase block">Absent Count</span>
+                  <span className="font-display font-extrabold text-xl text-rose-600 block mt-0.5">{viewingStudentProfile.attendanceSummary.absentCount}</span>
+                </div>
+                <div className="bg-white p-3 rounded-2xl border border-[#E7E7E7]">
+                  <span className="text-[10px] text-[#6B7280] font-bold uppercase block">Last Attended</span>
+                  <span className="font-mono text-xs font-bold text-[#111827] block mt-1">
+                    {viewingStudentProfile.attendanceSummary.lastAttendanceDate
+                      ? new Date(viewingStudentProfile.attendanceSummary.lastAttendanceDate).toLocaleDateString()
+                      : 'N/A'}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* QR Scan History Table */}
+            <div className="space-y-2">
+              <h4 className="text-xs font-bold text-[#111827] uppercase tracking-wider flex items-center gap-1.5">
+                <BookOpen className="w-4 h-4 text-[#6D5DFC]" /> QR Scan History ({viewingStudentProfile.qrScanHistory.length})
+              </h4>
+              <div className="overflow-x-auto border border-[#E7E7E7] rounded-2xl max-h-44">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-[#FAFAFA] border-b border-[#E7E7E7] text-[#64748B] uppercase text-[10px] font-bold">
+                    <tr>
+                      <th className="py-2.5 px-3">Subject</th>
+                      <th className="py-2.5 px-3">Date</th>
+                      <th className="py-2.5 px-3">Time</th>
+                      <th className="py-2.5 px-3">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#E7E7E7]">
+                    {viewingStudentProfile.qrScanHistory.length === 0 ? (
+                      <tr>
+                        <td colSpan={4} className="py-4 text-center text-[#6B7280]">
+                          No QR scan records found.
+                        </td>
+                      </tr>
+                    ) : (
+                      viewingStudentProfile.qrScanHistory.map((rec) => (
+                        <tr key={rec.id} className="hover:bg-[#FAFAFA]">
+                          <td className="py-2.5 px-3 font-bold text-[#111827]">{rec.subject || 'Session Attendance'}</td>
+                          <td className="py-2.5 px-3 font-mono">{rec.session_date || new Date(rec.attendance_time).toLocaleDateString()}</td>
+                          <td className="py-2.5 px-3 font-mono text-[#6D5DFC] font-bold">{new Date(rec.attendance_time).toLocaleTimeString()}</td>
+                          <td className="py-2.5 px-3">
+                            <span className="px-2 py-0.5 rounded-full bg-[#ECFDF5] text-[#12B76A] border border-[#12B76A]/20 font-bold text-[10px]">
+                              {rec.status}
+                            </span>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Login History */}
+            <div className="space-y-2">
+              <h4 className="text-xs font-bold text-[#111827] uppercase tracking-wider flex items-center gap-1.5">
+                <Activity className="w-4 h-4 text-[#6D5DFC]" /> Recent Login History ({viewingStudentProfile.loginHistory.length})
+              </h4>
+              <div className="overflow-x-auto border border-[#E7E7E7] rounded-2xl max-h-40">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-[#FAFAFA] border-b border-[#E7E7E7] text-[#64748B] uppercase text-[10px] font-bold">
+                    <tr>
+                      <th className="py-2.5 px-3">Date & Time</th>
+                      <th className="py-2.5 px-3">Device</th>
+                      <th className="py-2.5 px-3">Browser</th>
+                      <th className="py-2.5 px-3">IP Address</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#E7E7E7]">
+                    {viewingStudentProfile.loginHistory.length === 0 ? (
+                      <tr>
+                        <td colSpan={4} className="py-4 text-center text-[#6B7280]">
+                          No login history recorded yet.
+                        </td>
+                      </tr>
+                    ) : (
+                      viewingStudentProfile.loginHistory.map((log) => (
+                        <tr key={log.id} className="hover:bg-[#FAFAFA]">
+                          <td className="py-2.5 px-3 font-mono">{new Date(log.login_time).toLocaleString()}</td>
+                          <td className="py-2.5 px-3 font-medium">{log.device}</td>
+                          <td className="py-2.5 px-3">{log.browser}</td>
+                          <td className="py-2.5 px-3 font-mono text-[#6D5DFC] font-bold">{log.ip_address}</td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between pt-4 border-t border-[#E7E7E7]">
+              <button
+                onClick={() => triggerDeleteStudent(viewingStudentProfile.profile)}
+                className="px-4 py-2 rounded-full bg-rose-50 border border-rose-200 text-rose-600 text-xs font-bold hover:bg-rose-100 flex items-center gap-1.5"
+              >
+                <Trash2 className="w-4 h-4" /> Delete Permanently
+              </button>
+
+              <button
+                onClick={() => {
+                  setShowViewModal(false);
+                  openEditModal(viewingStudentProfile.profile);
+                }}
+                className="px-5 py-2.5 rounded-full bg-[#6D5DFC] text-white text-xs font-bold shadow-floating hover:bg-[#5b4be0] flex items-center gap-1.5"
+              >
+                <Edit className="w-4 h-4" /> Edit Student Details
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================================================== */}
+      {/* MODAL 4: DELETE PERMANENTLY WARNING MODAL */}
+      {/* ================================================== */}
+      {showDeleteConfirmModal && studentToDelete && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-md rounded-[28px] p-6 border border-rose-100 shadow-2xl space-y-4 text-center animate-fade-in relative">
+            <div className="w-14 h-14 rounded-2xl bg-rose-50 border border-rose-200 text-rose-600 flex items-center justify-center mx-auto">
+              <AlertTriangle className="w-7 h-7" />
+            </div>
+
+            <div>
+              <h3 className="font-display font-extrabold text-lg text-[#111827]">
+                Permanently Delete Student?
+              </h3>
+              <p className="text-xs text-[#6B7280] font-medium mt-2 leading-relaxed">
+                Are you sure you want to permanently delete <strong>{studentToDelete.name}</strong> ({studentToDelete.roll_number})?
+                <br /><br />
+                <span className="text-rose-600 font-bold">This action cannot be undone.</span> All attendance records, login history, QR scan logs, and analytics data will be permanently removed from the database.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-center gap-3 pt-2">
+              <button
+                onClick={() => setShowDeleteConfirmModal(false)}
+                className="w-1/2 py-3 rounded-full bg-[#FAFAFA] border border-[#E7E7E7] text-xs font-bold text-[#111827] hover:bg-gray-100"
+              >
+                Cancel
+              </button>
+
+              <button
+                onClick={confirmDeleteStudent}
+                className="w-1/2 py-3 rounded-full bg-rose-600 text-white font-extrabold text-xs shadow-floating hover:bg-rose-700 transition-all"
+              >
+                Delete Permanently
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================================================== */}
+      {/* MODAL 5: BULK DELETE WARNING MODAL */}
+      {/* ================================================== */}
+      {showBulkDeleteModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-md rounded-[28px] p-6 border border-rose-100 shadow-2xl space-y-4 text-center animate-fade-in relative">
+            <div className="w-14 h-14 rounded-2xl bg-rose-50 border border-rose-200 text-rose-600 flex items-center justify-center mx-auto">
+              <AlertTriangle className="w-7 h-7" />
+            </div>
+
+            <div>
+              <h3 className="font-display font-extrabold text-lg text-[#111827]">
+                Bulk Delete {selectedStudentIds.length} Selected Students?
+              </h3>
+              <p className="text-xs text-[#6B7280] font-medium mt-2 leading-relaxed">
+                Are you sure you want to permanently delete all {selectedStudentIds.length} selected student accounts?
+                <br /><br />
+                <span className="text-rose-600 font-bold">This action cannot be undone.</span> All associated attendance, login, and audit records will be removed.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-center gap-3 pt-2">
+              <button
+                onClick={() => setShowBulkDeleteModal(false)}
+                className="w-1/2 py-3 rounded-full bg-[#FAFAFA] border border-[#E7E7E7] text-xs font-bold text-[#111827]"
+              >
+                Cancel
+              </button>
+
+              <button
+                onClick={confirmBulkDelete}
+                className="w-1/2 py-3 rounded-full bg-rose-600 text-white font-extrabold text-xs shadow-floating hover:bg-rose-700 transition-all"
+              >
+                Delete All Selected
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================================================== */}
+      {/* MODAL 6: RESET PASSWORD MODAL */}
+      {/* ================================================== */}
+      {showResetPasswordModal && resetPassTarget && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-md rounded-[28px] p-6 border border-[#E7E7E7] shadow-2xl space-y-4 animate-fade-in relative">
+            <div className="flex items-center justify-between pb-3 border-b border-[#E7E7E7]">
+              <div>
+                <h3 className="font-display font-bold text-lg text-[#111827]">🔑 Password Reset Control</h3>
+                <p className="text-xs text-[#6B7280] font-medium">For {resetPassTarget.name} ({resetPassTarget.roll_number})</p>
+              </div>
+              <button onClick={() => setShowResetPasswordModal(false)} className="text-[#6B7280] hover:text-[#111827]">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleResetPasswordSubmit} className="space-y-4">
+              <div className="space-y-2">
+                <label className="block text-xs font-bold text-[#111827]">Select Password Reset Option</label>
+                <div className="space-y-2">
+                  <label className="flex items-center gap-2 p-3 rounded-2xl border border-[#E7E7E7] cursor-pointer hover:bg-[#FAFAFA]">
+                    <input
+                      type="radio"
+                      name="resetType"
+                      checked={resetPassType === 'default'}
+                      onChange={() => setResetPassType('default')}
+                      className="text-[#6D5DFC]"
+                    />
+                    <div>
+                      <span className="text-xs font-bold text-[#111827] block">Reset to Default Password (1234)</span>
+                      <span className="text-[10px] text-[#6B7280]">Resets password to "1234" and enforces mandatory password setup on next login.</span>
+                    </div>
+                  </label>
+
+                  <label className="flex items-center gap-2 p-3 rounded-2xl border border-[#E7E7E7] cursor-pointer hover:bg-[#FAFAFA]">
+                    <input
+                      type="radio"
+                      name="resetType"
+                      checked={resetPassType === 'custom'}
+                      onChange={() => setResetPassType('custom')}
+                      className="text-[#6D5DFC]"
+                    />
+                    <div>
+                      <span className="text-xs font-bold text-[#111827] block">Generate Custom Password</span>
+                      <span className="text-[10px] text-[#6B7280]">Specify a custom password to assign directly.</span>
+                    </div>
+                  </label>
+                </div>
+              </div>
+
+              {resetPassType === 'custom' && (
+                <div>
+                  <label className="block text-xs font-semibold text-[#111827] mb-1">New Custom Password *</label>
+                  <input
+                    type="text"
+                    required
+                    value={customGeneratedPassword}
+                    onChange={(e) => setCustomGeneratedPassword(e.target.value)}
+                    placeholder="e.g. StudentPass@2026"
+                    className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827] font-mono"
+                  />
+                </div>
+              )}
+
+              <div className="p-3 rounded-2xl bg-amber-50 border border-amber-200 text-amber-800 text-[11px]">
+                🛡 Security Policy: Actual passwords are standard bcrypt hashed. Password resets are logged in the Password Audit Logs.
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#E7E7E7]">
+                <button
+                  type="button"
+                  onClick={() => setShowResetPasswordModal(false)}
+                  className="px-5 py-2.5 rounded-full bg-[#FAFAFA] border border-[#E7E7E7] text-xs font-bold text-[#111827]"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-6 py-2.5 rounded-full bg-amber-600 font-extrabold text-xs text-white shadow-floating hover:bg-amber-700"
+                >
+                  Reset Password Now
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ================================================== */}
+      {/* MODAL 7: BULK IMPORT EXCEL MODAL */}
+      {/* ================================================== */}
       {showImportModal && (
         <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-md flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-md rounded-[24px] p-6 border border-[#E7E7E7] shadow-2xl space-y-4 text-center">
@@ -989,8 +1757,8 @@ export const StudentManagement: React.FC = () => {
 
             <div className="p-8 border-2 border-dashed border-[#E7E7E7] hover:border-[#12B76A] rounded-2xl bg-[#FAFAFA] transition-colors space-y-3">
               <Upload className="w-10 h-10 text-[#12B76A] mx-auto animate-bounce" />
-              <p className="text-xs text-[#111827] font-bold">Upload Excel File (.xlsx / .csv)</p>
-              <p className="text-[10px] text-[#6B7280]">Columns: name, roll_number, email, department, year, section</p>
+              <p className="text-xs text-[#111827] font-bold">Upload Excel / CSV File (.xlsx / .csv)</p>
+              <p className="text-[10px] text-[#6B7280]">Columns: Register Number, Name, Email, Phone, Department, Year, Section</p>
               <input
                 type="file"
                 accept=".xlsx, .xls, .csv"

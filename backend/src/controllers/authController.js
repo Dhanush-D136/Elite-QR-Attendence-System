@@ -61,7 +61,11 @@ function adminLogin(req, res) {
 }
 
 function isValidPasswordComplexity(pwd) {
-  if (!pwd || pwd.trim() === '') return false;
+  if (!pwd || typeof pwd !== 'string') return false;
+  if (pwd.length < 8) return false;
+  if (!/[A-Z]/.test(pwd)) return false;
+  if (!/[0-9]/.test(pwd)) return false;
+  if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(pwd)) return false;
   return true;
 }
 
@@ -101,6 +105,19 @@ function studentLogin(req, res) {
       db.run('UPDATE users SET device_fingerprint = ? WHERE id = ?', [device_fingerprint, user.id]);
       registeredDevice = device_fingerprint;
     }
+
+    // Log student login event
+    const logId = uuidv4();
+    const rawIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '127.0.0.1';
+    const ip = Array.isArray(rawIp) ? rawIp[0] : (rawIp.includes(',') ? rawIp.split(',')[0].trim() : rawIp);
+    const ua = req.headers['user-agent'] || 'Unknown Browser';
+    const device = ua.includes('Mobile') || ua.includes('Android') || ua.includes('iPhone') ? 'Mobile Device' : 'Desktop PC';
+    const browser = ua.includes('Chrome') ? 'Chrome' : ua.includes('Firefox') ? 'Firefox' : ua.includes('Safari') ? 'Safari' : 'Web Browser';
+
+    db.run(
+      `INSERT INTO login_logs (id, student_id, login_time, ip_address, device, browser) VALUES (?, ?, CURRENT_TIMESTAMP, ?, ?, ?)`,
+      [logId, user.id, ip, device, browser]
+    );
 
     const token = jwt.sign(
       { id: user.id, name: user.name, roll_number: user.roll_number, email: user.email, role: 'student', department: user.department, year: user.year, section: user.section },
@@ -142,7 +159,7 @@ async function firstTimePasswordChange(req, res) {
 
   if (!isValidPasswordComplexity(new_password)) {
     return res.status(400).json({
-      error: 'Please enter a valid new password.'
+      error: 'Password requirement failed: Must be at least 8 characters long, contain 1 uppercase letter, 1 number, and 1 special character (!@#$%^&*).'
     });
   }
 
@@ -154,6 +171,12 @@ async function firstTimePasswordChange(req, res) {
     [password_hash, now, device_fingerprint || null, userId],
     function (err) {
       if (err) return res.status(500).json({ error: 'Failed to update password: ' + err.message });
+
+      const auditId = uuidv4();
+      db.run(
+        `INSERT INTO password_audit_logs (id, student_id, changed_by, action, changed_at) VALUES (?, ?, 'Student', 'First-Time Password Setup', CURRENT_TIMESTAMP)`,
+        [auditId, userId]
+      );
 
       db.get('SELECT * FROM users WHERE id = ?', [userId], (err, user) => {
         if (err || !user) return res.status(500).json({ error: 'User fetch error' });
