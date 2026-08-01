@@ -120,7 +120,9 @@ export const AdminDashboard: React.FC = () => {
             </div>
           </div>
           <div>
-            <p className="font-display font-extrabold text-2xl text-[#6D5DFC]">{overview.attendancePercentage}%</p>
+            <p className="font-display font-extrabold text-2xl text-[#6D5DFC]">
+              {overview.attendancePercentage !== null && overview.attendancePercentage !== undefined ? `${overview.attendancePercentage}%` : '--'}
+            </p>
             <p className="text-[11px] text-[#6B7280] font-medium mt-0.5">Institutional daily average</p>
           </div>
         </div>
@@ -208,7 +210,7 @@ export const AdminDashboard: React.FC = () => {
           </div>
 
           <p className="text-[11px] text-[#6B7280] text-center pt-3 border-t border-[#E7E7E7] font-medium">
-            SmartAttend Pro Socket.IO Realtime Telemetry
+            Elite Minds Attendance Portal Realtime Telemetry
           </p>
         </div>
       </div>

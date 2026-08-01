@@ -88,8 +88,11 @@ export const SessionHub: React.FC<SessionHubProps> = ({
             setSubject(match.subject_name);
             setFacultyName(match.faculty_name);
             setPeriodNumber(String(match.period_number || 1));
+          } else {
+            setSubject(initialSubject);
+            if (initialFaculty) setFacultyName(initialFaculty);
           }
-        } else {
+        } else if (!subject) {
           const first = fetchedTt[0];
           setSelectedTimetableId(first.id);
           setSubject(first.subject_name);
@@ -261,7 +264,7 @@ export const SessionHub: React.FC<SessionHubProps> = ({
         <div>
           <h1 className="font-display font-extrabold text-2xl text-[#111827]">Live Dynamic QR Attendance Hub</h1>
           <p className="text-xs text-[#6B7280] font-medium mt-1">
-            Real-time anti-fraud attendance session manager for AI&DS III-A
+            Real-time attendance session manager for Elite Minds Attendance Portal
           </p>
         </div>
       </div>

@@ -130,7 +130,7 @@ function getSubjects(req, res) {
             const presentCount = matchedRecords.length;
 
             const totalPossible = classesHeld * totalStudents;
-            const avgPercentage = totalPossible > 0 ? Math.min(100, Math.round((presentCount / totalPossible) * 100)) : (classesHeld > 0 ? 85 : 0);
+            const avgPercentage = classesHeld > 0 && totalPossible > 0 ? Math.min(100, Math.round((presentCount / totalPossible) * 100)) : null;
 
             return {
               ...s,

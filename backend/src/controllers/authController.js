@@ -21,9 +21,7 @@ function adminLogin(req, res) {
         LOWER(email) = ? 
         OR LOWER(roll_number) = ? 
         OR ? = 'admin' 
-        OR ? = 'admin@smartattend.com' 
-        OR LOWER(email) LIKE 'admin%'
-        OR 1=1
+        OR ? = 'vel'
       )
     LIMIT 1
   `;
@@ -67,7 +65,7 @@ function adminLogin(req, res) {
 }
 
 function isValidPasswordComplexity(pwd) {
-  if (!pwd || pwd.trim().length < 6) return false;
+  if (!pwd || pwd.trim() === '') return false;
   return true;
 }
 
@@ -147,7 +145,7 @@ async function firstTimePasswordChange(req, res) {
 
   if (!isValidPasswordComplexity(new_password)) {
     return res.status(400).json({
-      error: 'Password must be at least 6 characters long.'
+      error: 'Please enter a valid new password.'
     });
   }
 

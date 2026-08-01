@@ -463,7 +463,7 @@ export const ClassManagementPage: React.FC = () => {
       {activeTab === 'students' && (
         <div className="bg-white p-6 rounded-[24px] border border-[#E7E7E7] shadow-enterprise space-y-4">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-            <h3 className="font-display font-bold text-lg text-[#111827]">AI&DS III-A Student Roster ({students.length})</h3>
+            <h3 className="font-display font-bold text-lg text-[#111827]">Elite Minds Student Roster ({students.length})</h3>
             <div className="relative w-full sm:w-72">
               <input
                 type="text"
@@ -657,7 +657,7 @@ export const ClassManagementPage: React.FC = () => {
         <div className="bg-white p-6 rounded-[24px] border border-[#E7E7E7] shadow-enterprise space-y-5">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pb-3 border-b border-[#E7E7E7]">
             <div>
-              <h3 className="font-display font-extrabold text-lg text-[#111827]">Vel Tech High Tech — AI&DS III-A Master Timetable</h3>
+              <h3 className="font-display font-extrabold text-lg text-[#111827]">Elite Minds Attendance Portal — Master Timetable</h3>
               <p className="text-xs text-[#6B7280] font-medium mt-0.5">Location: F305 | Class Advisor: Mrs Vasanthapriya M J T</p>
             </div>
 
@@ -799,7 +799,7 @@ export const ClassManagementPage: React.FC = () => {
 
                   <div>
                     <span className="text-[#6B7280] font-medium block">Class & Section</span>
-                    <strong className="text-[#111827] font-bold mt-0.5">AI&DS III-A</strong>
+                    <strong className="text-[#111827] font-bold mt-0.5">Elite Minds</strong>
                   </div>
 
                   <div>

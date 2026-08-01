@@ -33,7 +33,7 @@ app.use('/api', apiRoutes);
 
 // Root health check route
 app.get('/health', (req, res) => {
-  res.json({ status: 'healthy', system: 'SmartAttend Pro Backend API', timestamp: new Date() });
+  res.json({ status: 'healthy', system: 'Elite Minds Attendance Portal Backend API', timestamp: new Date() });
 });
 
 // Serve frontend static build assets if available
@@ -69,7 +69,7 @@ initDb()
   .then(() => {
     server.listen(PORT, '0.0.0.0', () => {
       console.log(`====================================================`);
-      console.log(`🚀 SmartAttend Pro Backend API Server running on port ${PORT}`);
+      console.log(`🚀 Elite Minds Attendance Portal Backend API Server running on port ${PORT}`);
       console.log(`⚡ Socket.IO Real-time Engine active on all network interfaces`);
       console.log(`====================================================`);
     });

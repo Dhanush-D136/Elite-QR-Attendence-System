@@ -45,11 +45,11 @@ function getStudents(req, res) {
     if (err) return res.status(500).json({ error: 'Database query error: ' + err.message });
 
     const formattedStudents = rows.map((st) => {
-      const total = st.total_sessions || 1;
-      const rate = Math.min(100, Math.round((st.attended_count / (st.total_sessions || 1)) * 100));
+      const total = st.total_sessions || 0;
+      const rate = total > 0 ? Math.min(100, Math.round((st.attended_count / total) * 100)) : null;
       return {
         ...st,
-        attendance_percentage: st.total_sessions > 0 ? rate : 100,
+        attendance_percentage: rate,
         status: st.must_change_password === 1 ? 'Pending Reset' : 'Active'
       };
     });

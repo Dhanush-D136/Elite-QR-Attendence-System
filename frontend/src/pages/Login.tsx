@@ -48,9 +48,9 @@ export const Login: React.FC = () => {
           <Shield className="w-7 h-7" />
         </div>
         <h1 className="font-display font-extrabold text-2xl sm:text-3xl tracking-tight text-[#111827]">
-          SmartAttend <span className="text-[#6D5DFC] font-bold text-xs px-3 py-1 rounded-full bg-[#F3F0FF] border border-[#6D5DFC]/20">PRO</span>
+          ELITE MINDS <span className="text-[#6D5DFC] font-bold text-xs px-3 py-1 rounded-full bg-[#F3F0FF] border border-[#6D5DFC]/20">PORTAL</span>
         </h1>
-        <p className="text-xs text-[#6B7280] font-medium">Academic Portal & Geofenced Attendance System</p>
+        <p className="text-xs text-[#6B7280] font-medium">Smart Attendance. Intelligent Analytics. Seamless Academic Management.</p>
       </div>
 
       {/* Main Login Card */}

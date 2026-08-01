@@ -15,7 +15,7 @@ function getDashboardMetrics(req, res) {
         (err, row3) => {
           const presentToday = row3 ? row3.present_today : 0;
           const absentToday = Math.max(0, totalStudents - presentToday);
-          const attendancePercentage = totalStudents > 0 ? Math.round((presentToday / totalStudents) * 100) : 0;
+          const attendancePercentage = totalStudents > 0 ? Math.round((presentToday / totalStudents) * 100) : null;
 
           db.all(
             `SELECT department, COUNT(id) as student_count 
@@ -58,6 +58,8 @@ function getReportsData(req, res) {
   const {
     subject_name,
     subject_code,
+    student_name,
+    register_number,
     faculty_name,
     from_date,
     to_date,
@@ -92,7 +94,17 @@ function getReportsData(req, res) {
     }
 
     db.all("SELECT * FROM users WHERE role = 'student' ORDER BY roll_number ASC", [], (err, studentRows) => {
-      const students = studentRows || [];
+      let students = studentRows || [];
+
+      if (student_name) {
+        const stName = student_name.toLowerCase().trim();
+        students = students.filter((st) => (st.name || '').toLowerCase().includes(stName));
+      }
+      if (register_number) {
+        const regNo = register_number.toLowerCase().trim();
+        students = students.filter((st) => (st.roll_number || st.email || '').toLowerCase().includes(regNo));
+      }
+
       const totalStudents = students.length;
 
       // Query sessions with filters
@@ -159,8 +171,13 @@ function getReportsData(req, res) {
               const subjectRecords = records.filter((r) => matchedSessionIds.has(r.session_id));
               const totalPossible = classesHeld * Math.max(1, totalStudents);
               const totalPresentRecords = subjectRecords.filter((r) => r.status === 'present' || r.status === 'late').length;
-              const avgPercentage = totalPossible > 0 ? Math.min(100, Math.round((totalPresentRecords / totalPossible) * 100)) : (classesHeld > 0 ? 85 : 0);
-              const presentCount = totalStudents > 0 ? Math.round(totalStudents * (avgPercentage / 100)) : 0;
+              
+              // If total classes conducted is 0, percentage must be null (displayed as --)
+              const avgPercentage = classesHeld > 0 && totalPossible > 0 
+                ? Math.min(100, Math.round((totalPresentRecords / totalPossible) * 100)) 
+                : null;
+                
+              const presentCount = totalStudents > 0 && avgPercentage !== null ? Math.round(totalStudents * (avgPercentage / 100)) : 0;
               const absentCount = Math.max(0, totalStudents - presentCount);
 
               // Find last session timestamp
@@ -176,7 +193,9 @@ function getReportsData(req, res) {
                 const stRecords = subjectRecords.filter((r) => r.student_id === st.id);
                 const stPresentCount = stRecords.filter((r) => r.status === 'present' || r.status === 'late').length;
                 const stAbsentCount = Math.max(0, classesHeld - stPresentCount);
-                const stPct = classesHeld > 0 ? Math.min(100, Math.round((stPresentCount / classesHeld) * 100)) : 100;
+                
+                // Crucial fix: If classesHeld = 0, stPct MUST be null (displayed as --), NOT 100%!
+                const stPct = classesHeld > 0 ? Math.min(100, Math.round((stPresentCount / classesHeld) * 100)) : null;
                 
                 // Check if attended today
                 const isPresentToday = stRecords.some((r) => (r.attendance_time || '').startsWith(todayDate));
@@ -184,6 +203,14 @@ function getReportsData(req, res) {
                 // Get last attended date
                 const sortedStRecords = [...stRecords].sort((a, b) => (b.attendance_time || '').localeCompare(a.attendance_time || ''));
                 const lastAttendedDate = sortedStRecords[0] ? new Date(sortedStRecords[0].attendance_time).toLocaleDateString() : 'Never';
+
+                let statusStr = '--';
+                if (stPct !== null) {
+                  if (stPct >= 75) statusStr = 'Safe';
+                  else if (stPct >= 65) statusStr = 'Warning';
+                  else if (stPct >= 50) statusStr = 'High Risk';
+                  else statusStr = 'Critical';
+                }
 
                 return {
                   id: st.id,
@@ -196,11 +223,11 @@ function getReportsData(req, res) {
                   lastAttendedDate,
                   isPresentToday,
                   isAbsentToday: !isPresentToday,
-                  status: stPct < 75 ? 'Defaulter' : 'Good'
+                  status: statusStr
                 };
               });
 
-              const defaulterCount = subjectStudents.filter((st) => st.percentage < 75).length;
+              const defaulterCount = subjectStudents.filter((st) => st.percentage !== null && st.percentage < 75).length;
 
               return {
                 id: s.id,
@@ -233,21 +260,30 @@ function getReportsData(req, res) {
 
             const studentStats = students.map((st) => {
               const stData = studentAttendanceMap[st.id] || { attended: 0, total: sessionList.length };
-              const totalSess = sessionList.length || 1;
-              const pct = Math.min(100, Math.round((stData.attended / totalSess) * 100));
+              const totalSess = sessionList.length;
+              const pct = totalSess > 0 ? Math.min(100, Math.round((stData.attended / totalSess) * 100)) : null;
+
+              let statusStr = '--';
+              if (pct !== null) {
+                if (pct >= 75) statusStr = 'Safe';
+                else if (pct >= 65) statusStr = 'Warning';
+                else if (pct >= 50) statusStr = 'High Risk';
+                else statusStr = 'Critical';
+              }
+
               return {
                 id: st.id,
                 name: st.name,
                 roll_number: st.roll_number || st.email.split('@')[0],
                 email: st.email,
-                overallPercentage: sessionList.length > 0 ? pct : 100,
+                overallPercentage: pct,
                 classesAttended: stData.attended,
-                classesMissed: Math.max(0, sessionList.length - stData.attended),
-                status: (sessionList.length > 0 ? pct : 100) < 75 ? 'Critical' : 'Good'
+                classesMissed: Math.max(0, totalSess - stData.attended),
+                status: statusStr
               };
             });
 
-            const defaulters = studentStats.filter((st) => st.overallPercentage < 75);
+            const defaulters = studentStats.filter((st) => st.overallPercentage !== null && st.overallPercentage < 75);
 
             db.get(
               "SELECT COUNT(DISTINCT student_id) as present_today FROM attendance_records WHERE DATE(attendance_time) = ?",
@@ -261,15 +297,12 @@ function getReportsData(req, res) {
                     totalStudents,
                     todayPresent: presentToday,
                     todayAbsent: absentToday,
-                    overallPercentage: totalStudents > 0 ? Math.round((presentToday / totalStudents) * 100) : 0,
+                    overallPercentage: totalStudents > 0 && sessionList.length > 0 ? Math.round((presentToday / totalStudents) * 100) : null,
                     classesConductedToday: sessionList.filter((s) => (s.start_time || '').startsWith(todayDate)).length
                   },
                   subjectStats,
                   studentStats,
-                  defaulters,
-                  monthlyStats: [
-                    { month: 'This Month', pct: totalStudents > 0 ? Math.round((presentToday / totalStudents) * 100) : 92, classes: sessionList.length }
-                  ]
+                  defaulters
                 });
               }
             );

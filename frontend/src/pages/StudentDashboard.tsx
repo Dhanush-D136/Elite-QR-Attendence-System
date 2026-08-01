@@ -2,29 +2,42 @@ import React, { useEffect, useState } from 'react';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { getSocket } from '../services/socket';
-import { AttendanceRecord } from '../types';
-import { MapPin, ShieldCheck, History, Flame, CheckCircle2, XCircle, Award, Sparkles, BookOpen } from 'lucide-react';
+import { AttendanceRecord, TimetableItem, SubjectItem } from '../types';
+import { MapPin, ShieldCheck, History, Flame, CheckCircle2, XCircle, Award, Sparkles, BookOpen, Calendar, Clock, AlertTriangle, Bell, Calculator, TrendingUp } from 'lucide-react';
 
 export const StudentDashboard: React.FC = () => {
   const { user } = useAuth();
   const [history, setHistory] = useState<AttendanceRecord[]>([]);
+  const [timetables, setTimetables] = useState<TimetableItem[]>([]);
+  const [subjects, setSubjects] = useState<SubjectItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  const fetchHistory = () => {
-    api.get('/attendance/my-history')
-      .then((res) => setHistory(res.data.history))
-      .catch((err) => console.error('Failed to load history', err))
-      .finally(() => setIsLoading(false));
+  const fetchData = async () => {
+    try {
+      setIsLoading(true);
+      const [resHistory, resTimetables, resSubjects] = await Promise.all([
+        api.get('/attendance/my-history'),
+        api.get('/timetables'),
+        api.get('/subjects')
+      ]);
+      setHistory(resHistory.data.history || []);
+      setTimetables(resTimetables.data.timetables || []);
+      setSubjects(resSubjects.data.subjects || []);
+    } catch (err) {
+      console.error('Failed to load student dashboard data', err);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   useEffect(() => {
-    fetchHistory();
+    fetchData();
 
     const socket = getSocket();
     socket.on('attendance_marked', (data: { record: AttendanceRecord }) => {
       if (data.record && data.record.student_id === user?.id) {
         setHistory((prev) => [data.record, ...prev]);
-        fetchHistory();
+        fetchData();
       }
     });
 
@@ -33,16 +46,50 @@ export const StudentDashboard: React.FC = () => {
     };
   }, [user?.id]);
 
+  const daysOfWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const todayName = daysOfWeek[new Date().getDay()] === 'Sunday' || daysOfWeek[new Date().getDay()] === 'Saturday' ? 'Monday' : daysOfWeek[new Date().getDay()];
+
+  // Today's classes filtering
+  const todaysClasses = timetables.filter((t) => (t.day || '').toLowerCase() === todayName.toLowerCase());
+
   const totalClasses = history.length;
   const presentClasses = history.filter((h) => h.status === 'present' || h.status === 'late').length;
   const missedClasses = Math.max(0, totalClasses - presentClasses);
-  const attendanceRate = totalClasses > 0 ? Math.round((presentClasses / totalClasses) * 100) : 100;
+  
+  // Attendance % formula: Present / Total * 100. If total = 0, display --
+  const attendanceRate = totalClasses > 0 ? Math.round((presentClasses / totalClasses) * 100) : null;
   const isPresentToday = history.some(
     (h) => new Date(h.attendance_time).toDateString() === new Date().toDateString()
   );
 
-  // Calculate streak
   const streak = isPresentToday ? Math.max(1, presentClasses) : Math.min(presentClasses, 3);
+
+  // Recovery Calculator logic for overall attendance
+  const requiredPct = 75;
+  let classesNeededForRecovery = 0;
+  if (totalClasses > 0 && attendanceRate !== null && attendanceRate < requiredPct) {
+    // (P + x) / (T + x) >= 0.75 => P + x >= 0.75 T + 0.75 x => 0.25 x >= 0.75 T - P => x >= 3 T - 4 P
+    classesNeededForRecovery = Math.max(0, Math.ceil(3 * totalClasses - 4 * presentClasses));
+  }
+
+  // Defaulter classification
+  let defaulterStatus = '--';
+  let defaulterColor = 'bg-slate-50 text-slate-600 border-slate-200';
+  if (attendanceRate !== null) {
+    if (attendanceRate >= 75) {
+      defaulterStatus = 'Safe (>=75%)';
+      defaulterColor = 'bg-[#ECFDF5] text-[#12B76A] border-[#12B76A]/20';
+    } else if (attendanceRate >= 65) {
+      defaulterStatus = 'Warning (65-74%)';
+      defaulterColor = 'bg-amber-50 text-amber-700 border-amber-200';
+    } else if (attendanceRate >= 50) {
+      defaulterStatus = 'High Risk (50-64%)';
+      defaulterColor = 'bg-orange-50 text-orange-700 border-orange-200';
+    } else {
+      defaulterStatus = 'Critical (<50%)';
+      defaulterColor = 'bg-rose-50 text-rose-700 border-rose-200';
+    }
+  }
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -66,16 +113,19 @@ export const StudentDashboard: React.FC = () => {
               </span>
             </div>
             <p className="text-xs text-[#6B7280] font-medium mt-1">
-              Roll No: <span className="font-mono text-[#6D5DFC] font-bold">{user?.roll_number}</span> • Dept of {user?.department} (Year {user?.year}, Sec {user?.section})
+              Roll No: <span className="font-mono text-[#6D5DFC] font-bold">{user?.roll_number}</span> • Dept of {user?.department || 'Computer Science'} (Year {user?.year || 3}, Sec {user?.section || 'A'})
             </p>
           </div>
         </div>
 
         {/* Status Badges */}
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className={`px-3.5 py-2 rounded-full border text-xs font-bold shadow-sm ${defaulterColor}`}>
+            <span>Status: {defaulterStatus}</span>
+          </div>
           <div className="px-3.5 py-2 rounded-full bg-[#F3F0FF] border border-[#6D5DFC]/20 text-xs text-[#6D5DFC] flex items-center gap-2 font-bold shadow-sm">
             <Flame className="w-4 h-4 text-amber-500 fill-amber-500" />
-            <span>{streak} Day Attendance Streak</span>
+            <span>{streak} Day Streak</span>
           </div>
         </div>
       </div>
@@ -85,14 +135,14 @@ export const StudentDashboard: React.FC = () => {
         {/* Attendance Percentage */}
         <div className="bg-white p-5 rounded-[24px] border border-[#E7E7E7] shadow-enterprise space-y-2 hover:border-[#6D5DFC]/40 transition-all">
           <div className="flex items-center justify-between text-[#6B7280] text-xs font-semibold">
-            <span>Attendance Rate</span>
+            <span>Overall Attendance</span>
             <Award className="w-4 h-4 text-[#6D5DFC]" />
           </div>
-          <p className={`font-display font-extrabold text-3xl ${attendanceRate >= 75 ? 'text-[#12B76A]' : 'text-rose-600'}`}>
-            {attendanceRate}%
+          <p className={`font-display font-extrabold text-3xl ${attendanceRate !== null && attendanceRate >= 75 ? 'text-[#12B76A]' : attendanceRate !== null ? 'text-rose-600' : 'text-slate-400'}`}>
+            {attendanceRate !== null ? `${attendanceRate}%` : '--'}
           </p>
           <div className="w-full bg-[#FAFAFA] rounded-full h-2 border border-[#E7E7E7] overflow-hidden">
-            <div className="bg-[#6D5DFC] h-full rounded-full transition-all duration-500" style={{ width: `${attendanceRate}%` }} />
+            <div className="bg-[#6D5DFC] h-full rounded-full transition-all duration-500" style={{ width: `${attendanceRate || 0}%` }} />
           </div>
           <p className="text-[10px] text-[#6B7280] font-medium">75% minimum institutional requirement</p>
         </div>
@@ -104,7 +154,7 @@ export const StudentDashboard: React.FC = () => {
             <CheckCircle2 className="w-4 h-4 text-[#12B76A]" />
           </div>
           <p className="font-display font-extrabold text-3xl text-[#12B76A]">{presentClasses}</p>
-          <p className="text-[10px] text-[#12B76A] font-semibold">Verified via GPS QR engine</p>
+          <p className="text-[10px] text-[#12B76A] font-semibold">Verified via QR scan</p>
         </div>
 
         {/* Classes Missed */}
@@ -128,15 +178,116 @@ export const StudentDashboard: React.FC = () => {
         </div>
       </div>
 
+      {/* Attendance Recovery Calculator (If below 75%) */}
+      {attendanceRate !== null && attendanceRate < 75 && (
+        <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-[24px] p-6 shadow-enterprise space-y-3">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-amber-500 text-white flex items-center justify-center shadow-sm">
+              <Calculator className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="font-display font-extrabold text-base text-amber-900">Attendance Recovery Calculator</h3>
+              <p className="text-xs text-amber-700 font-medium">Auto-generated target plan to reach 75% mandatory threshold</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs pt-2">
+            <div className="p-3 bg-white/80 rounded-2xl border border-amber-200">
+              <span className="text-[10px] text-amber-700 font-bold block uppercase">Current Attendance</span>
+              <strong className="text-lg text-rose-600 font-extrabold">{attendanceRate}%</strong>
+            </div>
+            <div className="p-3 bg-white/80 rounded-2xl border border-amber-200">
+              <span className="text-[10px] text-amber-700 font-bold block uppercase">Required Minimum</span>
+              <strong className="text-lg text-[#12B76A] font-extrabold">75%</strong>
+            </div>
+            <div className="p-3 bg-white/80 rounded-2xl border border-amber-200">
+              <span className="text-[10px] text-amber-700 font-bold block uppercase">Consecutive Classes Needed</span>
+              <strong className="text-lg text-amber-700 font-extrabold">{classesNeededForRecovery} Classes</strong>
+            </div>
+            <div className="p-3 bg-white/80 rounded-2xl border border-amber-200">
+              <span className="text-[10px] text-amber-700 font-bold block uppercase">Est. Recovery Window</span>
+              <strong className="text-xs text-amber-900 font-bold">~{Math.ceil(classesNeededForRecovery / 4)} Academic Days</strong>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Grid for Today's Schedule & Notifications */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Today's Schedule Card */}
+        <div className="bg-white p-6 rounded-[24px] border border-[#E7E7E7] shadow-enterprise space-y-4 lg:col-span-2">
+          <div className="flex items-center justify-between border-b border-[#E7E7E7] pb-3">
+            <div>
+              <h3 className="font-display font-bold text-base text-[#111827] flex items-center gap-2">
+                <Calendar className="w-5 h-5 text-[#6D5DFC]" />
+                Today's Schedule ({todayName})
+              </h3>
+              <p className="text-xs text-[#6B7280] font-medium">Your assigned lecture slots for today</p>
+            </div>
+            <span className="px-2.5 py-1 rounded-full bg-[#F3F0FF] text-[#6D5DFC] font-bold text-xs">
+              {todaysClasses.length} Lectures
+            </span>
+          </div>
+
+          {todaysClasses.length === 0 ? (
+            <div className="text-center py-8 text-[#6B7280] text-xs">
+              <p className="font-medium">No scheduled classes found for today.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {todaysClasses.map((item, idx) => (
+                <div key={idx} className="p-4 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] space-y-2 hover:border-[#6D5DFC]/40 transition-all">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold text-[#6D5DFC] px-2 py-0.5 rounded-full bg-[#F3F0FF]">
+                      Period {item.period_number || idx + 1}
+                    </span>
+                    <span className="text-[11px] font-mono text-[#6B7280] font-medium flex items-center gap-1">
+                      <Clock className="w-3 h-3 text-[#6D5DFC]" /> {item.start_time} - {item.end_time}
+                    </span>
+                  </div>
+                  <h4 className="font-display font-extrabold text-sm text-[#111827]">{item.subject_name}</h4>
+                  <div className="flex items-center justify-between text-[11px] text-[#6B7280]">
+                    <span>Faculty: <strong className="text-[#4F7CFF]">{item.faculty_name}</strong></span>
+                    <span>Room: <strong className="text-[#111827]">{item.room_number || 'F305'}</strong></span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Notifications & System Alerts */}
+        <div className="bg-white p-6 rounded-[24px] border border-[#E7E7E7] shadow-enterprise space-y-4">
+          <div className="flex items-center justify-between border-b border-[#E7E7E7] pb-3">
+            <h3 className="font-display font-bold text-base text-[#111827] flex items-center gap-2">
+              <Bell className="w-5 h-5 text-[#4F7CFF]" />
+              Academic Notifications
+            </h3>
+            <span className="w-2 h-2 rounded-full bg-[#12B76A]" />
+          </div>
+
+          <div className="space-y-3 text-xs">
+            <div className="p-3 rounded-2xl bg-[#F3F0FF] border border-[#6D5DFC]/20 space-y-1">
+              <span className="font-bold text-[#6D5DFC] block">Geofence Attendance Engine</span>
+              <p className="text-[#6B7280]">Make sure your location services (GPS) are enabled when scanning QR code.</p>
+            </div>
+            <div className="p-3 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] space-y-1">
+              <span className="font-bold text-[#111827] block">75% Attendance Mandatory</span>
+              <p className="text-[#6B7280]">Minimum 75% attendance is required to qualify for university examinations.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Attendance Log Table */}
       <div className="bg-white p-6 rounded-[24px] border border-[#E7E7E7] shadow-enterprise space-y-4">
         <div className="flex items-center justify-between">
           <div>
             <h3 className="font-display font-bold text-base text-[#111827] flex items-center gap-2">
               <History className="w-5 h-5 text-[#6D5DFC]" />
-              Recent Attendance Log
+              Recent Attendance History
             </h3>
-            <p className="text-xs text-[#6B7280] font-medium">Verified attendance timestamps, attendance codes, and GPS distance</p>
+            <p className="text-xs text-[#6B7280] font-medium">Verified attendance timestamps, codes, and geofence verification distance</p>
           </div>
         </div>
 

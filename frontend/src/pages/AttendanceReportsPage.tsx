@@ -308,8 +308,8 @@ export const AttendanceReportsPage: React.FC<AttendanceReportsPageProps> = ({ on
     }
   };
 
-  // Export Attendance Log to Excel
-  const handleExportExcel = () => {
+  // Export Attendance Log to Excel & CSV
+  const handleExportExcel = (format: 'xlsx' | 'csv' = 'xlsx') => {
     const exportData = attendanceRecords.map((r) => ({
       'Student Name': r.student_name,
       'Roll Number': r.roll_number,
@@ -324,29 +324,32 @@ export const AttendanceReportsPage: React.FC<AttendanceReportsPageProps> = ({ on
     const ws = XLSX.utils.json_to_sheet(exportData);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Attendance Records');
-    XLSX.writeFile(wb, `SmartAttend_Attendance_Export_${new Date().toISOString().split('T')[0]}.xlsx`);
+    const filename = `EliteMinds_Attendance_Export_${new Date().toISOString().split('T')[0]}.${format}`;
+    XLSX.writeFile(wb, filename, { bookType: format === 'csv' ? 'csv' : 'xlsx' });
   };
 
-  // Export Defaulters to Excel
-  const handleExportDefaulters = () => {
+  // Export Defaulters to Excel / CSV
+  const handleExportDefaulters = (format: 'xlsx' | 'csv' = 'xlsx') => {
     const exportData = defaultersList.map((d) => ({
       'Roll Number': d.roll_number,
       'Student Name': d.name,
       Email: d.email,
-      'Attendance %': `${d.overallPercentage}%`,
+      'Attendance %': d.overallPercentage !== null && d.overallPercentage !== undefined ? `${d.overallPercentage}%` : '--',
       'Classes Attended': d.classesAttended,
       'Classes Missed': d.classesMissed,
-      Status: d.status
+      'Classes Needed for 75%': d.overallPercentage !== null && d.overallPercentage < 75 ? Math.max(0, Math.ceil(3 * (d.classesAttended + d.classesMissed) - 4 * d.classesAttended)) : 0,
+      Status: d.status || 'Defaulter'
     }));
 
     const ws = XLSX.utils.json_to_sheet(exportData);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Defaulters List');
-    XLSX.writeFile(wb, `SmartAttend_Defaulters_${new Date().toISOString().split('T')[0]}.xlsx`);
+    const filename = `EliteMinds_Defaulters_${new Date().toISOString().split('T')[0]}.${format}`;
+    XLSX.writeFile(wb, filename, { bookType: format === 'csv' ? 'csv' : 'xlsx' });
   };
 
-  // Export Subject Analytics to Excel
-  const handleExportSubjectExcel = () => {
+  // Export Subject Analytics to Excel / CSV
+  const handleExportSubjectExcel = (format: 'xlsx' | 'csv' = 'xlsx') => {
     const exportData = displayedSubjects.map((s) => ({
       'Subject Code': s.code,
       'Subject Name': s.name,
@@ -354,7 +357,7 @@ export const AttendanceReportsPage: React.FC<AttendanceReportsPageProps> = ({ on
       'Total Classes Conducted': s.classesHeld,
       'Present Count': s.presentCount,
       'Absent Count': s.absentCount,
-      'Attendance %': `${s.avgPercentage}%`,
+      'Attendance %': s.avgPercentage !== null && s.avgPercentage !== undefined ? `${s.avgPercentage}%` : '--',
       'Defaulters (<75%)': s.studentsBelow75 || 0,
       'Last Session Date': s.lastClassDate
     }));
@@ -362,7 +365,8 @@ export const AttendanceReportsPage: React.FC<AttendanceReportsPageProps> = ({ on
     const ws = XLSX.utils.json_to_sheet(exportData);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Subject Analytics');
-    XLSX.writeFile(wb, `SmartAttend_Subject_Analytics_${new Date().toISOString().split('T')[0]}.xlsx`);
+    const filename = `EliteMinds_Subject_Analytics_${new Date().toISOString().split('T')[0]}.${format}`;
+    XLSX.writeFile(wb, filename, { bookType: format === 'csv' ? 'csv' : 'xlsx' });
   };
 
   // Export Subject Analytics / Student Details to PDF
@@ -395,7 +399,7 @@ export const AttendanceReportsPage: React.FC<AttendanceReportsPageProps> = ({ on
       </head>
       <body>
         <h1>${title}</h1>
-        <h3>Elite Institute of Technology • AI&DS III-A Attendance Hub</h3>
+        <h3>Elite Minds Attendance Portal • Smart Attendance. Intelligent Analytics. Seamless Academic Management.</h3>
         <div class="meta">
           <strong>Date Generated:</strong> ${new Date().toLocaleString()}<br/>
           <strong>Date Range Filter:</strong> ${fromDate || 'All'} to ${toDate || 'Present'} &nbsp;&nbsp;|&nbsp;&nbsp; 
@@ -473,7 +477,7 @@ export const AttendanceReportsPage: React.FC<AttendanceReportsPageProps> = ({ on
           </table>
         `
         }
-        <div class="footer">SmartAttend Academic Analytics System • Confidential Report</div>
+        <div class="footer">Elite Minds Attendance Portal • Confidential Academic Report</div>
         <script>
           window.onload = function() { window.print(); }
         </script>

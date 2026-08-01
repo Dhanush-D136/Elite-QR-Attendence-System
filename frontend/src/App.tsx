@@ -49,8 +49,8 @@ const MainLayout: React.FC = () => {
         <div className="w-14 h-14 rounded-2xl bg-[#F3F0FF] border border-[#6D5DFC]/30 flex items-center justify-center text-[#6D5DFC] shadow-floating">
           <RefreshCw className="w-7 h-7 animate-spin" />
         </div>
-        <h2 className="font-display font-extrabold text-lg text-[#111827]">Initializing AI&DS III-A ERP...</h2>
-        <p className="text-xs text-[#6B7280]">Vel Tech High Tech Attendance System</p>
+        <h2 className="font-display font-extrabold text-lg text-[#111827]">Initializing Elite Minds Attendance Portal...</h2>
+        <p className="text-xs text-[#6B7280]">Smart Attendance. Intelligent Analytics. Seamless Academic Management.</p>
       </div>
     );
   }

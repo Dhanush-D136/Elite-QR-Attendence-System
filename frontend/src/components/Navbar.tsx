@@ -17,13 +17,13 @@ export const Navbar: React.FC = () => {
         <div>
           <div className="flex items-center gap-2">
             <span className="font-display font-bold text-base tracking-tight text-[#111827]">
-              SmartAttend
+              ELITE MINDS
             </span>
             <span className="text-[10px] font-bold text-[#6D5DFC] px-2 py-0.5 rounded-full bg-[#F3F0FF] border border-[#6D5DFC]/20 tracking-wider">
-              PRO
+              PORTAL
             </span>
           </div>
-          <p className="text-[11px] text-[#6B7280] font-medium hidden sm:block">Enterprise Attendance Engine</p>
+          <p className="text-[11px] text-[#6B7280] font-medium hidden sm:block">Smart Attendance. Intelligent Analytics. Seamless Academic Management.</p>
         </div>
       </div>
 

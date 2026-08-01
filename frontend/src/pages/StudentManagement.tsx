@@ -167,14 +167,14 @@ export const StudentManagement: React.FC = () => {
       Year: st.year,
       Section: st.section,
       Phone: st.phone,
-      'Attendance %': `${st.attendance_percentage}%`,
+      'Attendance %': st.attendance_percentage !== null && st.attendance_percentage !== undefined ? `${st.attendance_percentage}%` : '--',
       Status: st.status
     }));
 
     const ws = XLSX.utils.json_to_sheet(exportData);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Students');
-    XLSX.writeFile(wb, `SmartAttend_Students_Export_${new Date().toISOString().split('T')[0]}.xlsx`);
+    XLSX.writeFile(wb, `EliteMinds_Students_Export_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
   // Reset Device

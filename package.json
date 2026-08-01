@@ -1,7 +1,7 @@
 {
-  "name": "smartattend-pro",
+  "name": "elite-minds-attendance-portal",
   "version": "1.0.0",
-  "description": "SmartAttend Pro Full Stack Enterprise QR Attendance System",
+  "description": "Elite Minds Attendance Portal - Smart Attendance. Intelligent Analytics. Seamless Academic Management.",
   "main": "backend/server.js",
   "scripts": {
     "install:all": "npm install --prefix backend --include=dev && npm install --prefix frontend --include=dev",

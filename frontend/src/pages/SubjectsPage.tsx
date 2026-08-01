@@ -171,7 +171,7 @@ export const SubjectsPage: React.FC<SubjectsPageProps> = ({ onNavigate }) => {
               Subject Master & Curriculum Hub
             </h1>
             <span className="px-2.5 py-0.5 rounded-full bg-[#F3F0FF] text-[#6D5DFC] font-bold text-xs border border-[#6D5DFC]/20">
-              AI&DS III-A
+              ELITE MINDS
             </span>
           </div>
           <p className="text-xs text-[#6B7280] font-medium mt-1">
@@ -322,7 +322,11 @@ export const SubjectsPage: React.FC<SubjectsPageProps> = ({ onNavigate }) => {
                     </div>
                     <div>
                       <span className="text-[9px] text-[#6D5DFC] font-bold block uppercase">Attendance</span>
-                      <strong className="font-mono text-[#6D5DFC] font-extrabold text-xs">{(sub as any).avgPercentage || 0}%</strong>
+                      <strong className="font-mono text-[#6D5DFC] font-extrabold text-xs">
+                        {(sub as any).classesHeld && (sub as any).classesHeld > 0 && (sub as any).avgPercentage !== null && (sub as any).avgPercentage !== undefined
+                          ? `${(sub as any).avgPercentage}%`
+                          : '--'}
+                      </strong>
                     </div>
                   </div>
                 </div>
@@ -331,7 +335,7 @@ export const SubjectsPage: React.FC<SubjectsPageProps> = ({ onNavigate }) => {
               {/* Action Buttons for Faculty / Admin */}
               <div className="pt-2 grid grid-cols-2 gap-2 text-xs">
                 <button
-                  onClick={() => onNavigate && onNavigate('reports', { subject: sub.name })}
+                  onClick={() => onNavigate && onNavigate('reports', { subject: sub.name, code: sub.code })}
                   className="px-3 py-2 rounded-xl bg-[#F3F0FF] text-[#6D5DFC] font-bold hover:bg-[#6D5DFC] hover:text-white transition-all flex items-center justify-center gap-1.5"
                 >
                   <ListChecks className="w-3.5 h-3.5" />
@@ -339,7 +343,7 @@ export const SubjectsPage: React.FC<SubjectsPageProps> = ({ onNavigate }) => {
                 </button>
 
                 <button
-                  onClick={() => onNavigate && onNavigate('sessions', { subject: sub.name, faculty: sub.faculty_name })}
+                  onClick={() => onNavigate && onNavigate('sessions', { subject: sub.name, code: sub.code, faculty: sub.faculty_name })}
                   className="px-3 py-2 rounded-xl bg-[#ECFDF5] text-[#12B76A] font-bold border border-[#12B76A]/20 hover:bg-[#12B76A] hover:text-white transition-all flex items-center justify-center gap-1.5"
                 >
                   <QrCode className="w-3.5 h-3.5" />

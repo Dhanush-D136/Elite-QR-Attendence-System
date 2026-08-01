@@ -13,18 +13,13 @@ export const FirstLoginModal: React.FC = () => {
     e.preventDefault();
     setError('');
 
-    if (!newPassword || newPassword.trim().length < 6) {
-      setError('Password must be at least 6 characters long.');
+    if (!newPassword || newPassword.trim() === '') {
+      setError('Please enter a new password.');
       return;
     }
 
     if (newPassword !== confirmPassword) {
       setError('Passwords do not match.');
-      return;
-    }
-
-    if (newPassword === '1234') {
-      setError('New password cannot be the default "1234" password.');
       return;
     }
 
@@ -82,7 +77,7 @@ export const FirstLoginModal: React.FC = () => {
                 required
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
-                placeholder="Enter new password (min. 6 chars)"
+                placeholder="Enter new password"
                 className="w-full px-4 py-3 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-[#111827] placeholder-[#9CA3AF] focus:outline-none focus:border-[#6D5DFC] text-xs pl-10"
               />
               <Lock className="w-4 h-4 text-[#9CA3AF] absolute left-3.5 top-3.5" />

@@ -97,10 +97,10 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({ onComplete }) => {
             </span>
             <div>
               <h2 className="font-display font-extrabold text-xl text-[#111827]">
-                SmartAttend ERP Setup Wizard
+                Elite Minds Setup Wizard
               </h2>
               <p className="text-xs text-[#6B7280] font-medium">
-                Welcome to SmartAttend Pro! Let's configure your single class attendance ERP system.
+                Welcome to Elite Minds Attendance Portal! Let's configure your attendance management portal.
               </p>
             </div>
           </div>

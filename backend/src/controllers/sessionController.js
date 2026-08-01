@@ -432,7 +432,7 @@ function autoLaunchSession(req, res) {
                 qrPayload: {
                   sessionId,
                   subject: existing.subject,
-                  class: 'AI&DS III-A',
+                  class: 'Elite Minds Portal',
                   period: `P${periodNumber}`,
                   faculty: matchedSlot.faculty_name,
                   room: matchedSlot.room_number,
@@ -451,7 +451,7 @@ function autoLaunchSession(req, res) {
         const qrPayload = {
           sessionId,
           subject: matchedSlot.subject_name,
-          class: 'AI&DS III-A',
+          class: 'Elite Minds Portal',
           period: `P${periodNumber}`,
           faculty: matchedSlot.faculty_name,
           room: matchedSlot.room_number,
