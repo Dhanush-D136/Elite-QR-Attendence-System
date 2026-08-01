@@ -74,8 +74,8 @@ async function createStudent(req, res) {
   const photo = profile_photo || `https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150`;
 
   db.run(
-    `INSERT INTO users (id, name, roll_number, email, role, department, year, section, phone, profile_photo, password_hash, must_change_password, is_first_login)
-     VALUES (?, ?, ?, ?, 'student', ?, ?, ?, ?, ?, ?, 1, 1)`,
+    `INSERT INTO users (id, name, roll_number, email, role, department, year, section, phone, profile_photo, password_hash, must_change_password, is_first_login, first_login, password_changed)
+     VALUES (?, ?, ?, ?, 'student', ?, ?, ?, ?, ?, ?, 1, 1, 1, 0)`,
     [id, name, roll_number, email, department, parseInt(year), section, phone || '', photo, defaultPasswordHash],
     function (err) {
       if (err) {
@@ -103,7 +103,7 @@ async function updateStudent(req, res) {
       const passwordHash = await bcrypt.hash(new_password.trim(), 10);
       db.run(
         `UPDATE users 
-         SET name = ?, roll_number = ?, email = ?, department = ?, year = ?, section = ?, phone = ?, profile_photo = COALESCE(?, profile_photo), password_hash = ?, must_change_password = 0, is_first_login = 0
+         SET name = ?, roll_number = ?, email = ?, department = ?, year = ?, section = ?, phone = ?, profile_photo = COALESCE(?, profile_photo), password_hash = ?, must_change_password = 0, is_first_login = 0, first_login = 0, password_changed = 1
          WHERE id = ? AND role = 'student'`,
         [name, roll_number, email, department, parseInt(year), section, phone || '', profile_photo, passwordHash, id],
         function (err) {
@@ -166,8 +166,8 @@ async function bulkImportStudents(req, res) {
 
       await new Promise((resolve, reject) => {
         db.run(
-          `INSERT OR IGNORE INTO users (id, name, roll_number, email, role, department, year, section, phone, profile_photo, password_hash, must_change_password, is_first_login)
-           VALUES (?, ?, ?, ?, 'student', ?, ?, ?, ?, ?, ?, 1, 1)`,
+          `INSERT OR IGNORE INTO users (id, name, roll_number, email, role, department, year, section, phone, profile_photo, password_hash, must_change_password, is_first_login, first_login, password_changed)
+           VALUES (?, ?, ?, ?, 'student', ?, ?, ?, ?, ?, ?, 1, 1, 1, 0)`,
           [id, st.name, st.roll_number, st.email, st.department || 'Computer Science', parseInt(st.year || 3), st.section || 'A', st.phone || '', photo, defaultPasswordHash],
           function (err) {
             if (err) reject(err);
@@ -205,7 +205,7 @@ async function resetStudentPassword(req, res) {
   const defaultPasswordHash = await bcrypt.hash('1234', 10);
 
   db.run(
-    "UPDATE users SET password_hash = ?, must_change_password = 1, is_first_login = 1 WHERE id = ? AND role = 'student'",
+    "UPDATE users SET password_hash = ?, must_change_password = 1, is_first_login = 1, first_login = 1, password_changed = 0 WHERE id = ? AND role = 'student'",
     [defaultPasswordHash, id],
     function (err) {
       if (err) return res.status(500).json({ error: 'Failed to reset student password: ' + err.message });

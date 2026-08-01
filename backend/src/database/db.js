@@ -35,6 +35,9 @@ function runMigrations() {
           { col: 'department_name', type: "TEXT DEFAULT 'Computer Science & Engineering'" },
           { col: 'device_fingerprint', type: 'TEXT' },
           { col: 'is_first_login', type: 'INTEGER DEFAULT 1' },
+          { col: 'first_login', type: 'INTEGER DEFAULT 1' },
+          { col: 'password_changed', type: 'INTEGER DEFAULT 0' },
+          { col: 'must_change_password', type: 'INTEGER DEFAULT 0' },
           { col: 'password_changed_at', type: 'DATETIME' }
         ];
 
@@ -272,6 +275,10 @@ function initDb() {
           password_hash TEXT NOT NULL,
           device_fingerprint TEXT,
           must_change_password INTEGER DEFAULT 0,
+          is_first_login INTEGER DEFAULT 1,
+          first_login INTEGER DEFAULT 1,
+          password_changed INTEGER DEFAULT 0,
+          password_changed_at DATETIME,
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )
       `);

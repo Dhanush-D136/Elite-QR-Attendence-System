@@ -25,7 +25,7 @@ export const FirstLoginModal: React.FC = () => {
 
     try {
       setIsSubmitting(true);
-      await submitFirstPasswordChange(newPassword);
+      await submitFirstPasswordChange(newPassword, confirmPassword);
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to update password');
     } finally {

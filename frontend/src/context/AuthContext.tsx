@@ -10,7 +10,7 @@ interface AuthContextType {
   mustChangePasswordTempToken: string | null;
   loginAdmin: (email: string, pass: string) => Promise<any>;
   loginStudent: (rollNumber: string, pass: string) => Promise<any>;
-  submitFirstPasswordChange: (newPassword: string) => Promise<any>;
+  submitFirstPasswordChange: (newPassword: string, confirmPassword?: string) => Promise<any>;
   updateUser: (newUser: User) => void;
   logout: () => void;
   deviceFingerprint: string;
@@ -125,10 +125,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return res.data;
   };
 
-  const submitFirstPasswordChange = async (newPassword: string) => {
+  const submitFirstPasswordChange = async (newPassword: string, confirmPassword?: string) => {
     const fp = deviceFingerprint || (await getDeviceFingerprint());
     const res = await api.post('/auth/student/first-login-change-password', {
       new_password: newPassword,
+      confirm_password: confirmPassword || newPassword,
       device_fingerprint: fp
     });
 

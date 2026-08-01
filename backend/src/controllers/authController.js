@@ -35,10 +35,6 @@ function adminLogin(req, res) {
       isValid = await bcrypt.compare(password, user.password_hash);
     } catch (e) {}
 
-    if (!isValid && (password === 'elite minds' || password === 'admin123' || password === '1234' || password === user.password_hash)) {
-      isValid = true;
-    }
-
     if (!isValid) return res.status(401).json({ error: 'Invalid admin password' });
 
     const token = jwt.sign(
@@ -88,21 +84,16 @@ function studentLogin(req, res) {
 
   db.get(query, [cleanInput, cleanInput, `${cleanInput}%`], async (err, user) => {
     if (err) return res.status(500).json({ error: 'Database error' });
-    if (!user) return res.status(401).json({ error: 'Invalid student roll number or password' });
+    if (!user) return res.status(401).json({ error: 'Invalid Password' });
 
     let isValid = false;
     try {
       isValid = await bcrypt.compare(password, user.password_hash);
     } catch (e) {}
 
-    // Allow default initial password 1234 if password_hash matches or first time login is active
-    if (!isValid && (password === '1234' || password === user.password_hash)) {
-      isValid = true;
-    }
+    if (!isValid) return res.status(401).json({ error: 'Invalid Password' });
 
-    if (!isValid) return res.status(401).json({ error: 'Invalid student password' });
-
-    const isFirstLogin = user.is_first_login === 1 || user.must_change_password === 1;
+    const isFirstLogin = Boolean(user.first_login === 1 || user.is_first_login === 1 || user.must_change_password === 1 || user.password_changed === 0);
 
     // Check device binding if device_fingerprint is provided
     let registeredDevice = user.device_fingerprint;
@@ -131,7 +122,9 @@ function studentLogin(req, res) {
         role: 'student',
         profile_photo: user.profile_photo,
         device_fingerprint: registeredDevice,
+        first_login: isFirstLogin,
         is_first_login: isFirstLogin,
+        password_changed: !isFirstLogin,
         must_change_password: isFirstLogin ? 1 : 0
       }
     });
@@ -140,8 +133,12 @@ function studentLogin(req, res) {
 
 // First-time Password Reset
 async function firstTimePasswordChange(req, res) {
-  const { new_password, device_fingerprint } = req.body;
+  const { new_password, confirm_password, device_fingerprint } = req.body;
   const userId = req.user.id;
+
+  if (confirm_password !== undefined && new_password !== confirm_password) {
+    return res.status(400).json({ error: 'Passwords do not match.' });
+  }
 
   if (!isValidPasswordComplexity(new_password)) {
     return res.status(400).json({
@@ -153,7 +150,7 @@ async function firstTimePasswordChange(req, res) {
   const now = new Date().toISOString();
 
   db.run(
-    'UPDATE users SET password_hash = ?, must_change_password = 0, is_first_login = 0, password_changed_at = ?, device_fingerprint = ? WHERE id = ?',
+    'UPDATE users SET password_hash = ?, must_change_password = 0, is_first_login = 0, first_login = 0, password_changed = 1, password_changed_at = ?, device_fingerprint = COALESCE(?, device_fingerprint) WHERE id = ?',
     [password_hash, now, device_fingerprint || null, userId],
     function (err) {
       if (err) return res.status(500).json({ error: 'Failed to update password: ' + err.message });
@@ -181,7 +178,9 @@ async function firstTimePasswordChange(req, res) {
             role: 'student',
             profile_photo: user.profile_photo,
             device_fingerprint: user.device_fingerprint,
+            first_login: false,
             is_first_login: false,
+            password_changed: true,
             must_change_password: 0
           }
         });
@@ -192,8 +191,12 @@ async function firstTimePasswordChange(req, res) {
 
 // Change Password
 async function changePassword(req, res) {
-  const { current_password, new_password } = req.body;
+  const { current_password, new_password, confirm_password } = req.body;
   const userId = req.user.id;
+
+  if (confirm_password !== undefined && new_password !== confirm_password) {
+    return res.status(400).json({ error: 'Passwords do not match.' });
+  }
 
   if (!isValidPasswordComplexity(new_password)) {
     return res.status(400).json({
@@ -205,17 +208,14 @@ async function changePassword(req, res) {
     if (err || !user) return res.status(404).json({ error: 'User not found' });
 
     let isValid = await bcrypt.compare(current_password, user.password_hash);
-    if (!isValid && current_password === '1234') {
-      isValid = true;
-    }
     if (!isValid) {
-      return res.status(400).json({ error: 'Incorrect current password' });
+      return res.status(400).json({ error: 'Invalid Password' });
     }
 
     const newHash = await bcrypt.hash(new_password, 10);
     const now = new Date().toISOString();
     db.run(
-      'UPDATE users SET password_hash = ?, must_change_password = 0, is_first_login = 0, password_changed_at = ? WHERE id = ?',
+      'UPDATE users SET password_hash = ?, must_change_password = 0, is_first_login = 0, first_login = 0, password_changed = 1, password_changed_at = ? WHERE id = ?',
       [newHash, now, userId],
       (err) => {
         if (err) return res.status(500).json({ error: 'Failed to update password' });
@@ -228,14 +228,18 @@ async function changePassword(req, res) {
 // Get current profile
 function getMe(req, res) {
   db.get(
-    'SELECT id, name, roll_number, email, role, department, year, section, phone, profile_photo, institution_name, department_name, device_fingerprint, is_first_login, must_change_password, password_changed_at FROM users WHERE id = ?',
+    'SELECT id, name, roll_number, email, role, department, year, section, phone, profile_photo, institution_name, department_name, device_fingerprint, is_first_login, first_login, must_change_password, password_changed, password_changed_at FROM users WHERE id = ?',
     [req.user.id],
     (err, user) => {
       if (err || !user) return res.status(404).json({ error: 'User not found' });
+      const isFirstLogin = Boolean(user.first_login === 1 || user.is_first_login === 1 || user.must_change_password === 1 || user.password_changed === 0);
       res.json({
         user: {
           ...user,
-          is_first_login: user.is_first_login === 1 || user.must_change_password === 1
+          first_login: isFirstLogin,
+          is_first_login: isFirstLogin,
+          password_changed: !isFirstLogin,
+          must_change_password: isFirstLogin ? 1 : 0
         }
       });
     }
