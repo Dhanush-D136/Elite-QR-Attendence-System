@@ -237,9 +237,24 @@ function deleteSubject(req, res) {
 
 // --- Timetable Controllers ---
 function getTimetables(req, res) {
-  const { day, date, subject, faculty, sort_by = 'period' } = req.query;
+  const { department, year, section, day, date, subject, faculty, sort_by = 'period' } = req.query;
   let query = 'SELECT * FROM timetables WHERE 1=1';
   const params = [];
+
+  if (department) {
+    query += ' AND (department = ? OR department IS NULL)';
+    params.push(department);
+  }
+
+  if (year) {
+    query += ' AND (year = ? OR year IS NULL)';
+    params.push(parseInt(year));
+  }
+
+  if (section) {
+    query += ' AND (section = ? OR section IS NULL)';
+    params.push(section);
+  }
 
   if (day) {
     query += ' AND day = ?';
@@ -262,11 +277,11 @@ function getTimetables(req, res) {
   }
 
   if (sort_by === 'date') {
-    query += ' ORDER BY date DESC, period_number ASC, start_time ASC';
+    query += ' ORDER BY date DESC, CAST(period_number AS INTEGER) ASC, start_time ASC';
   } else if (sort_by === 'subject') {
-    query += ' ORDER BY subject_name ASC, period_number ASC';
+    query += ' ORDER BY subject_name ASC, CAST(period_number AS INTEGER) ASC';
   } else if (sort_by === 'faculty') {
-    query += ' ORDER BY faculty_name ASC, period_number ASC';
+    query += ' ORDER BY faculty_name ASC, CAST(period_number AS INTEGER) ASC';
   } else {
     // Default sort by day & period_number
     query += ' ORDER BY CASE day WHEN "Monday" THEN 1 WHEN "Tuesday" THEN 2 WHEN "Wednesday" THEN 3 WHEN "Thursday" THEN 4 WHEN "Friday" THEN 5 WHEN "Saturday" THEN 6 ELSE 7 END, CAST(period_number AS INTEGER) ASC, start_time ASC';

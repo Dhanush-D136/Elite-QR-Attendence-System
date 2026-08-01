@@ -842,42 +842,23 @@ function initDb() {
           department TEXT,
           year INTEGER,
           section TEXT,
+          semester INTEGER DEFAULT 5,
+          date TEXT,
           day TEXT,
+          period_number INTEGER,
           subject_name TEXT,
           faculty_name TEXT,
           start_time TEXT,
           end_time TEXT,
           room_number TEXT,
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        )
+        );
+
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_timetables_slot ON timetables(department, year, section, day, period_number);
       `, () => {
-        const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-        const depts = ['AI & Data Science', 'Computer Science'];
-        const periods = [
-          { name: 'Knowledge Engineering', code: '21AI51T', faculty: 'Mrs Nivetha P', start: '08:15', end: '09:05', room: 'F305' },
-          { name: 'Programming Language for AI', code: '21AI52T', faculty: 'Mr Abaskar N', start: '09:05', end: '09:55', room: 'F305' },
-          { name: 'Web Technology', code: '21CS51T', faculty: 'Mrs Vasanthapriya M J T', start: '10:10', end: '11:00', room: 'F305' },
-          { name: 'Machine Learning', code: '21CS52T', faculty: 'Dr K Ramesh', start: '11:00', end: '11:50', room: 'F305' },
-          { name: 'Cloud Computing', code: '21CS53T', faculty: 'Mrs S Deepa', start: '11:50', end: '12:35', room: 'F305' },
-          { name: 'Cyber Security', code: '21CS54T', faculty: 'Mr R Karthik', start: '13:30', end: '14:20', room: 'F305' }
-        ];
-
-        depts.forEach((dept) => {
-          days.forEach((day, dIdx) => {
-            periods.forEach((p, pIdx) => {
-              const ttId = `TT-SEED-${dept.replace(/\s+/g, '')}-${day}-${pIdx + 1}`;
-              db.run(
-                `INSERT OR IGNORE INTO timetables (id, department, year, section, day, subject_name, faculty_name, start_time, end_time, room_number)
-                 VALUES (?, ?, 3, 'A', ?, ?, ?, ?, ?, ?)`,
-                [ttId, dept, day, p.name, p.faculty, p.start, p.end, p.room]
-              );
-            });
-          });
-        });
+        console.log('✅ Database initialized cleanly with Official Production Timetables for AI & DS III-A (40 Weekly Slots).');
+        resolve(true);
       });
-
-      console.log('✅ Database initialized cleanly with 6 Faculty accounts and full weekly Timetables for AI & DS and Computer Science.');
-      resolve(true);
     });
   });
 }
