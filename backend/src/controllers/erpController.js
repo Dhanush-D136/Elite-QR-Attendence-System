@@ -78,7 +78,7 @@ function deleteFaculty(req, res) {
 function getSubjects(req, res) {
   const { faculty_name, department, semester, section, type } = req.query;
 
-  let query = 'SELECT * FROM subjects WHERE is_archived = 0';
+  let query = 'SELECT * FROM subjects WHERE (is_archived = 0 OR is_archived IS NULL)';
   const params = [];
 
   if (faculty_name) {

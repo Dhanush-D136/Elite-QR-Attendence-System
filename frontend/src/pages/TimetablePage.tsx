@@ -84,10 +84,10 @@ export const TimetablePage: React.FC<TimetablePageProps> = ({ onNavigate }) => {
   useEffect(() => {
     fetchData();
 
-    // Subscribe to Socket.IO realtime timetable synchronization events
+    // Subscribe to Socket.IO realtime timetable and subject synchronization events
     const socket = getSocket();
     const handleTimetableChange = () => {
-      console.log('⚡ [ADMIN TIMETABLE] Realtime timetable sync event received. Refetching timetable...');
+      console.log('⚡ [ADMIN TIMETABLE] Realtime sync event received. Refetching data...');
       fetchData();
     };
 
@@ -95,17 +95,25 @@ export const TimetablePage: React.FC<TimetablePageProps> = ({ onNavigate }) => {
     socket.on('timetable_updated', handleTimetableChange);
     socket.on('timetable_deleted', handleTimetableChange);
     socket.on('timetable_changed', handleTimetableChange);
+    socket.on('subject_created', handleTimetableChange);
+    socket.on('subject_updated', handleTimetableChange);
+    socket.on('subject_deleted', handleTimetableChange);
 
     return () => {
       socket.off('timetable_created', handleTimetableChange);
       socket.off('timetable_updated', handleTimetableChange);
       socket.off('timetable_deleted', handleTimetableChange);
       socket.off('timetable_changed', handleTimetableChange);
+      socket.off('subject_created', handleTimetableChange);
+      socket.off('subject_updated', handleTimetableChange);
+      socket.off('subject_deleted', handleTimetableChange);
     };
   }, [department, year, section, sortBy, searchSubject]);
 
   const openAddModal = () => {
     setEditingTt(null);
+    const initialSubName = subjects[0]?.name || '';
+    const initialFacName = subjects[0]?.faculty_name || '';
     setFormData({
       department,
       year,
@@ -114,8 +122,8 @@ export const TimetablePage: React.FC<TimetablePageProps> = ({ onNavigate }) => {
       date: new Date().toISOString().split('T')[0],
       day: selectedDay,
       period_number: '1',
-      subject_name: subjects[0]?.name || 'Programming Language for AI',
-      faculty_name: subjects[0]?.faculty_name || 'Mrs Nivetha P',
+      subject_name: initialSubName,
+      faculty_name: initialFacName,
       start_time: '08:15 AM',
       end_time: '09:05 AM',
       room_number: 'F305'
@@ -418,6 +426,9 @@ export const TimetablePage: React.FC<TimetablePageProps> = ({ onNavigate }) => {
                   {subjects.map((s) => (
                     <option key={s.id} value={s.name}>{s.name} ({s.code})</option>
                   ))}
+                  {formData.subject_name && !subjects.some(s => s.name === formData.subject_name) && (
+                    <option value={formData.subject_name}>{formData.subject_name}</option>
+                  )}
                 </select>
               </div>
 
@@ -426,11 +437,20 @@ export const TimetablePage: React.FC<TimetablePageProps> = ({ onNavigate }) => {
                 <input
                   type="text"
                   required
+                  list="faculty-list"
                   value={formData.faculty_name}
                   onChange={(e) => setFormData({ ...formData, faculty_name: e.target.value })}
                   placeholder="e.g. Mrs Vasanthapriya M J T"
                   className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827]"
                 />
+                <datalist id="faculty-list">
+                  <option value="Mrs Nivetha P" />
+                  <option value="Mrs Vasanthapriya M J T" />
+                  <option value="Mrs Krithiga" />
+                  <option value="Mrs Gowthami K" />
+                  <option value="Mr Ramajayam" />
+                  <option value="Mr Balaarunesh G" />
+                </datalist>
               </div>
 
               <div className="grid grid-cols-2 gap-2">
