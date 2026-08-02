@@ -5,38 +5,18 @@ const dotenv = require('dotenv');
 
 dotenv.config();
 
-let dbPassword = process.env.SUPABASE_DB_PASSWORD || '';
-let host = process.env.SUPABASE_DB_HOST || 'aws-0-ap-south-1.pooler.supabase.com';
-let port = parseInt(process.env.SUPABASE_DB_PORT || '6543', 10);
+const dbPassword = process.env.SUPABASE_DB_PASSWORD || '';
+const host = process.env.SUPABASE_DB_HOST || 'db.ehmrnreqjadhjmmtlugj.supabase.co';
+const port = parseInt(process.env.SUPABASE_DB_PORT || '5432', 10);
 const database = process.env.SUPABASE_DB_NAME || 'postgres';
-let user = process.env.SUPABASE_DB_USER || 'postgres';
-
-const projectRef = process.env.SUPABASE_PROJECT_REF || 'ehmrnreqjadhjmmtlugj';
-
-// AUTOMATIC IPv4 RESOLUTION & POOLER REWRITE FOR RENDER & CLOUD DEPLOYMENTS
-// Direct Supabase DB hosts (db.[ref].supabase.co) are IPv6-ONLY.
-// Render free/standard web instances operate on IPv4-only networks and fail with ENETUNREACH.
-// We automatically upgrade connections to use Supabase IPv4 Pooler (aws-0-[region].pooler.supabase.com).
-if (host.startsWith('db.') && host.endsWith('.supabase.co')) {
-  const extractedRef = host.split('.')[1] || projectRef;
-  console.log(`[SUPABASE NETWORK AUDIT] Detected direct IPv6-only host: ${host}`);
-  console.log(`[SUPABASE NETWORK AUDIT] Auto-switching to Supabase IPv4 Connection Pooler host for Render compatibility.`);
-  
-  host = process.env.SUPABASE_POOLER_HOST || 'aws-0-ap-south-1.pooler.supabase.com';
-  if (port === 5432) port = 6543;
-  if (!user.includes('.')) {
-    user = `${user}.${extractedRef}`;
-  }
-} else if (!user.includes('.') && projectRef && host.includes('pooler.supabase.com')) {
-  user = `${user}.${projectRef}`;
-}
+const user = process.env.SUPABASE_DB_USER || 'postgres';
 
 let pool = null;
 let isSupabaseActive = false;
 
 if (dbPassword && dbPassword.trim() !== '') {
   console.log('====================================================');
-  console.log('[SUPABASE PG] Initializing IPv4 Connection Pooler:');
+  console.log('[SUPABASE PG] Initializing PostgreSQL Connection Pool:');
   console.log(`  ➔ Host:     ${host}`);
   console.log(`  ➔ Port:     ${port}`);
   console.log(`  ➔ User:     ${user}`);
@@ -111,7 +91,7 @@ async function initSupabasePostgres() {
   try {
     const client = await pool.connect();
     console.log('====================================================');
-    console.log('✅ Connected successfully to Supabase PostgreSQL cloud database (IPv4 Pooler)!');
+    console.log('✅ Connected successfully to Supabase PostgreSQL cloud database!');
     console.log('====================================================');
 
     // Read and run schema migrations
