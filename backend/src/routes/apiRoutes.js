@@ -126,6 +126,8 @@ router.put('/students/:id', verifyToken, requireRole('admin'), studentController
 router.delete('/students/:id', verifyToken, requireRole('admin'), studentController.deleteStudent);
 router.post('/students/:id/reset-device', verifyToken, requireRole('admin'), studentController.resetStudentDevice);
 router.post('/students/:id/reset-password', verifyToken, requireRole('admin'), studentController.resetStudentPassword);
+router.post('/students/:id/force-password-change', verifyToken, requireRole('admin'), studentController.forceStudentPasswordChange);
+router.put('/students/:id/status', verifyToken, requireRole('admin'), studentController.updateStudentAccountStatus);
 
 // --- Analytics & Dashboard Routes ---
 router.get('/analytics/dashboard', verifyToken, requireRole('admin'), analyticsController.getDashboardMetrics);

@@ -370,6 +370,54 @@ async function resetStudentPassword(req, res) {
   );
 }
 
+// Force Student Password Change on Next Login
+function forceStudentPasswordChange(req, res) {
+  const { id } = req.params;
+  db.run(
+    "UPDATE users SET must_change_password = 1, is_first_login = 1, first_login = 1, password_changed = 0 WHERE id = ? AND role = 'student'",
+    [id],
+    function (err) {
+      if (err) return res.status(500).json({ error: 'Failed to force password change: ' + err.message });
+
+      const auditId = uuidv4();
+      db.run(
+        `INSERT INTO password_audit_logs (id, student_id, changed_by, action, changed_at) VALUES (?, ?, 'Admin', 'Force Password Change Flagged', CURRENT_TIMESTAMP)`,
+        [auditId, id]
+      );
+
+      res.json({ message: 'Mandatory password change enforced for student on next login.' });
+    }
+  );
+}
+
+// Update Account Status (Active, Inactive, Locked, Suspended)
+function updateStudentAccountStatus(req, res) {
+  const { id } = req.params;
+  const { status } = req.body;
+
+  if (!status || !['Active', 'Inactive', 'Locked', 'Suspended'].includes(status)) {
+    return res.status(400).json({ error: 'Invalid account status value' });
+  }
+
+  db.run(
+    "UPDATE users SET status = ? WHERE id = ? AND role = 'student'",
+    [status, id],
+    function (err) {
+      if (err) return res.status(500).json({ error: 'Failed to update account status: ' + err.message });
+
+      const auditId = uuidv4();
+      const actionText = status === 'Locked' ? 'Account Locked' : status === 'Suspended' ? 'Account Suspended' : status === 'Active' ? 'Account Activated' : 'Account Deactivated';
+
+      db.run(
+        `INSERT INTO password_audit_logs (id, student_id, changed_by, action, changed_at) VALUES (?, ?, 'Admin', ?, CURRENT_TIMESTAMP)`,
+        [auditId, id, actionText]
+      );
+
+      res.json({ message: `Student account status updated to "${status}".` });
+    }
+  );
+}
+
 // Get Comprehensive Student Profile Details (Modal View)
 function getStudentProfileDetails(req, res) {
   const { id } = req.params;
@@ -482,6 +530,8 @@ module.exports = {
   bulkImportStudents,
   resetStudentDevice,
   resetStudentPassword,
+  forceStudentPasswordChange,
+  updateStudentAccountStatus,
   getStudentProfileDetails,
   getLoginActivity,
   getPasswordAuditLogs

@@ -501,6 +501,29 @@ export const StudentManagement: React.FC = () => {
       printWindow.print();
     }, 500);
   };
+  const handleForcePasswordChange = async (student: User) => {
+    if (confirm(`Enforce mandatory password change on next login for ${student.name}?`)) {
+      try {
+        await api.post(`/students/${student.id}/force-password-change`);
+        alert(`✅ Mandatory password change flagged for ${student.name}`);
+        fetchStudents();
+      } catch (err: any) {
+        alert(`❌ Failed: ${err.response?.data?.error || err.message}`);
+      }
+    }
+  };
+
+  const handleToggleAccountStatus = async (student: User, newStatus: string) => {
+    if (confirm(`Change account status of ${student.name} to "${newStatus}"?`)) {
+      try {
+        await api.put(`/students/${student.id}/status`, { status: newStatus });
+        alert(`✅ Account status changed to ${newStatus}`);
+        fetchStudents();
+      } catch (err: any) {
+        alert(`❌ Failed to update status: ${err.response?.data?.error || err.message}`);
+      }
+    }
+  };
 
   return (
     <div className="space-y-6 animate-fade-in font-sans">
@@ -846,9 +869,23 @@ export const StudentManagement: React.FC = () => {
                               <button
                                 onClick={() => openResetPasswordModal(st)}
                                 className="p-1.5 rounded-full text-amber-600 bg-amber-50 hover:bg-amber-100 transition-colors"
-                                title="Reset Student Password"
+                                title="Reset Student Password (Default 1234)"
                               >
                                 <Key className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => handleForcePasswordChange(st)}
+                                className="p-1.5 rounded-full text-purple-600 bg-purple-50 hover:bg-purple-100 transition-colors"
+                                title="Force Password Change on Next Login"
+                              >
+                                <Shield className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => handleToggleAccountStatus(st, st.status === 'Locked' ? 'Active' : 'Locked')}
+                                className={`p-1.5 rounded-full transition-colors ${st.status === 'Locked' ? 'text-rose-600 bg-rose-50 hover:bg-rose-100' : 'text-slate-600 bg-slate-100 hover:bg-slate-200'}`}
+                                title={st.status === 'Locked' ? 'Unlock Student Account' : 'Lock Student Account'}
+                              >
+                                <Lock className="w-3.5 h-3.5" />
                               </button>
                               <button
                                 onClick={() => triggerDeleteStudent(st)}
