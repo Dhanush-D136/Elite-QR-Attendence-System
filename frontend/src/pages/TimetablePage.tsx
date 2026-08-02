@@ -1,3 +1,21 @@
+import React, { useState, useEffect } from 'react';
+import api from '../services/api';
+import { TimetableItem, Department, SubjectItem } from '../types';
+import {
+  Calendar,
+  Plus,
+  Edit3,
+  Trash2,
+  ArrowUpDown,
+  Clock,
+  X,
+  Check,
+  BookOpen,
+  User,
+  Building,
+  MapPin,
+  Sparkles
+} from 'lucide-react';
 import { getSocket } from '../services/socket';
 
 interface TimetablePageProps {
