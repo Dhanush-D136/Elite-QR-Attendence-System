@@ -56,7 +56,7 @@ export const TimetablePage: React.FC<TimetablePageProps> = ({ onNavigate }) => {
     room_number: 'F305'
   });
 
-  const days = ['All Days', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const days = ['All Days', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
   const fetchData = async () => {
     try {
@@ -141,7 +141,7 @@ export const TimetablePage: React.FC<TimetablePageProps> = ({ onNavigate }) => {
       section,
       semester: '5',
       date: new Date().toISOString().split('T')[0],
-      day: selectedDay,
+      day: (selectedDay === 'All Days' || !selectedDay) ? 'Monday' : selectedDay,
       period_number: '1',
       subject_name: firstSub ? firstSub.name : '',
       faculty_name: firstSub ? (firstSub.faculty_name || '') : '',

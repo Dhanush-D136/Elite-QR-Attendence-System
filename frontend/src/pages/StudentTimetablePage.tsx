@@ -15,9 +15,9 @@ export const StudentTimetablePage: React.FC = () => {
   const [timetableMode, setTimetableMode] = useState<'daily' | 'weekly' | 'monthly'>('daily');
 
   const allDays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-  const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
   const todayName = allDays[new Date().getDay()];
-  const [activeDay, setActiveDay] = useState<string>(todayName === 'Sunday' ? 'Monday' : todayName);
+  const [activeDay, setActiveDay] = useState<string>(todayName);
 
   const dayOrderMap: Record<string, string> = {
     'Monday': 'Monday • Day Order 1',
