@@ -482,7 +482,7 @@ export const TimetablePage: React.FC<TimetablePageProps> = ({ onNavigate }) => {
                     onChange={(e) => setFormData({ ...formData, day: e.target.value })}
                     className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827]"
                   >
-                    {days.map((d) => (
+                    {days.filter(d => d !== 'All Days').map((d) => (
                       <option key={d} value={d}>{d}</option>
                     ))}
                   </select>

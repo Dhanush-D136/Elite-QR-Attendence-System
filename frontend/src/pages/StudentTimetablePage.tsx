@@ -68,8 +68,35 @@ export const StudentTimetablePage: React.FC = () => {
   const todayClasses = timetables.filter((t) => (t.day || '').toLowerCase() === todayName.toLowerCase()).sort((a, b) => (a.period_number || 0) - (b.period_number || 0));
   const activeDayClasses = timetables.filter((t) => (t.day || '').toLowerCase() === activeDay.toLowerCase()).sort((a, b) => (a.period_number || 0) - (b.period_number || 0));
 
-  const currentClass = todayClasses[0] || null;
-  const nextClass = todayClasses[1] || null;
+  const parseMins = (tStr?: string) => {
+    if (!tStr) return 0;
+    const clean = tStr.trim();
+    const parts = clean.split(' ');
+    const timeParts = parts[0].split(':');
+    let hrs = parseInt(timeParts[0], 10);
+    const mins = parseInt(timeParts[1] || '0', 10);
+    if (parts[1] && parts[1].toUpperCase() === 'PM' && hrs < 12) hrs += 12;
+    if (parts[1] && parts[1].toUpperCase() === 'AM' && hrs === 12) hrs = 0;
+    return hrs * 60 + mins;
+  };
+
+  const nowMins = new Date().getHours() * 60 + new Date().getMinutes();
+  let currentClass: TimetableItem | null = null;
+  let nextClass: TimetableItem | null = null;
+
+  for (let i = 0; i < todayClasses.length; i++) {
+    const slot = todayClasses[i];
+    const startM = parseMins(slot.start_time);
+    const endM = parseMins(slot.end_time);
+
+    if (nowMins >= startM && nowMins <= endM) {
+      currentClass = slot;
+      nextClass = todayClasses[i + 1] || null;
+      break;
+    } else if (nowMins < startM && !nextClass) {
+      nextClass = slot;
+    }
+  }
 
   return (
     <div className="space-y-6 animate-fade-in">

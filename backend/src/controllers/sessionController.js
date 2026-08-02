@@ -80,13 +80,39 @@ function getISTTimeDetails() {
 // Auto-detect Current Class & Next Class Slot from Timetable based on Server Clock (IST Asia/Kolkata)
 function getCurrentTimetableSlot(req, res) {
   const ist = getISTTimeDetails();
+  const targetDay = req.query.day || ist.currentDay;
+  const { department, year, section, faculty_name } = req.query;
 
-  db.all("SELECT * FROM timetables WHERE day = ? AND (status = 'ACTIVE' OR status IS NULL) ORDER BY CAST(period_number AS INTEGER) ASC, id ASC", [ist.currentDay], (err, rows) => {
+  let query = "SELECT * FROM timetables WHERE day = ? AND (status = 'ACTIVE' OR status IS NULL OR status = '')";
+  const params = [targetDay];
+
+  if (department && department !== 'All') {
+    const deptParam = department.includes('AI') ? '%AI%' : `%${department}%`;
+    query += " AND (department = ? OR department LIKE ? OR department IS NULL)";
+    params.push(department, deptParam);
+  }
+  if (year && year !== 'All') {
+    const yrNum = parseInt(year, 10) || 3;
+    query += " AND (year = ? OR year IS NULL)";
+    params.push(yrNum);
+  }
+  if (section && section !== 'All') {
+    query += " AND (section = ? OR section IS NULL)";
+    params.push(section);
+  }
+  if (faculty_name) {
+    query += " AND (LOWER(faculty_name) LIKE ? OR faculty_id = ?)";
+    params.push(`%${faculty_name.toLowerCase()}%`, faculty_name);
+  }
+
+  query += " ORDER BY CAST(period_number AS INTEGER) ASC, start_time ASC";
+
+  db.all(query, params, (err, rows) => {
     if (err || !rows || rows.length === 0) {
       return res.json({
         hasActiveSlot: false,
         message: 'No Active Lecture',
-        currentDay: ist.currentDay,
+        currentDay: targetDay,
         currentDate: ist.todayStr,
         currentTime: ist.formattedTime,
         currentClass: null,
@@ -96,7 +122,6 @@ function getCurrentTimetableSlot(req, res) {
 
     let currentSlot = null;
     let nextSlot = null;
-    let periodIndex = -1;
 
     for (let i = 0; i < rows.length; i++) {
       const slot = rows[i];
@@ -105,7 +130,6 @@ function getCurrentTimetableSlot(req, res) {
 
       if (ist.currentMinutes >= startMins && ist.currentMinutes <= endMins) {
         currentSlot = slot;
-        periodIndex = slot.period_number || (i + 1);
         nextSlot = rows[i + 1] || null;
         break;
       } else if (ist.currentMinutes < startMins && !nextSlot) {
@@ -114,21 +138,28 @@ function getCurrentTimetableSlot(req, res) {
     }
 
     const formatClass = (s) => s ? {
+      id: s.id,
       period: `Period ${s.period_number || 1}`,
       periodNumber: s.period_number || 1,
+      period_number: s.period_number || 1,
       subject: s.subject_name,
+      subject_name: s.subject_name,
       faculty: s.faculty_name,
+      faculty_name: s.faculty_name,
       room: s.room_number || 'F305',
+      room_number: s.room_number || 'F305',
       department: s.department || 'AI & DS',
-      year: 'III Year',
+      year: s.year || 3,
       section: s.section || 'A',
       startTime: s.start_time,
-      endTime: s.end_time
+      start_time: s.start_time,
+      endTime: s.end_time,
+      end_time: s.end_time
     } : null;
 
     return res.json({
       hasActiveSlot: !!currentSlot,
-      currentDay: ist.currentDay,
+      currentDay: targetDay,
       currentDate: ist.todayStr,
       currentTime: ist.formattedTime,
       slot: formatClass(currentSlot),

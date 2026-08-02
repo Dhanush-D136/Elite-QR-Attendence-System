@@ -89,28 +89,52 @@ export const SessionHub: React.FC<SessionHubProps> = ({
       const fetchedTt = res.data.timetables || [];
       setTimetables(fetchedTt);
 
-      if (fetchedTt.length > 0) {
-        if (initialSubject) {
-          const match = fetchedTt.find(
-            (t: TimetableItem) =>
-              t.subject_name.toLowerCase().includes(initialSubject.toLowerCase()) ||
-              initialSubject.toLowerCase().includes(t.subject_name.toLowerCase())
-          );
-          if (match) {
-            setSelectedTimetableId(match.id);
-            setSubject(match.subject_name);
-            setFacultyName(match.faculty_name);
-            setPeriodNumber(String(match.period_number || 1));
-          } else {
-            setSubject(initialSubject);
-            if (initialFaculty) setFacultyName(initialFaculty);
+      if (initialSubject) {
+        const match = fetchedTt.find(
+          (t: TimetableItem) =>
+            t.subject_name.toLowerCase().includes(initialSubject.toLowerCase()) ||
+            initialSubject.toLowerCase().includes(t.subject_name.toLowerCase())
+        );
+        if (match) {
+          setSelectedTimetableId(match.id);
+          setSubject(match.subject_name);
+          setFacultyName(match.faculty_name);
+          setPeriodNumber(String(match.period_number || 1));
+          if (match.department) setDepartment(match.department);
+          if (match.section) setSection(match.section);
+          if (match.year) setYear(String(match.year));
+        } else {
+          setSubject(initialSubject);
+          if (initialFaculty) setFacultyName(initialFaculty);
+        }
+      } else {
+        // Auto-detect current active or upcoming timetable slot
+        try {
+          const slotRes = await api.get('/sessions/current-slot');
+          const activeOrNext = slotRes.data?.slot || slotRes.data?.nextSlot;
+          if (activeOrNext) {
+            if (activeOrNext.id) setSelectedTimetableId(activeOrNext.id);
+            if (activeOrNext.subject_name || activeOrNext.subject) setSubject(activeOrNext.subject_name || activeOrNext.subject);
+            if (activeOrNext.faculty_name || activeOrNext.faculty) setFacultyName(activeOrNext.faculty_name || activeOrNext.faculty);
+            if (activeOrNext.period_number || activeOrNext.periodNumber) setPeriodNumber(String(activeOrNext.period_number || activeOrNext.periodNumber));
+            if (activeOrNext.department) setDepartment(activeOrNext.department);
+            if (activeOrNext.section) setSection(activeOrNext.section);
+            if (activeOrNext.year) setYear(String(activeOrNext.year));
+          } else if (fetchedTt.length > 0) {
+            const first = fetchedTt[0];
+            setSelectedTimetableId(first.id);
+            setSubject(first.subject_name);
+            setFacultyName(first.faculty_name);
+            setPeriodNumber(String(first.period_number || 1));
           }
-        } else if (!subject) {
-          const first = fetchedTt[0];
-          setSelectedTimetableId(first.id);
-          setSubject(first.subject_name);
-          setFacultyName(first.faculty_name);
-          setPeriodNumber(String(first.period_number || 1));
+        } catch (e) {
+          if (fetchedTt.length > 0) {
+            const first = fetchedTt[0];
+            setSelectedTimetableId(first.id);
+            setSubject(first.subject_name);
+            setFacultyName(first.faculty_name);
+            setPeriodNumber(String(first.period_number || 1));
+          }
         }
       }
     } catch (err) {

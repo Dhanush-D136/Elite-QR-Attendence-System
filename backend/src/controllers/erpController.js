@@ -258,6 +258,21 @@ function deleteSubject(req, res) {
   });
 }
 
+const { supabase } = require('../database/supabaseClient');
+
+async function syncTimetableToSupabase(action, slotOrId) {
+  if (!supabase) return;
+  try {
+    if (action === 'delete') {
+      await supabase.from('timetables').delete().eq('id', slotOrId);
+    } else {
+      await supabase.from('timetables').upsert(slotOrId, { onConflict: 'id' });
+    }
+  } catch (err) {
+    console.warn(`[SUPABASE DIRECT SYNC WARNING] ${err.message}`);
+  }
+}
+
 // --- Helper to broadcast real-time timetable Socket.IO events ---
 function broadcastTimetableEvent(eventType, payload) {
   if (global.io) {
@@ -339,7 +354,7 @@ function getTimetables(req, res) {
   } else if (sort_by === 'faculty') {
     query += ' ORDER BY faculty_name ASC, CAST(period_number AS INTEGER) ASC';
   } else {
-    query += " ORDER BY CASE day WHEN 'Monday' THEN 1 WHEN 'Tuesday' THEN 2 WHEN 'Wednesday' THEN 3 WHEN 'Thursday' THEN 4 WHEN 'Friday' THEN 5 WHEN 'Saturday' THEN 6 ELSE 7 END, CAST(period_number AS INTEGER) ASC, start_time ASC";
+    query += " ORDER BY CASE day WHEN 'Monday' THEN 1 WHEN 'Tuesday' THEN 2 WHEN 'Wednesday' THEN 3 WHEN 'Thursday' THEN 4 WHEN 'Friday' THEN 5 WHEN 'Saturday' THEN 6 WHEN 'Sunday' THEN 7 ELSE 8 END, CAST(period_number AS INTEGER) ASC, start_time ASC";
   }
   db.all(query, params, (err, timetables) => {
     if (err) return res.status(500).json({ error: 'Database error fetching timetables: ' + err.message });
@@ -365,7 +380,7 @@ function getStudentTimetable(req, res) {
     WHERE (department = ? OR department LIKE ? OR department IS NULL)
       AND (year = ? OR year IS NULL)
       AND (section = ? OR section IS NULL)
-    ORDER BY CASE day WHEN 'Monday' THEN 1 WHEN 'Tuesday' THEN 2 WHEN 'Wednesday' THEN 3 WHEN 'Thursday' THEN 4 WHEN 'Friday' THEN 5 WHEN 'Saturday' THEN 6 ELSE 7 END, CAST(period_number AS INTEGER) ASC, start_time ASC
+    ORDER BY CASE day WHEN 'Monday' THEN 1 WHEN 'Tuesday' THEN 2 WHEN 'Wednesday' THEN 3 WHEN 'Thursday' THEN 4 WHEN 'Friday' THEN 5 WHEN 'Saturday' THEN 6 WHEN 'Sunday' THEN 7 ELSE 8 END, CAST(period_number AS INTEGER) ASC, start_time ASC
   `;
 
   db.all(sql, [rawDept, deptParam, yr, sec], (err, timetables) => {
@@ -530,6 +545,7 @@ function createTimetable(req, res) {
             if (updateErr) return res.status(500).json({ error: 'Failed to update timetable slot: ' + updateErr.message });
 
             const updatedSlotObj = { ...newEntry, id: existingSlot.id };
+            syncTimetableToSupabase('update', updatedSlotObj);
             broadcastTimetableEvent('timetable_updated', { action: 'updated', slot: updatedSlotObj });
             res.status(200).json({ message: `Timetable entry updated successfully for ${newEntry.day} Period ${newEntry.period_number}!`, id: existingSlot.id, timetable: updatedSlotObj });
           }
@@ -558,6 +574,8 @@ function createTimetable(req, res) {
           ],
           function (err) {
             if (err) return res.status(500).json({ error: 'Failed to create timetable slot: ' + err.message });
+
+            syncTimetableToSupabase('create', newEntry);
 
             // Trigger Socket.IO Realtime Sync
             broadcastTimetableEvent('timetable_created', { slot: newEntry });
@@ -642,6 +660,8 @@ function updateTimetable(req, res) {
     function (err) {
       if (err) return res.status(500).json({ error: 'Failed to update timetable entry: ' + err.message });
 
+      syncTimetableToSupabase('update', updatedEntry);
+
       // Trigger Socket.IO Realtime Sync
       broadcastTimetableEvent('timetable_updated', { action: 'updated', slot: updatedEntry });
 
@@ -654,6 +674,8 @@ function deleteTimetable(req, res) {
   const { id } = req.params;
   db.run('DELETE FROM timetables WHERE id = ?', [id], function (err) {
     if (err) return res.status(500).json({ error: 'Failed to delete timetable entry: ' + err.message });
+
+    syncTimetableToSupabase('delete', id);
 
     // Trigger Socket.IO Realtime Sync
     broadcastTimetableEvent('timetable_deleted', { id });
