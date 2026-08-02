@@ -2,9 +2,13 @@ const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 const bcrypt = require('bcryptjs');
 const { v4: uuidv4 } = require('uuid');
+const { supabase } = require('./supabaseClient');
+const { initSupabasePostgres } = require('./pgAdapter');
+
 
 const dbPath = path.resolve(__dirname, 'smartattend.db');
 const db = new sqlite3.Database(dbPath);
+
 
 const PREDEFINED_100_TOKENS = [
   "A7K9X","B4XM2","C8RT5","D7PQ9","E6ZW4","F9KL8","G3YN7","H5VC2","J8MD6","K4TR9",
@@ -315,7 +319,11 @@ function runMigrations() {
 function initDb() {
   return new Promise((resolve, reject) => {
     db.serialize(async () => {
+      // Attempt connection & migration on Supabase PostgreSQL cloud database
+      await initSupabasePostgres();
+
       // Create Users table
+
       db.run(`
         CREATE TABLE IF NOT EXISTS users (
           id TEXT PRIMARY KEY,
@@ -863,4 +871,5 @@ function initDb() {
   });
 }
 
-module.exports = { db, initDb, runMigrations, PREDEFINED_100_TOKENS };
+module.exports = { db, initDb, runMigrations, PREDEFINED_100_TOKENS, supabase };
+
