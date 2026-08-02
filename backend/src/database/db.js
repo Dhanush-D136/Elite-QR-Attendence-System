@@ -206,6 +206,9 @@ function runMigrations() {
                       } catch (e) {}
                     }
                   });
+                  try {
+                    db.run("UPDATE timetables SET status = 'ACTIVE' WHERE status IS NULL OR status = ''");
+                  } catch (e) {}
                 }
 
                 // Auto-sync & Seed Master Timetable for Semester 5 Section A

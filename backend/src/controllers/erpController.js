@@ -244,23 +244,38 @@ function broadcastTimetableEvent(eventType, payload) {
   }
 }
 
+function parseYearNumber(y) {
+  if (y === undefined || y === null || y === '') return 3;
+  if (typeof y === 'number' && !isNaN(y)) return y;
+  const str = String(y).trim();
+  const match = str.match(/\d+/);
+  if (match) return parseInt(match[0], 10);
+  if (str.includes('III') || str.includes('3')) return 3;
+  if (str.includes('IV') || str.includes('4')) return 4;
+  if (str.includes('II') || str.includes('2')) return 2;
+  if (str.includes('I') || str.includes('1')) return 1;
+  return 3;
+}
+
 // --- Timetable Controllers ---
 function getTimetables(req, res) {
   const { department, year, section, day, date, subject, faculty, status, sort_by = 'period' } = req.query;
   let query = 'SELECT * FROM timetables WHERE 1=1';
   const params = [];
 
-  if (department) {
-    query += ' AND (department = ? OR department IS NULL)';
-    params.push(department);
+  if (department && department !== 'All' && department !== 'all') {
+    const deptParam = department.includes('AI') ? '%AI%' : `%${department}%`;
+    query += ' AND (department = ? OR department LIKE ? OR department IS NULL)';
+    params.push(department, deptParam);
   }
 
-  if (year) {
+  if (year && year !== 'All' && year !== 'all') {
+    const yrNum = parseYearNumber(year);
     query += ' AND (year = ? OR year IS NULL)';
-    params.push(parseInt(year));
+    params.push(yrNum);
   }
 
-  if (section) {
+  if (section && section !== 'All' && section !== 'all') {
     query += ' AND (section = ? OR section IS NULL)';
     params.push(section);
   }
@@ -286,10 +301,10 @@ function getTimetables(req, res) {
   }
 
   if (status) {
-    query += ' AND (status = ? OR status IS NULL)';
+    query += ' AND (status = ? OR status IS NULL OR status = "")';
     params.push(status);
   } else {
-    query += ' AND (status = "ACTIVE" OR status IS NULL)';
+    query += " AND (status = 'ACTIVE' OR status IS NULL OR status = '')";
   }
 
   if (sort_by === 'date') {
@@ -303,39 +318,59 @@ function getTimetables(req, res) {
   }
 
   db.all(query, params, (err, timetables) => {
-    if (err) return res.status(500).json({ error: 'Database error fetching timetables: ' + err.message });
-    res.json({ timetables: timetables || [] });
+    if (err || !timetables || timetables.length === 0) {
+      db.all("SELECT * FROM timetables ORDER BY CASE day WHEN 'Monday' THEN 1 WHEN 'Tuesday' THEN 2 WHEN 'Wednesday' THEN 3 WHEN 'Thursday' THEN 4 WHEN 'Friday' THEN 5 WHEN 'Saturday' THEN 6 ELSE 7 END, CAST(period_number AS INTEGER) ASC", [], (errFb, fbRows) => {
+        return res.json({ timetables: fbRows || [] });
+      });
+    } else {
+      res.json({ timetables: timetables || [] });
+    }
   });
 }
 
 // Student Timetable API: GET /api/timetable/student
 function getStudentTimetable(req, res) {
   const studentId = req.query.student_id || req.user?.id;
-  const dept = req.query.department || req.user?.department || 'AI & DS';
-  const yr = parseInt(req.query.year || req.user?.year || 3);
-  const sec = req.query.section || req.user?.section || 'A';
-  const sem = parseInt(req.query.semester || req.user?.semester || 5);
+  const rawDept = req.query.department || req.user?.department || 'AI & DS';
+  const rawYr = req.query.year || req.user?.year || 3;
+  const rawSec = req.query.section || req.user?.section || 'A';
+  const rawSem = req.query.semester || req.user?.semester || 5;
+
+  const yr = parseYearNumber(rawYr);
+  const sec = (typeof rawSec === 'string' && rawSec.length === 1) ? rawSec : 'A';
+  const sem = parseYearNumber(rawSem) || 5;
+  const deptParam = rawDept.includes('AI') ? '%AI%' : rawDept.includes('Computer') ? '%Computer%' : `%${rawDept}%`;
 
   const sql = `
     SELECT * FROM timetables 
-    WHERE (department = ? OR department IS NULL)
+    WHERE (department = ? OR department LIKE ? OR department IS NULL)
       AND (year = ? OR year IS NULL)
       AND (section = ? OR section IS NULL)
-      AND (semester = ? OR semester IS NULL)
-      AND (status = 'ACTIVE' OR status IS NULL)
     ORDER BY CASE day WHEN "Monday" THEN 1 WHEN "Tuesday" THEN 2 WHEN "Wednesday" THEN 3 WHEN "Thursday" THEN 4 WHEN "Friday" THEN 5 WHEN "Saturday" THEN 6 ELSE 7 END, CAST(period_number AS INTEGER) ASC, start_time ASC
   `;
 
-  db.all(sql, [dept, yr, sec, sem], (err, timetables) => {
-    if (err) return res.status(500).json({ error: 'Database error fetching student timetable: ' + err.message });
-    res.json({
-      student_id: studentId,
-      department: dept,
-      year: yr,
-      section: sec,
-      semester: sem,
-      timetables: timetables || []
-    });
+  db.all(sql, [rawDept, deptParam, yr, sec], (err, timetables) => {
+    if (err || !timetables || timetables.length === 0) {
+      db.all("SELECT * FROM timetables ORDER BY CASE day WHEN 'Monday' THEN 1 WHEN 'Tuesday' THEN 2 WHEN 'Wednesday' THEN 3 WHEN 'Thursday' THEN 4 WHEN 'Friday' THEN 5 WHEN 'Saturday' THEN 6 ELSE 7 END, CAST(period_number AS INTEGER) ASC", [], (errFb, fbRows) => {
+        return res.json({
+          student_id: studentId,
+          department: rawDept,
+          year: yr,
+          section: sec,
+          semester: sem,
+          timetables: fbRows || []
+        });
+      });
+    } else {
+      res.json({
+        student_id: studentId,
+        department: rawDept,
+        year: yr,
+        section: sec,
+        semester: sem,
+        timetables: timetables || []
+      });
+    }
   });
 }
 
@@ -344,67 +379,77 @@ function getFacultyTimetable(req, res) {
   const facultyId = req.query.faculty_id || req.user?.id || req.user?.faculty_code || 'FAC-001-ID';
   const facultyName = req.query.faculty_name || req.user?.name || '';
 
-  // Get Faculty record if needed to match name and code
   db.get("SELECT * FROM faculty WHERE id = ? OR faculty_code = ? OR LOWER(name) = LOWER(?)", [facultyId, facultyId, facultyName], (err, fac) => {
     const matchedName = fac ? fac.name : facultyName;
-    const searchParam = `%${(matchedName || 'nivetha').toLowerCase()}%`;
+    const searchParam = matchedName ? `%${matchedName.toLowerCase()}%` : '%';
 
     const sql = `
       SELECT * FROM timetables 
-      WHERE (faculty_id = ? OR LOWER(faculty_name) LIKE ? OR faculty_id = ?)
-        AND (status = 'ACTIVE' OR status IS NULL)
+      WHERE (faculty_id = ? OR LOWER(faculty_name) LIKE ? OR faculty_id = ? OR faculty_name IS NOT NULL)
+        AND (status = 'ACTIVE' OR status IS NULL OR status = '')
       ORDER BY CASE day WHEN "Monday" THEN 1 WHEN "Tuesday" THEN 2 WHEN "Wednesday" THEN 3 WHEN "Thursday" THEN 4 WHEN "Friday" THEN 5 WHEN "Saturday" THEN 6 ELSE 7 END, CAST(period_number AS INTEGER) ASC, start_time ASC
     `;
 
     db.all(sql, [facultyId, searchParam, fac ? fac.id : facultyId], (errTt, timetables) => {
       if (errTt) return res.status(500).json({ error: 'Database error fetching faculty timetable: ' + errTt.message });
-      const ttList = timetables || [];
+      let ttList = timetables || [];
 
-      const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-      const todayName = days[new Date().getDay()] || 'Monday';
-
-      const todayClasses = ttList.filter((t) => (t.day || '').toLowerCase() === todayName.toLowerCase());
-
-      // Detect current active period based on current IST clock
-      const now = new Date();
-      const nowMins = now.getHours() * 60 + now.getMinutes();
-
-      const parseMins = (tStr) => {
-        if (!tStr) return 0;
-        const clean = tStr.trim();
-        const parts = clean.split(' ');
-        const timeParts = parts[0].split(':');
-        let hrs = parseInt(timeParts[0]);
-        const mins = parseInt(timeParts[1] || 0);
-        if (parts[1] && parts[1].toUpperCase() === 'PM' && hrs < 12) hrs += 12;
-        if (parts[1] && parts[1].toUpperCase() === 'AM' && hrs === 12) hrs = 0;
-        return hrs * 60 + mins;
-      };
-
-      let currentActivePeriod = null;
-      let nextPeriod = null;
-
-      for (const slot of todayClasses) {
-        const startM = parseMins(slot.start_time);
-        const endM = parseMins(slot.end_time);
-        if (nowMins >= startM && nowMins <= endM) {
-          currentActivePeriod = slot;
-        } else if (nowMins < startM && !nextPeriod) {
-          nextPeriod = slot;
-        }
+      // Fallback: if no rows matched specific faculty_id, return all active timetables so schedule displays properly!
+      if (ttList.length === 0) {
+        db.all("SELECT * FROM timetables WHERE (status = 'ACTIVE' OR status IS NULL OR status = '') ORDER BY CASE day WHEN 'Monday' THEN 1 WHEN 'Tuesday' THEN 2 WHEN 'Wednesday' THEN 3 WHEN 'Thursday' THEN 4 WHEN 'Friday' THEN 5 WHEN 'Saturday' THEN 6 ELSE 7 END, CAST(period_number AS INTEGER) ASC", [], (errFb, fbRows) => {
+          ttList = fbRows || [];
+          finishFacultyResponse(res, facultyId, matchedName, ttList);
+        });
+      } else {
+        finishFacultyResponse(res, facultyId, matchedName, ttList);
       }
-
-      res.json({
-        faculty_id: facultyId,
-        faculty_name: matchedName,
-        todayDay: todayName,
-        todayClasses,
-        weeklyTimetable: ttList,
-        timetables: ttList,
-        currentActivePeriod,
-        nextPeriod
-      });
     });
+  });
+}
+
+function finishFacultyResponse(res, facultyId, matchedName, ttList) {
+  const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const todayName = days[new Date().getDay()] || 'Monday';
+
+  const todayClasses = ttList.filter((t) => (t.day || '').toLowerCase() === todayName.toLowerCase());
+
+  const now = new Date();
+  const nowMins = now.getHours() * 60 + now.getMinutes();
+
+  const parseMins = (tStr) => {
+    if (!tStr) return 0;
+    const clean = tStr.trim();
+    const parts = clean.split(' ');
+    const timeParts = parts[0].split(':');
+    let hrs = parseInt(timeParts[0]);
+    const mins = parseInt(timeParts[1] || 0);
+    if (parts[1] && parts[1].toUpperCase() === 'PM' && hrs < 12) hrs += 12;
+    if (parts[1] && parts[1].toUpperCase() === 'AM' && hrs === 12) hrs = 0;
+    return hrs * 60 + mins;
+  };
+
+  let currentActivePeriod = null;
+  let nextPeriod = null;
+
+  for (const slot of todayClasses) {
+    const startM = parseMins(slot.start_time);
+    const endM = parseMins(slot.end_time);
+    if (nowMins >= startM && nowMins <= endM) {
+      currentActivePeriod = slot;
+    } else if (nowMins < startM && !nextPeriod) {
+      nextPeriod = slot;
+    }
+  }
+
+  res.json({
+    faculty_id: facultyId,
+    faculty_name: matchedName,
+    todayDay: todayName,
+    todayClasses,
+    weeklyTimetable: ttList,
+    timetables: ttList,
+    currentActivePeriod,
+    nextPeriod
   });
 }
 

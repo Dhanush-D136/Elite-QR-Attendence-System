@@ -179,10 +179,12 @@ export const TimetablePage: React.FC<TimetablePageProps> = ({ onNavigate }) => {
             onChange={(e) => setDepartment(e.target.value)}
             className="px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-[#111827] font-medium"
           >
-            <option value="Computer Science">Computer Science</option>
+            <option value="AI & DS">AI & DS</option>
             <option value="AI & Data Science">AI & Data Science</option>
+            <option value="Computer Science">Computer Science</option>
             <option value="Electronics">Electronics</option>
             <option value="Mechanical">Mechanical</option>
+            <option value="All">All Departments</option>
           </select>
 
           <select
