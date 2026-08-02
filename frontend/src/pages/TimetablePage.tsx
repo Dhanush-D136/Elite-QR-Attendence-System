@@ -35,16 +35,15 @@ export const TimetablePage: React.FC<TimetablePageProps> = ({ onNavigate }) => {
     room_number: 'F305'
   });
 
-  const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const days = ['All Days', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
   const fetchData = async () => {
     try {
-      const params = new URLSearchParams({
-        department,
-        year,
-        section,
-        sort_by: sortBy
-      });
+      const params = new URLSearchParams();
+      if (department && department !== 'All') params.append('department', department);
+      if (year && year !== 'All') params.append('year', year);
+      if (section && section !== 'All') params.append('section', section);
+      if (sortBy) params.append('sort_by', sortBy);
       if (searchSubject) params.append('subject', searchSubject);
 
       const [resTt, resDept, resSub] = await Promise.all([
@@ -52,7 +51,8 @@ export const TimetablePage: React.FC<TimetablePageProps> = ({ onNavigate }) => {
         api.get('/departments'),
         api.get('/subjects')
       ]);
-      setTimetables(resTt.data.timetables || []);
+      const list = resTt.data.timetables || resTt.data || [];
+      setTimetables(list);
       setDepartments(resDept.data.departments || []);
       setSubjects(resSub.data.subjects || []);
     } catch (err) {
@@ -149,7 +149,26 @@ export const TimetablePage: React.FC<TimetablePageProps> = ({ onNavigate }) => {
     }
   };
 
-  const filteredTt = timetables.filter((t) => t.day === selectedDay);
+  const normalizeDay = (d?: string) => {
+    if (!d) return '';
+    const clean = d.toString().trim().toLowerCase();
+    if (clean === 'day1' || clean === 'day 1' || clean === 'mon' || clean === 'monday') return 'monday';
+    if (clean === 'day2' || clean === 'day 2' || clean === 'tue' || clean === 'tuesday') return 'tuesday';
+    if (clean === 'day3' || clean === 'day 3' || clean === 'wed' || clean === 'wednesday') return 'wednesday';
+    if (clean === 'day4' || clean === 'day 4' || clean === 'thu' || clean === 'thursday') return 'thursday';
+    if (clean === 'day5' || clean === 'day 5' || clean === 'fri' || clean === 'friday') return 'friday';
+    if (clean === 'day6' || clean === 'day 6' || clean === 'sat' || clean === 'saturday') return 'saturday';
+    if (clean === 'day7' || clean === 'day 7' || clean === 'sun' || clean === 'sunday') return 'sunday';
+    return clean;
+  };
+
+  const filteredTt = timetables.filter((t) => {
+    if (selectedDay === 'All Days') return true;
+    if (!t.day) return true;
+    return normalizeDay(t.day) === normalizeDay(selectedDay);
+  });
+
+  const displayTt = (filteredTt.length > 0 || selectedDay === 'All Days') ? filteredTt : timetables;
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -179,12 +198,12 @@ export const TimetablePage: React.FC<TimetablePageProps> = ({ onNavigate }) => {
             onChange={(e) => setDepartment(e.target.value)}
             className="px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-[#111827] font-medium"
           >
+            <option value="All">All Departments</option>
             <option value="AI & DS">AI & DS</option>
             <option value="AI & Data Science">AI & Data Science</option>
             <option value="Computer Science">Computer Science</option>
             <option value="Electronics">Electronics</option>
             <option value="Mechanical">Mechanical</option>
-            <option value="All">All Departments</option>
           </select>
 
           <select
@@ -192,6 +211,7 @@ export const TimetablePage: React.FC<TimetablePageProps> = ({ onNavigate }) => {
             onChange={(e) => setYear(e.target.value)}
             className="px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-[#111827] font-medium"
           >
+            <option value="All">All Years</option>
             <option value="1">1st Year</option>
             <option value="2">2nd Year</option>
             <option value="3">3rd Year</option>
@@ -203,6 +223,7 @@ export const TimetablePage: React.FC<TimetablePageProps> = ({ onNavigate }) => {
             onChange={(e) => setSection(e.target.value)}
             className="px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-[#111827] font-medium"
           >
+            <option value="All">All Sections</option>
             <option value="A">Section A</option>
             <option value="B">Section B</option>
             <option value="C">Section C</option>
@@ -251,11 +272,11 @@ export const TimetablePage: React.FC<TimetablePageProps> = ({ onNavigate }) => {
             {selectedDay} Timetable Slots ({department} - Yr {year}, Sec {section})
           </h3>
           <span className="text-xs text-[#6D5DFC] font-bold">
-            {filteredTt.length} Active Period(s) Configured
+            {displayTt.length} Active Period(s) Configured
           </span>
         </div>
 
-        {filteredTt.length === 0 ? (
+        {displayTt.length === 0 ? (
           <div className="py-12 text-center text-[#6B7280] text-xs font-medium space-y-2">
             <Calendar className="w-8 h-8 text-[#9CA3AF] mx-auto opacity-70" />
             <p>No class timetable slots configured for {selectedDay}.</p>
@@ -268,7 +289,7 @@ export const TimetablePage: React.FC<TimetablePageProps> = ({ onNavigate }) => {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredTt.map((tt) => (
+            {displayTt.map((tt) => (
               <div key={tt.id} className="p-5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] space-y-3 hover:border-[#6D5DFC]/40 transition-all flex flex-col justify-between group">
                 <div>
                   <div className="flex items-center justify-between pb-2 border-b border-[#E7E7E7]">
