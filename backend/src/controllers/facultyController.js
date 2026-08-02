@@ -493,47 +493,77 @@ async function adminCreateFaculty(req, res) {
   }
 
   const cleanCode = faculty_code.trim().toUpperCase();
-  const cleanEmail = (email || `${cleanCode.toLowerCase()}@velhightech.com`).trim().toLowerCase();
+  const cleanEmail = (email && email.trim() !== '') ? email.trim().toLowerCase() : `${cleanCode.toLowerCase()}@velhightech.com`;
   const id = uuidv4();
   const passwordHash = await bcrypt.hash(password || '1234', 10);
   const photo = profile_photo || `https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150`;
   const facultyStatus = status || 'Active';
 
-  db.run(
-    `INSERT INTO faculty (id, faculty_code, name, department, designation, email, phone, qualification, experience, specialization, profile_photo, status, password_hash, password_changed, must_change_password) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0)`,
-    [id, cleanCode, name.trim(), department || 'AI & Data Science', designation || 'Assistant Professor', cleanEmail, phone || '+91 9876501234', qualification || 'M.Tech (AI & DS)', experience || '5 Years Teaching', specialization || 'Artificial Intelligence', photo, facultyStatus, passwordHash],
-    function (err) {
-      if (err) {
-        if (err.message.includes('UNIQUE constraint failed')) {
-          return res.status(409).json({ error: 'Faculty Code or Email already exists in the system.' });
+  // Upfront duplication check for friendly user error response
+  db.get(
+    `SELECT id, faculty_code, name, email FROM faculty WHERE LOWER(faculty_code) = LOWER(?) OR LOWER(email) = LOWER(?)`,
+    [cleanCode, cleanEmail],
+    (checkErr, existing) => {
+      if (existing) {
+        if (existing.faculty_code.toLowerCase() === cleanCode.toLowerCase()) {
+          return res.status(409).json({
+            error: `Faculty Code '${cleanCode}' is already registered for ${existing.name}. Please use a unique Faculty Code or edit the existing account.`
+          });
         }
-        return res.status(500).json({ error: 'Failed to create faculty account: ' + err.message });
+        if (existing.email.toLowerCase() === cleanEmail.toLowerCase()) {
+          return res.status(409).json({
+            error: `Official Email ID '${cleanEmail}' is already registered for ${existing.name}. Please use a unique email address or edit the existing account.`
+          });
+        }
       }
 
-      // Add Subject Mappings if provided
-      if (assigned_subjects && Array.isArray(assigned_subjects)) {
-        assigned_subjects.forEach((sub) => {
-          const mapId = uuidv4();
-          const subName = typeof sub === 'string' ? sub : sub.subject_name;
-          const subCode = typeof sub === 'object' ? sub.subject_code : '21AI51T';
-          db.run(
-            `INSERT INTO faculty_subject_mapping (id, faculty_id, subject_name, subject_code, department, year, section) VALUES (?, ?, ?, ?, ?, 3, 'A')`,
-            [mapId, id, subName, subCode, department || 'AI & DS']
-          );
-        });
-      } else {
-        // Default Subject Mappings
-        const mapId1 = uuidv4();
-        db.run(
-          `INSERT INTO faculty_subject_mapping (id, faculty_id, subject_name, subject_code, department, year, section) VALUES (?, ?, 'Knowledge Engineering', '21AI55T', ?, 3, 'A')`,
-          [mapId1, id, department || 'AI & DS']
-        );
-      }
+      db.run(
+        `INSERT INTO faculty (id, faculty_code, name, department, designation, email, phone, qualification, experience, specialization, profile_photo, status, password_hash, password_changed, must_change_password) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0)`,
+        [id, cleanCode, name.trim(), department || 'AI & Data Science', designation || 'Assistant Professor', cleanEmail, phone || '+91 9876501234', qualification || 'M.Tech (AI & DS)', experience || '5 Years Teaching', specialization || 'Artificial Intelligence', photo, facultyStatus, passwordHash],
+        function (err) {
+          if (err) {
+            if (
+              err.message.includes('UNIQUE constraint failed') ||
+              err.message.includes('unique constraint') ||
+              err.message.includes('duplicate key')
+            ) {
+              if (err.message.includes('email') || err.message.includes('faculty_email_key')) {
+                return res.status(409).json({ error: `Official Email ID '${cleanEmail}' is already registered in the system. Please use a unique email address.` });
+              }
+              if (err.message.includes('faculty_code') || err.message.includes('faculty_faculty_code_key')) {
+                return res.status(409).json({ error: `Faculty Code '${cleanCode}' is already registered in the system. Please use a unique Faculty Code.` });
+              }
+              return res.status(409).json({ error: 'Faculty Code or Email already exists in the system.' });
+            }
+            return res.status(500).json({ error: 'Failed to create faculty account: ' + err.message });
+          }
 
-      // Log Activity
-      db.run(`INSERT INTO faculty_activity_logs (id, faculty_id, action, details) VALUES (?, ?, 'Account Created', 'Faculty account created by Administrator')`, [uuidv4(), id]);
+          // Add Subject Mappings if provided
+          if (assigned_subjects && Array.isArray(assigned_subjects)) {
+            assigned_subjects.forEach((sub) => {
+              const mapId = uuidv4();
+              const subName = typeof sub === 'string' ? sub : sub.subject_name;
+              const subCode = typeof sub === 'object' ? sub.subject_code : '21AI51T';
+              db.run(
+                `INSERT INTO faculty_subject_mapping (id, faculty_id, subject_name, subject_code, department, year, section) VALUES (?, ?, ?, ?, ?, 3, 'A')`,
+                [mapId, id, subName, subCode, department || 'AI & DS']
+              );
+            });
+          } else {
+            // Default Subject Mappings
+            const mapId1 = uuidv4();
+            db.run(
+              `INSERT INTO faculty_subject_mapping (id, faculty_id, subject_name, subject_code, department, year, section) VALUES (?, ?, 'Knowledge Engineering', '21AI55T', ?, 3, 'A')`,
+              [mapId1, id, department || 'AI & DS']
+            );
+          }
 
-      res.status(201).json({ message: `Faculty account ${cleanCode} created successfully!`, id });
+          // Log Activity
+          db.run(`INSERT INTO faculty_activity_logs (id, faculty_id, action, details) VALUES (?, ?, 'Account Created', 'Faculty account created by Administrator')`, [uuidv4(), id]);
+
+          res.status(201).json({ message: `Faculty account ${cleanCode} created successfully!`, id });
+        }
+      );
     }
   );
 }
