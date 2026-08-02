@@ -403,6 +403,10 @@ CREATE POLICY "Allow server full access to classes" ON public.classes FOR ALL TO
 CREATE POLICY "Allow server full access to sections" ON public.sections FOR ALL TO service_role USING (true) WITH CHECK (true);
 CREATE POLICY "Allow server full access to subjects" ON public.subjects FOR ALL TO service_role USING (true) WITH CHECK (true);
 CREATE POLICY "Allow server full access to timetables" ON public.timetables FOR ALL TO service_role USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "Allow public select access to timetables" ON public.timetables;
+CREATE POLICY "Allow public select access to timetables" ON public.timetables FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Allow public write access to timetables" ON public.timetables;
+CREATE POLICY "Allow public write access to timetables" ON public.timetables FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow server full access to system_settings" ON public.system_settings FOR ALL TO service_role USING (true) WITH CHECK (true);
 CREATE POLICY "Allow server full access to faculty" ON public.faculty FOR ALL TO service_role USING (true) WITH CHECK (true);
 CREATE POLICY "Allow server full access to class_details" ON public.class_details FOR ALL TO service_role USING (true) WITH CHECK (true);

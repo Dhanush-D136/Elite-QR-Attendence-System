@@ -98,20 +98,8 @@ async function autoMigrateSqliteToSupabase(client) {
     return;
   }
 
-  // Check if users table in Supabase already has records
-  let supabaseUserCount = 0;
-  try {
-    const userCheck = await client.query('SELECT COUNT(*) FROM public.users');
-    supabaseUserCount = parseInt(userCheck.rows[0].count, 10);
-  } catch (e) {}
-
-  if (supabaseUserCount >= 10) {
-    console.log(`[SUPABASE AUTO-MIGRATION] Supabase PostgreSQL already contains ${supabaseUserCount} users. Verification complete.`);
-    return;
-  }
-
   console.log('====================================================');
-  console.log('🚀 [SUPABASE AUTO-MIGRATION] Seeding Supabase PostgreSQL from SQLite smartattend.db...');
+  console.log('🚀 [SUPABASE AUTO-MIGRATION] Verifying & Seeding Supabase PostgreSQL from SQLite smartattend.db...');
   console.log('====================================================');
 
   const sqliteDb = new sqlite3.Database(sqlitePath, sqlite3.OPEN_READONLY);
