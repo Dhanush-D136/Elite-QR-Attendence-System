@@ -152,7 +152,7 @@ function getFacultyDashboard(req, res) {
         `SELECT * FROM timetables 
          WHERE (faculty_id = ? OR LOWER(faculty_name) LIKE ?) 
            AND (status = 'ACTIVE' OR status IS NULL)
-         ORDER BY CASE day WHEN "Monday" THEN 1 WHEN "Tuesday" THEN 2 WHEN "Wednesday" THEN 3 WHEN "Thursday" THEN 4 WHEN "Friday" THEN 5 WHEN "Saturday" THEN 6 ELSE 7 END, CAST(period_number AS INTEGER) ASC, start_time ASC`,
+         ORDER BY CASE day WHEN 'Monday' THEN 1 WHEN 'Tuesday' THEN 2 WHEN 'Wednesday' THEN 3 WHEN 'Thursday' THEN 4 WHEN 'Friday' THEN 5 WHEN 'Saturday' THEN 6 ELSE 7 END, CAST(period_number AS INTEGER) ASC, start_time ASC`,
         [faculty.id, searchParam],
         (errTt, timetableRows) => {
           const allClasses = timetableRows || [];

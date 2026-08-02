@@ -339,7 +339,7 @@ function getTimetables(req, res) {
   } else if (sort_by === 'faculty') {
     query += ' ORDER BY faculty_name ASC, CAST(period_number AS INTEGER) ASC';
   } else {
-    query += ' ORDER BY CASE day WHEN "Monday" THEN 1 WHEN "Tuesday" THEN 2 WHEN "Wednesday" THEN 3 WHEN "Thursday" THEN 4 WHEN "Friday" THEN 5 WHEN "Saturday" THEN 6 ELSE 7 END, CAST(period_number AS INTEGER) ASC, start_time ASC';
+    query += " ORDER BY CASE day WHEN 'Monday' THEN 1 WHEN 'Tuesday' THEN 2 WHEN 'Wednesday' THEN 3 WHEN 'Thursday' THEN 4 WHEN 'Friday' THEN 5 WHEN 'Saturday' THEN 6 ELSE 7 END, CAST(period_number AS INTEGER) ASC, start_time ASC";
   }
   db.all(query, params, (err, timetables) => {
     if (err) return res.status(500).json({ error: 'Database error fetching timetables: ' + err.message });
@@ -365,7 +365,7 @@ function getStudentTimetable(req, res) {
     WHERE (department = ? OR department LIKE ? OR department IS NULL)
       AND (year = ? OR year IS NULL)
       AND (section = ? OR section IS NULL)
-    ORDER BY CASE day WHEN "Monday" THEN 1 WHEN "Tuesday" THEN 2 WHEN "Wednesday" THEN 3 WHEN "Thursday" THEN 4 WHEN "Friday" THEN 5 WHEN "Saturday" THEN 6 ELSE 7 END, CAST(period_number AS INTEGER) ASC, start_time ASC
+    ORDER BY CASE day WHEN 'Monday' THEN 1 WHEN 'Tuesday' THEN 2 WHEN 'Wednesday' THEN 3 WHEN 'Thursday' THEN 4 WHEN 'Friday' THEN 5 WHEN 'Saturday' THEN 6 ELSE 7 END, CAST(period_number AS INTEGER) ASC, start_time ASC
   `;
 
   db.all(sql, [rawDept, deptParam, yr, sec], (err, timetables) => {
@@ -394,7 +394,7 @@ function getFacultyTimetable(req, res) {
       SELECT * FROM timetables 
       WHERE (faculty_id = ? OR LOWER(faculty_name) LIKE ? OR faculty_id = ? OR LOWER(faculty_name) = LOWER(?))
         AND (status = 'ACTIVE' OR status IS NULL OR status = '')
-      ORDER BY CASE day WHEN "Monday" THEN 1 WHEN "Tuesday" THEN 2 WHEN "Wednesday" THEN 3 WHEN "Thursday" THEN 4 WHEN "Friday" THEN 5 WHEN "Saturday" THEN 6 ELSE 7 END, CAST(period_number AS INTEGER) ASC, start_time ASC
+      ORDER BY CASE day WHEN 'Monday' THEN 1 WHEN 'Tuesday' THEN 2 WHEN 'Wednesday' THEN 3 WHEN 'Thursday' THEN 4 WHEN 'Friday' THEN 5 WHEN 'Saturday' THEN 6 ELSE 7 END, CAST(period_number AS INTEGER) ASC, start_time ASC
     `;
 
     db.all(sql, [facultyId, searchParam, fac ? fac.id : facultyId, matchedName], (errTt, timetables) => {
