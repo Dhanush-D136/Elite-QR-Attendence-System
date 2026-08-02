@@ -176,11 +176,12 @@ function createSubject(req, res) {
     ],
     function (err) {
       if (err) {
-        if (err.message.includes('UNIQUE constraint failed')) {
+        if (err.message.includes('UNIQUE constraint failed') || err.message.includes('unique constraint') || err.message.includes('duplicate key')) {
           return res.status(409).json({ error: 'Subject code already exists. Please use a unique subject code.' });
         }
         return res.status(500).json({ error: 'Failed to create subject: ' + err.message });
       }
+      broadcastTimetableEvent('subject_created', { id, name, code });
       res.status(201).json({ message: 'Subject created successfully and synchronized across modules!', id });
     }
   );
@@ -210,6 +211,7 @@ function updateSubject(req, res) {
     ],
     function (err) {
       if (err) return res.status(500).json({ error: 'Failed to update subject: ' + err.message });
+      broadcastTimetableEvent('subject_updated', { id, name, code });
       res.json({ message: 'Subject updated successfully across all modules!' });
     }
   );
@@ -222,6 +224,7 @@ function toggleArchiveSubject(req, res) {
     const newArchived = row.is_archived === 1 ? 0 : 1;
     db.run('UPDATE subjects SET is_archived = ?, status = ? WHERE id = ?', [newArchived, newArchived ? 'Inactive' : 'Active', id], (err2) => {
       if (err2) return res.status(500).json({ error: 'Failed to archive subject' });
+      broadcastTimetableEvent('subject_updated', { id, is_archived: newArchived });
       res.json({ message: newArchived ? 'Subject archived' : 'Subject restored', is_archived: newArchived });
     });
   });
@@ -495,35 +498,73 @@ function createTimetable(req, res) {
     status
   };
 
-  db.run(
-    sql,
-    [
-      newEntry.id,
-      newEntry.department,
-      newEntry.year,
-      newEntry.section,
-      newEntry.semester,
-      newEntry.date,
-      newEntry.day,
-      newEntry.period_number,
-      newEntry.subject_id,
-      newEntry.subject_name,
-      newEntry.faculty_id,
-      newEntry.faculty_name,
-      newEntry.start_time,
-      newEntry.end_time,
-      newEntry.room_number,
-      newEntry.academic_year,
-      newEntry.status
-    ],
-    function (err) {
-      if (err) return res.status(500).json({ error: 'Failed to create timetable slot: ' + err.message });
-      
-      // Trigger Socket.IO Realtime Sync
-      broadcastTimetableEvent('timetable_created', { slot: newEntry });
-      broadcastTimetableEvent('timetable_updated', { action: 'created', slot: newEntry });
+  // Check if a slot for this department, year, section, day, and period_number already exists
+  db.get(
+    `SELECT id FROM timetables WHERE (department = ? OR department LIKE ?) AND (year = ? OR year IS NULL) AND (section = ? OR section IS NULL) AND day = ? AND period_number = ?`,
+    [newEntry.department, `%${newEntry.department}%`, newEntry.year, newEntry.section, newEntry.day, newEntry.period_number],
+    (checkErr, existingSlot) => {
+      if (existingSlot) {
+        const updateSql = `
+          UPDATE timetables 
+          SET subject_id = ?, subject_name = ?, faculty_id = ?, faculty_name = ?, start_time = ?, end_time = ?, room_number = ?, semester = ?, date = ?, academic_year = ?, status = 'ACTIVE'
+          WHERE id = ?
+        `;
+        db.run(
+          updateSql,
+          [
+            newEntry.subject_id,
+            newEntry.subject_name,
+            newEntry.faculty_id,
+            newEntry.faculty_name,
+            newEntry.start_time,
+            newEntry.end_time,
+            newEntry.room_number,
+            newEntry.semester,
+            newEntry.date,
+            newEntry.academic_year,
+            existingSlot.id
+          ],
+          function (updateErr) {
+            if (updateErr) return res.status(500).json({ error: 'Failed to update timetable slot: ' + updateErr.message });
 
-      res.status(201).json({ message: 'Timetable entry created successfully and synchronized across all portals!', id, timetable: newEntry });
+            const updatedSlotObj = { ...newEntry, id: existingSlot.id };
+            broadcastTimetableEvent('timetable_updated', { action: 'updated', slot: updatedSlotObj });
+            res.status(200).json({ message: `Timetable entry updated successfully for ${newEntry.day} Period ${newEntry.period_number}!`, id: existingSlot.id, timetable: updatedSlotObj });
+          }
+        );
+      } else {
+        db.run(
+          sql,
+          [
+            newEntry.id,
+            newEntry.department,
+            newEntry.year,
+            newEntry.section,
+            newEntry.semester,
+            newEntry.date,
+            newEntry.day,
+            newEntry.period_number,
+            newEntry.subject_id,
+            newEntry.subject_name,
+            newEntry.faculty_id,
+            newEntry.faculty_name,
+            newEntry.start_time,
+            newEntry.end_time,
+            newEntry.room_number,
+            newEntry.academic_year,
+            newEntry.status
+          ],
+          function (err) {
+            if (err) return res.status(500).json({ error: 'Failed to create timetable slot: ' + err.message });
+
+            // Trigger Socket.IO Realtime Sync
+            broadcastTimetableEvent('timetable_created', { slot: newEntry });
+            broadcastTimetableEvent('timetable_updated', { action: 'created', slot: newEntry });
+
+            res.status(201).json({ message: 'Timetable entry created successfully and synchronized across all portals!', id, timetable: newEntry });
+          }
+        );
+      }
     }
   );
 }
