@@ -336,15 +336,9 @@ function getTimetables(req, res) {
   } else {
     query += ' ORDER BY CASE day WHEN "Monday" THEN 1 WHEN "Tuesday" THEN 2 WHEN "Wednesday" THEN 3 WHEN "Thursday" THEN 4 WHEN "Friday" THEN 5 WHEN "Saturday" THEN 6 ELSE 7 END, CAST(period_number AS INTEGER) ASC, start_time ASC';
   }
-
   db.all(query, params, (err, timetables) => {
-    if (err || !timetables || timetables.length === 0) {
-      db.all("SELECT * FROM timetables ORDER BY CASE day WHEN 'Monday' THEN 1 WHEN 'Tuesday' THEN 2 WHEN 'Wednesday' THEN 3 WHEN 'Thursday' THEN 4 WHEN 'Friday' THEN 5 WHEN 'Saturday' THEN 6 ELSE 7 END, CAST(period_number AS INTEGER) ASC", [], (errFb, fbRows) => {
-        return res.json({ timetables: fbRows || [] });
-      });
-    } else {
-      res.json({ timetables: timetables || [] });
-    }
+    if (err) return res.status(500).json({ error: 'Database error fetching timetables: ' + err.message });
+    res.json({ timetables: timetables || [] });
   });
 }
 
@@ -370,27 +364,15 @@ function getStudentTimetable(req, res) {
   `;
 
   db.all(sql, [rawDept, deptParam, yr, sec], (err, timetables) => {
-    if (err || !timetables || timetables.length === 0) {
-      db.all("SELECT * FROM timetables ORDER BY CASE day WHEN 'Monday' THEN 1 WHEN 'Tuesday' THEN 2 WHEN 'Wednesday' THEN 3 WHEN 'Thursday' THEN 4 WHEN 'Friday' THEN 5 WHEN 'Saturday' THEN 6 ELSE 7 END, CAST(period_number AS INTEGER) ASC", [], (errFb, fbRows) => {
-        return res.json({
-          student_id: studentId,
-          department: rawDept,
-          year: yr,
-          section: sec,
-          semester: sem,
-          timetables: fbRows || []
-        });
-      });
-    } else {
-      res.json({
-        student_id: studentId,
-        department: rawDept,
-        year: yr,
-        section: sec,
-        semester: sem,
-        timetables: timetables || []
-      });
-    }
+    if (err) return res.status(500).json({ error: 'Database error fetching student timetable' });
+    res.json({
+      student_id: studentId,
+      department: rawDept,
+      year: yr,
+      section: sec,
+      semester: sem,
+      timetables: timetables || []
+    });
   });
 }
 
@@ -405,24 +387,14 @@ function getFacultyTimetable(req, res) {
 
     const sql = `
       SELECT * FROM timetables 
-      WHERE (faculty_id = ? OR LOWER(faculty_name) LIKE ? OR faculty_id = ? OR faculty_name IS NOT NULL)
+      WHERE (faculty_id = ? OR LOWER(faculty_name) LIKE ? OR faculty_id = ? OR LOWER(faculty_name) = LOWER(?))
         AND (status = 'ACTIVE' OR status IS NULL OR status = '')
       ORDER BY CASE day WHEN "Monday" THEN 1 WHEN "Tuesday" THEN 2 WHEN "Wednesday" THEN 3 WHEN "Thursday" THEN 4 WHEN "Friday" THEN 5 WHEN "Saturday" THEN 6 ELSE 7 END, CAST(period_number AS INTEGER) ASC, start_time ASC
     `;
 
-    db.all(sql, [facultyId, searchParam, fac ? fac.id : facultyId], (errTt, timetables) => {
+    db.all(sql, [facultyId, searchParam, fac ? fac.id : facultyId, matchedName], (errTt, timetables) => {
       if (errTt) return res.status(500).json({ error: 'Database error fetching faculty timetable: ' + errTt.message });
-      let ttList = timetables || [];
-
-      // Fallback: if no rows matched specific faculty_id, return all active timetables so schedule displays properly!
-      if (ttList.length === 0) {
-        db.all("SELECT * FROM timetables WHERE (status = 'ACTIVE' OR status IS NULL OR status = '') ORDER BY CASE day WHEN 'Monday' THEN 1 WHEN 'Tuesday' THEN 2 WHEN 'Wednesday' THEN 3 WHEN 'Thursday' THEN 4 WHEN 'Friday' THEN 5 WHEN 'Saturday' THEN 6 ELSE 7 END, CAST(period_number AS INTEGER) ASC", [], (errFb, fbRows) => {
-          ttList = fbRows || [];
-          finishFacultyResponse(res, facultyId, matchedName, ttList);
-        });
-      } else {
-        finishFacultyResponse(res, facultyId, matchedName, ttList);
-      }
+      finishFacultyResponse(res, facultyId, matchedName, timetables || []);
     });
   });
 }

@@ -77,7 +77,7 @@ function getISTTimeDetails() {
   };
 }
 
-// Auto-detect Current Class Slot from Timetable based on Server Clock (IST Asia/Kolkata)
+// Auto-detect Current Class & Next Class Slot from Timetable based on Server Clock (IST Asia/Kolkata)
 function getCurrentTimetableSlot(req, res) {
   const ist = getISTTimeDetails();
 
@@ -87,11 +87,15 @@ function getCurrentTimetableSlot(req, res) {
         hasActiveSlot: false,
         message: 'No Active Lecture',
         currentDay: ist.currentDay,
-        currentTime: ist.formattedTime
+        currentDate: ist.todayStr,
+        currentTime: ist.formattedTime,
+        currentClass: null,
+        nextClass: null
       });
     }
 
-    let matchedSlot = null;
+    let currentSlot = null;
+    let nextSlot = null;
     let periodIndex = -1;
 
     for (let i = 0; i < rows.length; i++) {
@@ -100,45 +104,37 @@ function getCurrentTimetableSlot(req, res) {
       const endMins = parseTimeToMinutes(slot.end_time);
 
       if (ist.currentMinutes >= startMins && ist.currentMinutes <= endMins) {
-        matchedSlot = slot;
+        currentSlot = slot;
         periodIndex = slot.period_number || (i + 1);
+        nextSlot = rows[i + 1] || null;
         break;
+      } else if (ist.currentMinutes < startMins && !nextSlot) {
+        nextSlot = slot;
       }
     }
 
-    if (matchedSlot) {
-      return res.json({
-        hasActiveSlot: true,
-        slot: {
-          period: `Period ${periodIndex}`,
-          periodNumber: periodIndex,
-          subject: matchedSlot.subject_name,
-          faculty: matchedSlot.faculty_name,
-          room: matchedSlot.room_number,
-          department: matchedSlot.department || 'AI & DS',
-          year: 'III Year',
-          section: 'A',
-          startTime: matchedSlot.start_time,
-          endTime: matchedSlot.end_time
-        }
-      });
-    }
+    const formatClass = (s) => s ? {
+      period: `Period ${s.period_number || 1}`,
+      periodNumber: s.period_number || 1,
+      subject: s.subject_name,
+      faculty: s.faculty_name,
+      room: s.room_number || 'F305',
+      department: s.department || 'AI & DS',
+      year: 'III Year',
+      section: s.section || 'A',
+      startTime: s.start_time,
+      endTime: s.end_time
+    } : null;
 
-    // No class currently active at this exact time (e.g. Lunch Break or Off Hours)
     return res.json({
-      hasActiveSlot: false,
-      isBreakOrOffHours: true,
-      message: 'No Active Lecture',
+      hasActiveSlot: !!currentSlot,
       currentDay: ist.currentDay,
+      currentDate: ist.todayStr,
       currentTime: ist.formattedTime,
-      nextSlot: rows[0] ? {
-        period: `Period ${rows[0].period_number || 1}`,
-        subject: rows[0].subject_name,
-        faculty: rows[0].faculty_name,
-        room: rows[0].room_number,
-        startTime: rows[0].start_time,
-        endTime: rows[0].end_time
-      } : null
+      slot: formatClass(currentSlot),
+      currentClass: formatClass(currentSlot),
+      nextSlot: formatClass(nextSlot),
+      nextClass: formatClass(nextSlot)
     });
   });
 }
