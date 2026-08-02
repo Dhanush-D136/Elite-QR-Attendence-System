@@ -79,6 +79,9 @@ CREATE TABLE IF NOT EXISTS public.attendance_sessions (
   created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
+ALTER TABLE public.attendance_sessions ADD COLUMN IF NOT EXISTS period_number TEXT;
+ALTER TABLE public.attendance_sessions ADD COLUMN IF NOT EXISTS faculty_name TEXT;
+ALTER TABLE public.attendance_sessions ADD COLUMN IF NOT EXISTS date TEXT;
 ALTER TABLE public.attendance_sessions ENABLE ROW LEVEL SECURITY;
 CREATE INDEX IF NOT EXISTS idx_sessions_dept_sec ON public.attendance_sessions(department, year, section);
 CREATE INDEX IF NOT EXISTS idx_sessions_code ON public.attendance_sessions(attendance_code);
@@ -212,6 +215,11 @@ CREATE TABLE IF NOT EXISTS public.timetables (
   created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
+ALTER TABLE public.timetables ADD COLUMN IF NOT EXISTS subject_id TEXT;
+ALTER TABLE public.timetables ADD COLUMN IF NOT EXISTS faculty_id TEXT;
+ALTER TABLE public.timetables ADD COLUMN IF NOT EXISTS date TEXT;
+ALTER TABLE public.timetables ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'ACTIVE';
+ALTER TABLE public.timetables ADD COLUMN IF NOT EXISTS academic_year TEXT DEFAULT '2026-2027 (ODD)';
 ALTER TABLE public.timetables ENABLE ROW LEVEL SECURITY;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_timetables_slot ON public.timetables(department, year, section, day, period_number);
 
@@ -391,22 +399,53 @@ ALTER TABLE public.class_details ENABLE ROW LEVEL SECURITY;
 -- RLS POLICIES FOR SUPABASE SERVICE ROLE / SERVER-SIDE ACCESS
 -- Allow service_role & server access to read/write all tables
 -- ====================================================================
+DROP POLICY IF EXISTS "Allow server full access to users" ON public.users;
 CREATE POLICY "Allow server full access to users" ON public.users FOR ALL TO service_role USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow server full access to attendance_tokens" ON public.attendance_tokens;
 CREATE POLICY "Allow server full access to attendance_tokens" ON public.attendance_tokens FOR ALL TO service_role USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow server full access to attendance_sessions" ON public.attendance_sessions;
 CREATE POLICY "Allow server full access to attendance_sessions" ON public.attendance_sessions FOR ALL TO service_role USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow server full access to attendance_records" ON public.attendance_records;
 CREATE POLICY "Allow server full access to attendance_records" ON public.attendance_records FOR ALL TO service_role USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow server full access to violation_logs" ON public.violation_logs;
 CREATE POLICY "Allow server full access to violation_logs" ON public.violation_logs FOR ALL TO service_role USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow server full access to login_logs" ON public.login_logs;
 CREATE POLICY "Allow server full access to login_logs" ON public.login_logs FOR ALL TO service_role USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow server full access to password_audit_logs" ON public.password_audit_logs;
 CREATE POLICY "Allow server full access to password_audit_logs" ON public.password_audit_logs FOR ALL TO service_role USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow server full access to departments" ON public.departments;
 CREATE POLICY "Allow server full access to departments" ON public.departments FOR ALL TO service_role USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow server full access to classes" ON public.classes;
 CREATE POLICY "Allow server full access to classes" ON public.classes FOR ALL TO service_role USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow server full access to sections" ON public.sections;
 CREATE POLICY "Allow server full access to sections" ON public.sections FOR ALL TO service_role USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow server full access to subjects" ON public.subjects;
 CREATE POLICY "Allow server full access to subjects" ON public.subjects FOR ALL TO service_role USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow server full access to timetables" ON public.timetables;
 CREATE POLICY "Allow server full access to timetables" ON public.timetables FOR ALL TO service_role USING (true) WITH CHECK (true);
+
 DROP POLICY IF EXISTS "Allow public select access to timetables" ON public.timetables;
 CREATE POLICY "Allow public select access to timetables" ON public.timetables FOR SELECT USING (true);
+
 DROP POLICY IF EXISTS "Allow public write access to timetables" ON public.timetables;
 CREATE POLICY "Allow public write access to timetables" ON public.timetables FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow server full access to system_settings" ON public.system_settings;
 CREATE POLICY "Allow server full access to system_settings" ON public.system_settings FOR ALL TO service_role USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow server full access to faculty" ON public.faculty;
 CREATE POLICY "Allow server full access to faculty" ON public.faculty FOR ALL TO service_role USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow server full access to class_details" ON public.class_details;
 CREATE POLICY "Allow server full access to class_details" ON public.class_details FOR ALL TO service_role USING (true) WITH CHECK (true);
