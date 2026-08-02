@@ -6,26 +6,41 @@ const dotenv = require('dotenv');
 
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
-const dbPassword = process.env.SUPABASE_DB_PASSWORD || '';
-const host = process.env.SUPABASE_DB_HOST || 'db.ehmrnreqjadhjmmtlugj.supabase.co';
-const port = parseInt(process.env.SUPABASE_DB_PORT || '5432', 10);
+let dbPassword = process.env.SUPABASE_DB_PASSWORD || '';
+let host = process.env.SUPABASE_DB_HOST || 'aws-0-ap-south-1.pooler.supabase.com';
+let port = parseInt(process.env.SUPABASE_DB_PORT || '6543', 10);
 const database = process.env.SUPABASE_DB_NAME || 'postgres';
-const user = process.env.SUPABASE_DB_USER || 'postgres';
+let user = process.env.SUPABASE_DB_USER || 'postgres';
+const projectRef = process.env.SUPABASE_PROJECT_REF || 'ehmrnreqjadhjmmtlugj';
+
+// Automatic IPv4 Pooler Host & User Formatting
+if (host.startsWith('db.') && host.endsWith('.supabase.co')) {
+  const extractedRef = host.split('.')[1] || projectRef;
+  host = process.env.SUPABASE_POOLER_HOST || 'aws-0-ap-south-1.pooler.supabase.com';
+  if (port === 5432) port = 6543;
+  if (!user.includes('.')) {
+    user = `${user}.${extractedRef}`;
+  }
+} else if (!user.includes('.') && projectRef && host.includes('pooler.supabase.com')) {
+  user = `${user}.${projectRef}`;
+}
 
 console.log('====================================================');
-console.log('🚀 CRITICAL SUPABASE DEPLOYMENT & DATA MIGRATION AUDIT');
+console.log('🚀 SUPABASE IPv4 DATA MIGRATION & DEPLOYMENT AUDIT');
 console.log('====================================================');
 
 if (!dbPassword || dbPassword.trim() === '') {
   console.error('\n❌ ERROR: SUPABASE_DB_PASSWORD is missing or empty in backend/.env!');
   console.error('👉 Please paste your Supabase database password into backend/.env:');
   console.error('   SUPABASE_DB_PASSWORD=your_actual_password_here');
-  console.error('\nThen re-run this migration script to execute schema creation & data migration.\n');
+  console.error('\nThen re-run: node src/database/migrate_sqlite_to_supabase.js\n');
   process.exit(1);
 }
 
 const sqlitePath = path.resolve(__dirname, 'smartattend.db');
 const sqliteDb = new sqlite3.Database(sqlitePath);
+
+console.log(`[IPv4 POOLER TARGET] ${user}@${host}:${port}/${database}`);
 
 const pgPool = new Pool({
   host,
@@ -41,9 +56,9 @@ const pgPool = new Pool({
 async function runMigrationAudit() {
   let pgClient;
   try {
-    console.log(`\n[STEP 1/5] Connecting to Supabase PostgreSQL at ${host}...`);
+    console.log(`\n[STEP 1/5] Connecting to Supabase IPv4 Pooler at ${host}:${port}...`);
     pgClient = await pgPool.connect();
-    console.log('✅ Connected to Supabase PostgreSQL successfully!');
+    console.log('✅ Connected to Supabase PostgreSQL IPv4 Pooler successfully!');
 
     console.log('\n[STEP 2/5] Executing supabase_schema.sql (Creating all tables, indexes, RLS policies)...');
     const schemaSqlPath = path.join(__dirname, 'supabase_schema.sql');
@@ -156,7 +171,7 @@ async function runMigrationAudit() {
     console.table(auditReport);
 
     console.log('\n====================================================');
-    console.log('🎉 SUPABASE MIGRATION STATUS: SUCCESS!');
+    console.log('🎉 SUPABASE IPv4 MIGRATION STATUS: SUCCESS!');
     console.log('====================================================\n');
 
   } catch (err) {
