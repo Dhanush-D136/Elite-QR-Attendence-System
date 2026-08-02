@@ -117,70 +117,71 @@ export const DynamicQRDisplay: React.FC<DynamicQRDisplayProps> = ({
   }, [sessionId]);
 
   return (
-    <div className="bg-white rounded-[24px] p-6 lg:p-8 border border-[#E7E7E7] shadow-enterprise relative overflow-hidden text-center max-w-md mx-auto space-y-6 animate-fade-in">
-      {/* Header Info */}
-      <div className="space-y-2">
-        <div className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-[#ECFDF5] border border-[#12B76A]/30 text-[#12B76A] text-xs font-bold uppercase tracking-wider">
-          <Sparkles className="w-3.5 h-3.5 animate-spin text-[#12B76A]" />
-          1s Dynamic Real-Time Rotating QR
-        </div>
-        
-        <div className="pt-1">
-          {subjectCode && (
-            <span className="px-2.5 py-0.5 rounded-full bg-[#F3F0FF] text-[#6D5DFC] font-mono text-[10px] font-extrabold border border-[#6D5DFC]/20 mr-1.5">
-              {subjectCode}
-            </span>
+    <div className="qr-parent-wrapper w-full">
+      <div className="qr-code-card bg-white rounded-[24px] p-6 lg:p-8 border border-[#E7E7E7] shadow-enterprise relative overflow-hidden text-center max-w-md mx-auto space-y-6 animate-fade-in">
+        {/* Header Info */}
+        <div className="space-y-2">
+          <div className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-[#ECFDF5] border border-[#12B76A]/30 text-[#12B76A] text-xs font-bold uppercase tracking-wider">
+            <Sparkles className="w-3.5 h-3.5 animate-spin text-[#12B76A]" />
+            1s Dynamic Real-Time Rotating QR
+          </div>
+          
+          <div className="pt-1">
+            {subjectCode && (
+              <span className="px-2.5 py-0.5 rounded-full bg-[#F3F0FF] text-[#6D5DFC] font-mono text-[10px] font-extrabold border border-[#6D5DFC]/20 mr-1.5">
+                {subjectCode}
+              </span>
+            )}
+            <h3 className="font-display font-extrabold text-2xl text-[#111827] inline">{subjectName}</h3>
+          </div>
+
+          {facultyName && (
+            <p className="text-xs text-[#4F7CFF] font-bold">
+              Faculty: {facultyName}
+            </p>
           )}
-          <h3 className="font-display font-extrabold text-2xl text-[#111827] inline">{subjectName}</h3>
-        </div>
 
-        {facultyName && (
-          <p className="text-xs text-[#4F7CFF] font-bold">
-            Faculty: {facultyName}
-          </p>
-        )}
-
-        <div className="p-3 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] grid grid-cols-2 gap-2 text-xs text-[#6B7280]">
-          <div>
-            <span className="text-[10px] font-bold text-[#6D5DFC] block uppercase">Date & Period</span>
-            <strong className="text-[#111827]">{sessionDate || new Date().toLocaleDateString()} • Period {periodNumber || 1}</strong>
-          </div>
-          <div>
-            <span className="text-[10px] font-bold text-[#6D5DFC] block uppercase">Dept & Section</span>
-            <strong className="text-[#111827]">{department} (Sec {section})</strong>
-          </div>
-        </div>
-
-        {/* Active Code Badge */}
-        <div className="mt-2 inline-flex items-center gap-2 px-5 py-2 rounded-2xl bg-[#F7F3EE] border border-[#E7E7E7] text-[#111827] font-mono text-sm font-bold shadow-sm">
-          <Key className="w-4 h-4 text-[#6D5DFC] animate-pulse" />
-          <span>Active Nonce Token: <strong className="text-[#6D5DFC] text-xl tracking-wider font-extrabold ml-1">{attendanceCode}</strong></span>
-        </div>
-      </div>
-
-      {/* QR Code Container with Force Key Re-render */}
-      <div className="relative p-5 rounded-2xl bg-white border-2 border-[#E7E7E7] shadow-sm flex flex-col items-center justify-center min-h-[280px]">
-        {isLoading && !qrSvg ? (
-          <div className="flex flex-col items-center gap-3 text-[#6B7280]">
-            <RefreshCw className="w-8 h-8 animate-spin text-[#6D5DFC]" />
-            <p className="text-xs font-bold">Generating 1s Dynamic QR...</p>
-          </div>
-        ) : (
-          <>
-            <div
-              key={rawPayload}
-              className="w-full max-w-[260px] mx-auto filter drop-shadow-sm transition-all duration-300"
-              dangerouslySetInnerHTML={{ __html: qrSvg }}
-            />
-
-            {/* Countdown Badge */}
-            <div className="mt-3 flex items-center justify-center gap-2 text-xs font-mono text-[#111827] bg-[#ECFDF5] px-4 py-1.5 rounded-full border border-[#12B76A]/30 font-bold">
-              <Clock className="w-3.5 h-3.5 text-[#12B76A] animate-spin" />
-              <span>1s Real-Time Server Sync: <strong className="text-[#12B76A] text-sm font-extrabold">{timeLeft}s</strong></span>
+          <div className="p-3 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] grid grid-cols-2 gap-2 text-xs text-[#6B7280]">
+            <div>
+              <span className="text-[10px] font-bold text-[#6D5DFC] block uppercase">Date & Period</span>
+              <strong className="text-[#111827]">{sessionDate || new Date().toLocaleDateString()} • Period {periodNumber || 1}</strong>
             </div>
-          </>
-        )}
-      </div>
+            <div>
+              <span className="text-[10px] font-bold text-[#6D5DFC] block uppercase">Dept & Section</span>
+              <strong className="text-[#111827]">{department} (Sec {section})</strong>
+            </div>
+          </div>
+
+          {/* Active Code Badge */}
+          <div className="mt-2 inline-flex items-center gap-2 px-5 py-2 rounded-2xl bg-[#F7F3EE] border border-[#E7E7E7] text-[#111827] font-mono text-sm font-bold shadow-sm">
+            <Key className="w-4 h-4 text-[#6D5DFC] animate-pulse" />
+            <span>Active Nonce Token: <strong className="text-[#6D5DFC] text-xl tracking-wider font-extrabold ml-1">{attendanceCode}</strong></span>
+          </div>
+        </div>
+
+        {/* QR Code Container with Force Key Re-render */}
+        <div className="qr-code-container relative p-5 rounded-2xl bg-white border-2 border-[#E7E7E7] shadow-sm flex flex-col items-center justify-center min-h-[280px]">
+          {isLoading && !qrSvg ? (
+            <div className="flex flex-col items-center gap-3 text-[#6B7280]">
+              <RefreshCw className="w-8 h-8 animate-spin text-[#6D5DFC]" />
+              <p className="text-xs font-bold">Generating 1s Dynamic QR...</p>
+            </div>
+          ) : (
+            <>
+              <div
+                key={rawPayload}
+                className="qr-code-image w-full max-w-[260px] mx-auto filter drop-shadow-sm transition-all duration-300 [&>svg]:w-full [&>svg]:h-auto [&>svg]:max-w-full [&>svg]:block [&>svg]:mx-auto"
+                dangerouslySetInnerHTML={{ __html: qrSvg }}
+              />
+
+              {/* Countdown Badge */}
+              <div className="mt-3 flex items-center justify-center gap-2 text-xs font-mono text-[#111827] bg-[#ECFDF5] px-4 py-1.5 rounded-full border border-[#12B76A]/30 font-bold">
+                <Clock className="w-3.5 h-3.5 text-[#12B76A] animate-spin" />
+                <span>1s Real-Time Server Sync: <strong className="text-[#12B76A] text-sm font-extrabold">{timeLeft}s</strong></span>
+              </div>
+            </>
+          )}
+        </div>
 
       {/* ADMIN REAL-TIME SECURITY DEBUG PANEL */}
       <div className="p-4 rounded-2xl bg-[#FAFAFA] border border-[#6D5DFC]/20 text-left text-xs space-y-2 font-mono shadow-sm">
@@ -248,5 +249,6 @@ export const DynamicQRDisplay: React.FC<DynamicQRDisplayProps> = ({
         </div>
       </div>
     </div>
-  );
+  </div>
+);
 };

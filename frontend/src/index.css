@@ -150,3 +150,44 @@ body.theme-dark ::-webkit-scrollbar-thumb {
 .animate-scanner-laser {
   animation: scanner-laser 2.4s ease-in-out infinite;
 }
+
+/* MOBILE QR CODE ALIGNMENT STYLES ONLY (< 768px) */
+@media (max-width: 767px) {
+  .qr-parent-wrapper {
+    display: flex !important;
+    justify-content: center !important;
+    align-items: center !important;
+    padding-left: 16px !important;
+    padding-right: 16px !important;
+    box-sizing: border-box !important;
+    width: 100% !important;
+  }
+
+  .qr-code-card {
+    width: 100% !important;
+    max-width: 320px !important;
+    margin: 0 auto !important;
+    padding: 16px !important;
+    box-sizing: border-box !important;
+  }
+
+  .qr-code-container {
+    width: 100% !important;
+    max-width: 320px !important;
+    margin: 0 auto !important;
+    padding: 16px !important;
+    box-sizing: border-box !important;
+  }
+
+  .qr-code-image,
+  .qr-code-image svg,
+  .qr-code-image img,
+  .qr-code-container svg,
+  .qr-code-container img {
+    width: 100% !important;
+    max-width: 280px !important;
+    height: auto !important;
+    display: block !important;
+    margin: 0 auto !important;
+  }
+}
