@@ -373,25 +373,38 @@ function getStudentTimetable(req, res) {
   const yr = parseYearNumber(rawYr);
   const sec = (typeof rawSec === 'string' && rawSec.length === 1) ? rawSec : 'A';
   const sem = parseYearNumber(rawSem) || 5;
-  const deptParam = rawDept.includes('AI') ? '%AI%' : rawDept.includes('Computer') ? '%Computer%' : `%${rawDept}%`;
 
   const sql = `
     SELECT * FROM timetables 
-    WHERE (department = ? OR department LIKE ? OR department IS NULL)
-      AND (year = ? OR year IS NULL)
-      AND (section = ? OR section IS NULL)
+    WHERE (status = 'ACTIVE' OR status IS NULL OR status = '')
     ORDER BY CASE day WHEN 'Monday' THEN 1 WHEN 'Tuesday' THEN 2 WHEN 'Wednesday' THEN 3 WHEN 'Thursday' THEN 4 WHEN 'Friday' THEN 5 WHEN 'Saturday' THEN 6 WHEN 'Sunday' THEN 7 ELSE 8 END, CAST(period_number AS INTEGER) ASC, start_time ASC
   `;
 
-  db.all(sql, [rawDept, deptParam, yr, sec], (err, timetables) => {
+  db.all(sql, [], (err, timetables) => {
     if (err) return res.status(500).json({ error: 'Database error fetching student timetable' });
+
+    const allList = timetables || [];
+    const deptClean = rawDept.toLowerCase();
+
+    let filtered = allList.filter((t) => {
+      const d = (t.department || '').toLowerCase();
+      const matchDept = !d || d.includes('ai') || d.includes(deptClean) || deptClean.includes(d);
+      const matchYr = !t.year || t.year == yr;
+      const matchSec = !t.section || t.section === sec;
+      return matchDept && matchYr && matchSec;
+    });
+
+    if (filtered.length === 0) {
+      filtered = allList;
+    }
+
     res.json({
       student_id: studentId,
       department: rawDept,
       year: yr,
       section: sec,
       semester: sem,
-      timetables: timetables || []
+      timetables: filtered
     });
   });
 }
