@@ -12,9 +12,12 @@ import {
   Check,
   BookOpen,
   User,
+  UserCheck,
   Building,
   MapPin,
-  Sparkles
+  Sparkles,
+  ListChecks,
+  QrCode
 } from 'lucide-react';
 import { getSocket } from '../services/socket';
 
