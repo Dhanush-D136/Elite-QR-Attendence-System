@@ -229,9 +229,29 @@ function toggleArchiveSubject(req, res) {
 
 function deleteSubject(req, res) {
   const { id } = req.params;
-  db.run('DELETE FROM subjects WHERE id = ?', [id], function (err) {
-    if (err) return res.status(500).json({ error: 'Failed to delete subject' });
-    res.json({ message: 'Subject removed successfully' });
+  db.get('SELECT name, code FROM subjects WHERE id = ?', [id], (getErr, subj) => {
+    const subjName = subj ? subj.name : '';
+    const subjCode = subj ? subj.code : '';
+
+    // 1. Delete attendance records for sessions belonging to this subject
+    db.run(
+      `DELETE FROM attendance_records WHERE session_id IN (SELECT id FROM attendance_sessions WHERE subject = ? OR subject = ?)`,
+      [subjName, subjCode],
+      () => {
+        // 2. Delete attendance sessions belonging to this subject
+        db.run(`DELETE FROM attendance_sessions WHERE subject = ? OR subject = ?`, [subjName, subjCode], () => {
+          // 3. Delete timetable entries belonging to this subject
+          db.run(`DELETE FROM timetables WHERE subject_name = ? OR subject_id = ?`, [subjName, id], () => {
+            // 4. Delete the subject itself
+            db.run('DELETE FROM subjects WHERE id = ?', [id], function (err) {
+              if (err) return res.status(500).json({ error: 'Failed to delete subject: ' + err.message });
+              broadcastTimetableEvent('subject_deleted', { id, name: subjName });
+              res.json({ message: `Subject '${subjName || id}' and its associated slots/sessions were removed successfully.` });
+            });
+          });
+        });
+      }
+    );
   });
 }
 
