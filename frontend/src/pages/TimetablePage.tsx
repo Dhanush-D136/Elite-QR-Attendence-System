@@ -418,11 +418,6 @@ export const TimetablePage: React.FC<TimetablePageProps> = ({ onNavigate }) => {
                   {subjects.map((s) => (
                     <option key={s.id} value={s.name}>{s.name} ({s.code})</option>
                   ))}
-                  <option value="Programming Language for AI">Programming Language for AI (P-AI)</option>
-                  <option value="Data Analytics">Data Analytics (21HC52T)</option>
-                  <option value="Web Technology">Web Technology (21HI53IT)</option>
-                  <option value="Knowledge Engineering">Knowledge Engineering (KE)</option>
-                  <option value="Block Chain Technology">Block Chain Technology (BCT)</option>
                 </select>
               </div>
 

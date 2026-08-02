@@ -1,6 +1,8 @@
 const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 const { v4: uuidv4 } = require('uuid');
 const { db } = require('../database/db');
+const { JWT_SECRET } = require('../middleware/authMiddleware');
 
 /**
  * Faculty Login - Authentication using Faculty ID (FAC001) or Official Email
@@ -34,6 +36,13 @@ async function facultyLogin(req, res) {
       const logId = uuidv4();
       db.run("INSERT INTO faculty_activity_logs (id, faculty_id, action, details) VALUES (?, ?, 'Faculty Login', 'Logged into Faculty Portal')", [logId, faculty.id]);
 
+      // Generate signed JWT token
+      const token = jwt.sign(
+        { id: faculty.id, name: faculty.name, role: 'faculty', email: faculty.email, faculty_code: faculty.faculty_code || faculty.code },
+        JWT_SECRET,
+        { expiresIn: '30d' }
+      );
+
       // Remove sensitive hash from response
       delete faculty.password_hash;
       res.json({
@@ -46,7 +55,7 @@ async function facultyLogin(req, res) {
           must_change_password: isDefault ? 1 : 0,
           password_changed: !isDefault
         },
-        token: `faculty_token_${faculty.id}_${Date.now()}`
+        token
       });
     }
   );
@@ -95,9 +104,16 @@ async function facultyChangePassword(req, res) {
           [uuidv4(), faculty.id]
         );
 
+        const token = jwt.sign(
+          { id: faculty.id, name: faculty.name, role: 'faculty', email: faculty.email, faculty_code: faculty.faculty_code || faculty.code },
+          JWT_SECRET,
+          { expiresIn: '30d' }
+        );
+
         delete faculty.password_hash;
         res.json({
           message: 'Faculty password updated successfully.',
+          token,
           user: {
             ...faculty,
             role: 'faculty',
