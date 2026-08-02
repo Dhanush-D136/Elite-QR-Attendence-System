@@ -1,7 +1,4 @@
-import React, { useEffect, useState } from 'react';
-import api from '../services/api';
-import { TimetableItem, Department, SubjectItem } from '../types';
-import { Calendar, Plus, Trash2, Edit3, X, Clock, MapPin, UserCheck, ArrowUpDown, Filter, Sparkles, QrCode, ListChecks } from 'lucide-react';
+import { getSocket } from '../services/socket';
 
 interface TimetablePageProps {
   onNavigate?: (tab: string, extraData?: any) => void;
@@ -51,7 +48,7 @@ export const TimetablePage: React.FC<TimetablePageProps> = ({ onNavigate }) => {
       if (searchSubject) params.append('subject', searchSubject);
 
       const [resTt, resDept, resSub] = await Promise.all([
-        api.get(`/timetables?${params.toString()}`),
+        api.get(`/timetable?${params.toString()}`),
         api.get('/departments'),
         api.get('/subjects')
       ]);
@@ -65,6 +62,25 @@ export const TimetablePage: React.FC<TimetablePageProps> = ({ onNavigate }) => {
 
   useEffect(() => {
     fetchData();
+
+    // Subscribe to Socket.IO realtime timetable synchronization events
+    const socket = getSocket();
+    const handleTimetableChange = () => {
+      console.log('⚡ [ADMIN TIMETABLE] Realtime timetable sync event received. Refetching timetable...');
+      fetchData();
+    };
+
+    socket.on('timetable_created', handleTimetableChange);
+    socket.on('timetable_updated', handleTimetableChange);
+    socket.on('timetable_deleted', handleTimetableChange);
+    socket.on('timetable_changed', handleTimetableChange);
+
+    return () => {
+      socket.off('timetable_created', handleTimetableChange);
+      socket.off('timetable_updated', handleTimetableChange);
+      socket.off('timetable_deleted', handleTimetableChange);
+      socket.off('timetable_changed', handleTimetableChange);
+    };
   }, [department, year, section, sortBy, searchSubject]);
 
   const openAddModal = () => {

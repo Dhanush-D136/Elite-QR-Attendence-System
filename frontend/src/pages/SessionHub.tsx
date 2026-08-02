@@ -179,11 +179,21 @@ export const SessionHub: React.FC<SessionHubProps> = ({
       }
     };
 
+    const handleTimetableSync = () => {
+      console.log('⚡ [QR SESSION HUB] Real-time timetable change detected. Refetching active slot & timetable list...');
+      fetchTimetables();
+    };
+
     socket.on('attendance_updated', handleUpdate);
     socket.on('attendance_marked', handleUpdate);
     socket.on('attendanceMarked', handleUpdate);
     socket.on('new_attendance_record', handleUpdate);
     socket.on('session_updated', handleUpdate);
+
+    socket.on('timetable_created', handleTimetableSync);
+    socket.on('timetable_updated', handleTimetableSync);
+    socket.on('timetable_deleted', handleTimetableSync);
+    socket.on('timetable_changed', handleTimetableSync);
 
     return () => {
       socket.off('attendance_updated', handleUpdate);
@@ -191,6 +201,11 @@ export const SessionHub: React.FC<SessionHubProps> = ({
       socket.off('attendanceMarked', handleUpdate);
       socket.off('new_attendance_record', handleUpdate);
       socket.off('session_updated', handleUpdate);
+
+      socket.off('timetable_created', handleTimetableSync);
+      socket.off('timetable_updated', handleTimetableSync);
+      socket.off('timetable_deleted', handleTimetableSync);
+      socket.off('timetable_changed', handleTimetableSync);
     };
   }, []);
 

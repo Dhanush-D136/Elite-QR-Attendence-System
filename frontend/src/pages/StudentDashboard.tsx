@@ -19,7 +19,7 @@ export const StudentDashboard: React.FC = () => {
       setIsLoading(true);
       const [resHistory, resTimetables, resSubjects] = await Promise.all([
         api.get('/attendance/my-history'),
-        api.get('/timetables'),
+        api.get('/timetable/student'),
         api.get('/subjects')
       ]);
       setHistory(resHistory.data.history || []);
@@ -36,15 +36,30 @@ export const StudentDashboard: React.FC = () => {
     fetchData();
 
     const socket = getSocket();
-    socket.on('attendance_marked', (data: { record: AttendanceRecord }) => {
+    const handleAttendanceMarked = (data: { record: AttendanceRecord }) => {
       if (data.record && data.record.student_id === user?.id) {
         setHistory((prev) => [data.record, ...prev]);
         fetchData();
       }
-    });
+    };
+
+    const handleTimetableChanged = () => {
+      console.log('⚡ [STUDENT DASHBOARD] Realtime timetable sync update received.');
+      fetchData();
+    };
+
+    socket.on('attendance_marked', handleAttendanceMarked);
+    socket.on('timetable_created', handleTimetableChanged);
+    socket.on('timetable_updated', handleTimetableChanged);
+    socket.on('timetable_deleted', handleTimetableChanged);
+    socket.on('timetable_changed', handleTimetableChanged);
 
     return () => {
-      socket.off('attendance_marked');
+      socket.off('attendance_marked', handleAttendanceMarked);
+      socket.off('timetable_created', handleTimetableChanged);
+      socket.off('timetable_updated', handleTimetableChanged);
+      socket.off('timetable_deleted', handleTimetableChanged);
+      socket.off('timetable_changed', handleTimetableChanged);
     };
   }, [user?.id]);
 

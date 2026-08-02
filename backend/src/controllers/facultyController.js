@@ -58,19 +58,20 @@ function getFacultyDashboard(req, res) {
     db.all("SELECT * FROM faculty_subjects WHERE faculty_id = ?", [faculty.id], (errSub, subjects) => {
       const assignedSubjects = subjects || [];
 
-      // Get Today's Schedule from Timetables
+      // Get Today's & Weekly Schedule dynamically from Master Timetables table
       const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
       const todayDay = days[new Date().getDay()] || 'Monday';
 
+      const searchParam = `%${faculty.name.toLowerCase()}%`;
       db.all(
-        "SELECT * FROM timetables WHERE LOWER(faculty_name) LIKE ? OR LOWER(faculty_name) LIKE ? ORDER BY start_time ASC",
-        [`%${faculty.name.toLowerCase()}%`, `%nivetha%`],
+        `SELECT * FROM timetables 
+         WHERE (faculty_id = ? OR LOWER(faculty_name) LIKE ?) 
+           AND (status = 'ACTIVE' OR status IS NULL)
+         ORDER BY CASE day WHEN "Monday" THEN 1 WHEN "Tuesday" THEN 2 WHEN "Wednesday" THEN 3 WHEN "Thursday" THEN 4 WHEN "Friday" THEN 5 WHEN "Saturday" THEN 6 ELSE 7 END, CAST(period_number AS INTEGER) ASC, start_time ASC`,
+        [faculty.id, searchParam],
         (errTt, timetableRows) => {
-          const todayClasses = timetableRows || [
-            { id: 'TT-01', day: 'Monday', period_number: 'P1', subject_name: 'Knowledge Engineering', start_time: '08:15', end_time: '09:05', room_number: 'F305', department: 'AI & DS', section: 'A' },
-            { id: 'TT-02', day: 'Monday', period_number: 'P2', subject_name: 'Programming Language for AI', start_time: '09:05', end_time: '09:55', room_number: 'F305', department: 'AI & DS', section: 'A' },
-            { id: 'TT-03', day: 'Monday', period_number: 'P5', subject_name: 'Web Technology', start_time: '11:50', end_time: '12:35', room_number: 'F305', department: 'AI & DS', section: 'A' }
-          ];
+          const allClasses = timetableRows || [];
+          const todayClasses = allClasses.filter((t) => (t.day || '').toLowerCase() === todayDay.toLowerCase());
 
           // Count active attendance session for this faculty
           db.get("SELECT * FROM attendance_sessions WHERE status = 'active' ORDER BY start_time DESC LIMIT 1", [], (errSess, activeSession) => {
@@ -78,6 +79,7 @@ function getFacultyDashboard(req, res) {
               faculty,
               assignedSubjects,
               todayClasses,
+              weeklyTimetable: allClasses,
               todayDay,
               activeSession: activeSession || null
             });

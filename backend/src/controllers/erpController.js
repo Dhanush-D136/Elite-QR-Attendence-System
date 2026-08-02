@@ -235,9 +235,18 @@ function deleteSubject(req, res) {
   });
 }
 
+// --- Helper to broadcast real-time timetable Socket.IO events ---
+function broadcastTimetableEvent(eventType, payload) {
+  if (global.io) {
+    global.io.emit(eventType, payload);
+    global.io.emit('timetable_changed', { event: eventType, ...payload });
+    console.log(`⚡ [REALTIME TIMETABLE SYNC] Socket.IO broadcast: '${eventType}'`, payload);
+  }
+}
+
 // --- Timetable Controllers ---
 function getTimetables(req, res) {
-  const { department, year, section, day, date, subject, faculty, sort_by = 'period' } = req.query;
+  const { department, year, section, day, date, subject, faculty, status, sort_by = 'period' } = req.query;
   let query = 'SELECT * FROM timetables WHERE 1=1';
   const params = [];
 
@@ -267,13 +276,20 @@ function getTimetables(req, res) {
   }
 
   if (subject) {
-    query += ' AND subject_name LIKE ?';
-    params.push(`%${subject}%`);
+    query += ' AND (subject_name LIKE ? OR subject_id = ?)';
+    params.push(`%${subject}%`, subject);
   }
 
   if (faculty) {
-    query += ' AND faculty_name LIKE ?';
-    params.push(`%${faculty}%`);
+    query += ' AND (faculty_name LIKE ? OR faculty_id = ?)';
+    params.push(`%${faculty}%`, faculty);
+  }
+
+  if (status) {
+    query += ' AND (status = ? OR status IS NULL)';
+    params.push(status);
+  } else {
+    query += ' AND (status = "ACTIVE" OR status IS NULL)';
   }
 
   if (sort_by === 'date') {
@@ -283,13 +299,112 @@ function getTimetables(req, res) {
   } else if (sort_by === 'faculty') {
     query += ' ORDER BY faculty_name ASC, CAST(period_number AS INTEGER) ASC';
   } else {
-    // Default sort by day & period_number
     query += ' ORDER BY CASE day WHEN "Monday" THEN 1 WHEN "Tuesday" THEN 2 WHEN "Wednesday" THEN 3 WHEN "Thursday" THEN 4 WHEN "Friday" THEN 5 WHEN "Saturday" THEN 6 ELSE 7 END, CAST(period_number AS INTEGER) ASC, start_time ASC';
   }
 
   db.all(query, params, (err, timetables) => {
     if (err) return res.status(500).json({ error: 'Database error fetching timetables: ' + err.message });
     res.json({ timetables: timetables || [] });
+  });
+}
+
+// Student Timetable API: GET /api/timetable/student
+function getStudentTimetable(req, res) {
+  const studentId = req.query.student_id || req.user?.id;
+  const dept = req.query.department || req.user?.department || 'AI & DS';
+  const yr = parseInt(req.query.year || req.user?.year || 3);
+  const sec = req.query.section || req.user?.section || 'A';
+  const sem = parseInt(req.query.semester || req.user?.semester || 5);
+
+  const sql = `
+    SELECT * FROM timetables 
+    WHERE (department = ? OR department IS NULL)
+      AND (year = ? OR year IS NULL)
+      AND (section = ? OR section IS NULL)
+      AND (semester = ? OR semester IS NULL)
+      AND (status = 'ACTIVE' OR status IS NULL)
+    ORDER BY CASE day WHEN "Monday" THEN 1 WHEN "Tuesday" THEN 2 WHEN "Wednesday" THEN 3 WHEN "Thursday" THEN 4 WHEN "Friday" THEN 5 WHEN "Saturday" THEN 6 ELSE 7 END, CAST(period_number AS INTEGER) ASC, start_time ASC
+  `;
+
+  db.all(sql, [dept, yr, sec, sem], (err, timetables) => {
+    if (err) return res.status(500).json({ error: 'Database error fetching student timetable: ' + err.message });
+    res.json({
+      student_id: studentId,
+      department: dept,
+      year: yr,
+      section: sec,
+      semester: sem,
+      timetables: timetables || []
+    });
+  });
+}
+
+// Faculty Timetable API: GET /api/timetable/faculty
+function getFacultyTimetable(req, res) {
+  const facultyId = req.query.faculty_id || req.user?.id || req.user?.faculty_code || 'FAC-001-ID';
+  const facultyName = req.query.faculty_name || req.user?.name || '';
+
+  // Get Faculty record if needed to match name and code
+  db.get("SELECT * FROM faculty WHERE id = ? OR faculty_code = ? OR LOWER(name) = LOWER(?)", [facultyId, facultyId, facultyName], (err, fac) => {
+    const matchedName = fac ? fac.name : facultyName;
+    const searchParam = `%${(matchedName || 'nivetha').toLowerCase()}%`;
+
+    const sql = `
+      SELECT * FROM timetables 
+      WHERE (faculty_id = ? OR LOWER(faculty_name) LIKE ? OR faculty_id = ?)
+        AND (status = 'ACTIVE' OR status IS NULL)
+      ORDER BY CASE day WHEN "Monday" THEN 1 WHEN "Tuesday" THEN 2 WHEN "Wednesday" THEN 3 WHEN "Thursday" THEN 4 WHEN "Friday" THEN 5 WHEN "Saturday" THEN 6 ELSE 7 END, CAST(period_number AS INTEGER) ASC, start_time ASC
+    `;
+
+    db.all(sql, [facultyId, searchParam, fac ? fac.id : facultyId], (errTt, timetables) => {
+      if (errTt) return res.status(500).json({ error: 'Database error fetching faculty timetable: ' + errTt.message });
+      const ttList = timetables || [];
+
+      const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+      const todayName = days[new Date().getDay()] || 'Monday';
+
+      const todayClasses = ttList.filter((t) => (t.day || '').toLowerCase() === todayName.toLowerCase());
+
+      // Detect current active period based on current IST clock
+      const now = new Date();
+      const nowMins = now.getHours() * 60 + now.getMinutes();
+
+      const parseMins = (tStr) => {
+        if (!tStr) return 0;
+        const clean = tStr.trim();
+        const parts = clean.split(' ');
+        const timeParts = parts[0].split(':');
+        let hrs = parseInt(timeParts[0]);
+        const mins = parseInt(timeParts[1] || 0);
+        if (parts[1] && parts[1].toUpperCase() === 'PM' && hrs < 12) hrs += 12;
+        if (parts[1] && parts[1].toUpperCase() === 'AM' && hrs === 12) hrs = 0;
+        return hrs * 60 + mins;
+      };
+
+      let currentActivePeriod = null;
+      let nextPeriod = null;
+
+      for (const slot of todayClasses) {
+        const startM = parseMins(slot.start_time);
+        const endM = parseMins(slot.end_time);
+        if (nowMins >= startM && nowMins <= endM) {
+          currentActivePeriod = slot;
+        } else if (nowMins < startM && !nextPeriod) {
+          nextPeriod = slot;
+        }
+      }
+
+      res.json({
+        faculty_id: facultyId,
+        faculty_name: matchedName,
+        todayDay: todayName,
+        todayClasses,
+        weeklyTimetable: ttList,
+        timetables: ttList,
+        currentActivePeriod,
+        nextPeriod
+      });
+    });
   });
 }
 
@@ -302,11 +417,15 @@ function createTimetable(req, res) {
     date,
     day = 'Monday',
     period_number = 1,
+    subject_id,
     subject_name,
+    faculty_id,
     faculty_name,
     start_time,
     end_time,
-    room_number = 'F305'
+    room_number = 'F305',
+    academic_year = '2026-2027 (ODD)',
+    status = 'ACTIVE'
   } = req.body;
 
   if (!subject_name || !faculty_name || !start_time) {
@@ -314,27 +433,60 @@ function createTimetable(req, res) {
   }
 
   const id = 'tt-' + uuidv4();
+  const sql = `
+    INSERT INTO timetables (id, department, year, section, semester, date, day, period_number, subject_id, subject_name, faculty_id, faculty_name, start_time, end_time, room_number, academic_year, status)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `;
+
+  const newEntry = {
+    id,
+    department,
+    year: parseInt(year || 3),
+    section,
+    semester: parseInt(semester || 5),
+    date: date || null,
+    day,
+    period_number: parseInt(period_number || 1),
+    subject_id: subject_id || null,
+    subject_name: subject_name.trim(),
+    faculty_id: faculty_id || null,
+    faculty_name: faculty_name.trim(),
+    start_time,
+    end_time: end_time || '09:00 AM',
+    room_number: room_number || 'F305',
+    academic_year,
+    status
+  };
+
   db.run(
-    `INSERT INTO timetables (id, department, year, section, semester, date, day, period_number, subject_name, faculty_name, start_time, end_time, room_number)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    sql,
     [
-      id,
-      department,
-      parseInt(year || 3),
-      section,
-      parseInt(semester || 5),
-      date || null,
-      day,
-      parseInt(period_number || 1),
-      subject_name,
-      faculty_name,
-      start_time,
-      end_time || '09:00 AM',
-      room_number
+      newEntry.id,
+      newEntry.department,
+      newEntry.year,
+      newEntry.section,
+      newEntry.semester,
+      newEntry.date,
+      newEntry.day,
+      newEntry.period_number,
+      newEntry.subject_id,
+      newEntry.subject_name,
+      newEntry.faculty_id,
+      newEntry.faculty_name,
+      newEntry.start_time,
+      newEntry.end_time,
+      newEntry.room_number,
+      newEntry.academic_year,
+      newEntry.status
     ],
     function (err) {
       if (err) return res.status(500).json({ error: 'Failed to create timetable slot: ' + err.message });
-      res.status(201).json({ message: 'Timetable entry created successfully', id });
+      
+      // Trigger Socket.IO Realtime Sync
+      broadcastTimetableEvent('timetable_created', { slot: newEntry });
+      broadcastTimetableEvent('timetable_updated', { action: 'created', slot: newEntry });
+
+      res.status(201).json({ message: 'Timetable entry created successfully and synchronized across all portals!', id, timetable: newEntry });
     }
   );
 }
@@ -342,42 +494,78 @@ function createTimetable(req, res) {
 function updateTimetable(req, res) {
   const { id } = req.params;
   const {
-    department,
-    year,
-    section,
-    semester,
+    department = 'AI & DS',
+    year = 3,
+    section = 'A',
+    semester = 5,
     date,
-    day,
-    period_number,
+    day = 'Monday',
+    period_number = 1,
+    subject_id,
     subject_name,
+    faculty_id,
     faculty_name,
     start_time,
     end_time,
-    room_number
+    room_number = 'F305',
+    academic_year = '2026-2027 (ODD)',
+    status = 'ACTIVE'
   } = req.body;
 
+  const sql = `
+    UPDATE timetables 
+    SET department = ?, year = ?, section = ?, semester = ?, date = ?, day = ?, period_number = ?, subject_id = ?, subject_name = ?, faculty_id = ?, faculty_name = ?, start_time = ?, end_time = ?, room_number = ?, academic_year = ?, status = ?
+    WHERE id = ?
+  `;
+
+  const updatedEntry = {
+    id,
+    department,
+    year: parseInt(year || 3),
+    section,
+    semester: parseInt(semester || 5),
+    date: date || null,
+    day,
+    period_number: parseInt(period_number || 1),
+    subject_id: subject_id || null,
+    subject_name,
+    faculty_id: faculty_id || null,
+    faculty_name,
+    start_time,
+    end_time,
+    room_number,
+    academic_year,
+    status
+  };
+
   db.run(
-    `UPDATE timetables 
-     SET department = ?, year = ?, section = ?, semester = ?, date = ?, day = ?, period_number = ?, subject_name = ?, faculty_name = ?, start_time = ?, end_time = ?, room_number = ?
-     WHERE id = ?`,
+    sql,
     [
-      department || 'AI & DS',
-      parseInt(year || 3),
-      section || 'A',
-      parseInt(semester || 5),
-      date || null,
-      day || 'Monday',
-      parseInt(period_number || 1),
-      subject_name,
-      faculty_name,
-      start_time,
-      end_time,
-      room_number || 'F305',
+      updatedEntry.department,
+      updatedEntry.year,
+      updatedEntry.section,
+      updatedEntry.semester,
+      updatedEntry.date,
+      updatedEntry.day,
+      updatedEntry.period_number,
+      updatedEntry.subject_id,
+      updatedEntry.subject_name,
+      updatedEntry.faculty_id,
+      updatedEntry.faculty_name,
+      updatedEntry.start_time,
+      updatedEntry.end_time,
+      updatedEntry.room_number,
+      updatedEntry.academic_year,
+      updatedEntry.status,
       id
     ],
     function (err) {
       if (err) return res.status(500).json({ error: 'Failed to update timetable entry: ' + err.message });
-      res.json({ message: 'Timetable entry updated successfully' });
+
+      // Trigger Socket.IO Realtime Sync
+      broadcastTimetableEvent('timetable_updated', { action: 'updated', slot: updatedEntry });
+
+      res.json({ message: 'Timetable entry updated successfully and synchronized across all portals!', timetable: updatedEntry });
     }
   );
 }
@@ -386,7 +574,12 @@ function deleteTimetable(req, res) {
   const { id } = req.params;
   db.run('DELETE FROM timetables WHERE id = ?', [id], function (err) {
     if (err) return res.status(500).json({ error: 'Failed to delete timetable entry: ' + err.message });
-    res.json({ message: 'Timetable entry deleted successfully' });
+
+    // Trigger Socket.IO Realtime Sync
+    broadcastTimetableEvent('timetable_deleted', { id });
+    broadcastTimetableEvent('timetable_updated', { action: 'deleted', id });
+
+    res.json({ message: 'Timetable entry deleted successfully and synchronized across all portals!', id });
   });
 }
 
@@ -419,6 +612,8 @@ module.exports = {
   toggleArchiveSubject,
   deleteSubject,
   getTimetables,
+  getStudentTimetable,
+  getFacultyTimetable,
   createTimetable,
   updateTimetable,
   deleteTimetable,

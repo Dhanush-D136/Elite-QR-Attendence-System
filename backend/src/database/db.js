@@ -192,7 +192,11 @@ function runMigrations() {
                   const ttMigrations = [
                     { col: 'date', type: 'TEXT' },
                     { col: 'period_number', type: 'INTEGER DEFAULT 1' },
-                    { col: 'semester', type: 'INTEGER DEFAULT 5' }
+                    { col: 'semester', type: 'INTEGER DEFAULT 5' },
+                    { col: 'subject_id', type: 'TEXT' },
+                    { col: 'faculty_id', type: 'TEXT' },
+                    { col: 'academic_year', type: "TEXT DEFAULT '2026-2027 (ODD)'" },
+                    { col: 'status', type: "TEXT DEFAULT 'ACTIVE'" }
                   ];
                   ttMigrations.forEach(({ col, type }) => {
                     if (!ttColNames.includes(col.toLowerCase())) {
@@ -511,11 +515,15 @@ function initDb() {
           date TEXT,
           day TEXT NOT NULL,
           period_number INTEGER DEFAULT 1,
+          subject_id TEXT,
           subject_name TEXT NOT NULL,
+          faculty_id TEXT,
           faculty_name TEXT NOT NULL,
           start_time TEXT NOT NULL,
           end_time TEXT NOT NULL,
           room_number TEXT NOT NULL,
+          academic_year TEXT DEFAULT '2026-2027 (ODD)',
+          status TEXT DEFAULT 'ACTIVE',
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )
       `);

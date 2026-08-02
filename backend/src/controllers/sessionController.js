@@ -81,7 +81,7 @@ function getISTTimeDetails() {
 function getCurrentTimetableSlot(req, res) {
   const ist = getISTTimeDetails();
 
-  db.all('SELECT * FROM timetables WHERE day = ? ORDER BY period_number ASC, id ASC', [ist.currentDay], (err, rows) => {
+  db.all("SELECT * FROM timetables WHERE day = ? AND (status = 'ACTIVE' OR status IS NULL) ORDER BY CAST(period_number AS INTEGER) ASC, id ASC", [ist.currentDay], (err, rows) => {
     if (err || !rows || rows.length === 0) {
       return res.json({
         hasActiveSlot: false,

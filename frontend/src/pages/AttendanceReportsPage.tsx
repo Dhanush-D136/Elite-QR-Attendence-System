@@ -222,11 +222,21 @@ export const AttendanceReportsPage: React.FC<AttendanceReportsPageProps> = ({ on
     socket.on('attendance_updated', handleUpdate);
     socket.on('attendance_deleted', handleUpdate);
 
+    socket.on('timetable_created', handleUpdate);
+    socket.on('timetable_updated', handleUpdate);
+    socket.on('timetable_deleted', handleUpdate);
+    socket.on('timetable_changed', handleUpdate);
+
     return () => {
       socket.off('attendanceMarked', handleUpdate);
       socket.off('attendance_marked', handleUpdate);
       socket.off('attendance_updated', handleUpdate);
       socket.off('attendance_deleted', handleUpdate);
+
+      socket.off('timetable_created', handleUpdate);
+      socket.off('timetable_updated', handleUpdate);
+      socket.off('timetable_deleted', handleUpdate);
+      socket.off('timetable_changed', handleUpdate);
     };
   }, [activeTab]);
 

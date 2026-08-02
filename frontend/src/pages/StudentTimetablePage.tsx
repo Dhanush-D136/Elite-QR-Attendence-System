@@ -6,6 +6,8 @@ import { Calendar, Clock, MapPin, UserCheck, Sparkles, BookOpen, Layers } from '
 
 import { HeroBanner } from '../components/HeroBanner';
 
+import { getSocket } from '../services/socket';
+
 export const StudentTimetablePage: React.FC = () => {
   const { user } = useAuth();
   const [timetables, setTimetables] = useState<TimetableItem[]>([]);
@@ -28,14 +30,40 @@ export const StudentTimetablePage: React.FC = () => {
   };
   const activeDayOrderLabel = dayOrderMap[activeDay] || activeDay;
 
+  const fetchStudentTimetable = () => {
+    const dept = user?.department || 'AI & DS';
+    const yr = user?.year || 3;
+    const sec = user?.section || 'A';
+
+    setIsLoading(true);
+    api.get(`/timetable/student?student_id=${user?.id || ''}&department=${encodeURIComponent(dept)}&year=${yr}&section=${sec}`)
+      .then((res) => setTimetables(res.data.timetables || []))
+      .catch((err) => console.error('Failed to load student timetable', err))
+      .finally(() => setIsLoading(false));
+  };
+
   useEffect(() => {
-    if (user?.department && user?.year && user?.section) {
-      api.get(`/timetables?department=${encodeURIComponent(user.department)}&year=${user.year}&section=${user.section}`)
-        .then((res) => setTimetables(res.data.timetables || []))
-        .catch((err) => console.error('Failed to load student timetable', err))
-        .finally(() => setIsLoading(false));
-    }
-  }, [user?.department, user?.year, user?.section]);
+    fetchStudentTimetable();
+
+    // Subscribe to Socket.IO realtime timetable synchronization events
+    const socket = getSocket();
+    const handleTimetableUpdate = () => {
+      console.log('⚡ [STUDENT TIMETABLE] Real-time timetable change detected. Refetching schedule...');
+      fetchStudentTimetable();
+    };
+
+    socket.on('timetable_created', handleTimetableUpdate);
+    socket.on('timetable_updated', handleTimetableUpdate);
+    socket.on('timetable_deleted', handleTimetableUpdate);
+    socket.on('timetable_changed', handleTimetableUpdate);
+
+    return () => {
+      socket.off('timetable_created', handleTimetableUpdate);
+      socket.off('timetable_updated', handleTimetableUpdate);
+      socket.off('timetable_deleted', handleTimetableUpdate);
+      socket.off('timetable_changed', handleTimetableUpdate);
+    };
+  }, [user?.department, user?.year, user?.section, user?.id]);
 
   const todayClasses = timetables.filter((t) => (t.day || '').toLowerCase() === todayName.toLowerCase()).sort((a, b) => (a.period_number || 0) - (b.period_number || 0));
   const activeDayClasses = timetables.filter((t) => (t.day || '').toLowerCase() === activeDay.toLowerCase()).sort((a, b) => (a.period_number || 0) - (b.period_number || 0));

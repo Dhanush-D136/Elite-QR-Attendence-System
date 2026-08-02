@@ -82,6 +82,14 @@ router.put('/subjects/:id/archive', verifyToken, requireRole('admin'), erpContro
 router.delete('/subjects/:id', verifyToken, requireRole('admin'), erpController.deleteSubject);
 
 // --- Timetable ERP Routes ---
+router.get('/timetable/student', verifyToken, erpController.getStudentTimetable);
+router.get('/timetable/faculty', verifyToken, erpController.getFacultyTimetable);
+router.get('/timetable', verifyToken, erpController.getTimetables);
+router.post('/timetable', verifyToken, requireRole('admin'), erpController.createTimetable);
+router.put('/timetable/:id', verifyToken, requireRole('admin'), erpController.updateTimetable);
+router.delete('/timetable/:id', verifyToken, requireRole('admin'), erpController.deleteTimetable);
+
+// Plural Aliases for Timetable Routes
 router.get('/timetables', verifyToken, erpController.getTimetables);
 router.post('/timetables', verifyToken, requireRole('admin'), erpController.createTimetable);
 router.put('/timetables/:id', verifyToken, requireRole('admin'), erpController.updateTimetable);

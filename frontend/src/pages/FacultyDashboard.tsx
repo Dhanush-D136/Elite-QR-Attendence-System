@@ -197,12 +197,18 @@ export const FacultyDashboard: React.FC = () => {
   const [facultySpecialization, setFacultySpecialization] = useState<string>((user as any)?.specialization || 'AI & Web Security');
   const [facultyPhoto, setFacultyPhoto] = useState<string>(user?.profile_photo || 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150');
 
+  // Faculty Timetable & Real-time State
+  const [facultyTimetable, setFacultyTimetable] = useState<any[]>([]);
+  const [currentActivePeriod, setCurrentActivePeriod] = useState<any>(null);
+  const [nextPeriod, setNextPeriod] = useState<any>(null);
+  const [timetableMode, setTimetableMode] = useState<'today' | 'weekly'>('today');
+
   useEffect(() => {
     fetchFacultyData();
 
-    // Socket.IO real-time scan feed listener
+    // Socket.IO real-time scan feed & timetable sync listeners
     const socket = getSocket();
-    socket.on('attendanceMarked', (data: any) => {
+    const handleAttendanceMarked = (data: any) => {
       setLiveRecordsCount((prev) => prev + 1);
       setLiveScanFeed((prev) => [
         {
@@ -213,18 +219,34 @@ export const FacultyDashboard: React.FC = () => {
         },
         ...prev
       ]);
-    });
+    };
+
+    const handleTimetableSync = () => {
+      console.log('⚡ [FACULTY DASHBOARD] Real-time timetable change detected. Updating faculty schedule...');
+      fetchFacultyData();
+    };
+
+    socket.on('attendanceMarked', handleAttendanceMarked);
+    socket.on('timetable_created', handleTimetableSync);
+    socket.on('timetable_updated', handleTimetableSync);
+    socket.on('timetable_deleted', handleTimetableSync);
+    socket.on('timetable_changed', handleTimetableSync);
 
     return () => {
-      socket.off('attendanceMarked');
+      socket.off('attendanceMarked', handleAttendanceMarked);
+      socket.off('timetable_created', handleTimetableSync);
+      socket.off('timetable_updated', handleTimetableSync);
+      socket.off('timetable_deleted', handleTimetableSync);
+      socket.off('timetable_changed', handleTimetableSync);
     };
   }, []);
 
   const fetchFacultyData = async () => {
     try {
       setIsLoading(true);
-      const [dashRes, stRes, riskRes, docRes, leaveRes] = await Promise.all([
+      const [dashRes, ttRes, stRes, riskRes, docRes, leaveRes] = await Promise.all([
         api.get(`/faculty/dashboard?faculty_id=${user?.id || 'FAC-001-ID'}`),
+        api.get(`/timetable/faculty?faculty_id=${user?.id || 'FAC-001-ID'}&faculty_name=${encodeURIComponent(user?.name || '')}`),
         api.get('/faculty/students'),
         api.get('/faculty/risk-detection'),
         api.get('/faculty/documents'),
@@ -235,6 +257,10 @@ export const FacultyDashboard: React.FC = () => {
       if (dashRes.data.activeSession) {
         setActiveSession(dashRes.data.activeSession);
       }
+      setFacultyTimetable(ttRes.data.weeklyTimetable || ttRes.data.timetables || dashRes.data.todayClasses || []);
+      setCurrentActivePeriod(ttRes.data.currentActivePeriod || null);
+      setNextPeriod(ttRes.data.nextPeriod || null);
+
       setStudents(stRes.data.students || []);
       setRiskData(riskRes.data || { safe: [], warning: [], risk: [], critical: [] });
       setDocuments(docRes.data.documents || []);

@@ -200,11 +200,15 @@ CREATE TABLE IF NOT EXISTS public.timetables (
   date TEXT,
   day TEXT NOT NULL,
   period_number INTEGER DEFAULT 1,
+  subject_id TEXT,
   subject_name TEXT NOT NULL,
+  faculty_id TEXT,
   faculty_name TEXT NOT NULL,
   start_time TEXT NOT NULL,
   end_time TEXT NOT NULL,
   room_number TEXT NOT NULL,
+  academic_year TEXT DEFAULT '2026-2027 (ODD)',
+  status TEXT DEFAULT 'ACTIVE',
   created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
