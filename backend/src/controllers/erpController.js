@@ -262,6 +262,8 @@ function deleteSubject(req, res) {
 function broadcastTimetableEvent(eventType, payload) {
   if (global.io) {
     global.io.emit(eventType, payload);
+    global.io.emit('timetable_updated', payload);
+    global.io.emit('timetable_created', payload);
     global.io.emit('timetable_changed', { event: eventType, ...payload });
     console.log(`⚡ [REALTIME TIMETABLE SYNC] Socket.IO broadcast: '${eventType}'`, payload);
   }
