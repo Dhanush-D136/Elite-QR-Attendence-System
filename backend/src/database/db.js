@@ -871,5 +871,58 @@ function initDb() {
   });
 }
 
-module.exports = { db, initDb, runMigrations, PREDEFINED_100_TOKENS, supabase };
+const { isSupabaseActive, getPg, allPg, runPg } = require('./pgAdapter');
+
+
+const dbWrapper = {
+  get(sql, params, cb) {
+    if (typeof params === 'function') {
+      cb = params;
+      params = [];
+    }
+    if (isSupabaseActive()) {
+      getPg(sql, params)
+        .then((row) => (cb ? cb(null, row) : null))
+        .catch((err) => (cb ? cb(err, null) : null));
+    } else {
+      db.get(sql, params, cb);
+    }
+  },
+  all(sql, params, cb) {
+    if (typeof params === 'function') {
+      cb = params;
+      params = [];
+    }
+    if (isSupabaseActive()) {
+      allPg(sql, params)
+        .then((rows) => (cb ? cb(null, rows) : null))
+        .catch((err) => (cb ? cb(err, null) : null));
+    } else {
+      db.all(sql, params, cb);
+    }
+  },
+  run(sql, params, cb) {
+    if (typeof params === 'function') {
+      cb = params;
+      params = [];
+    }
+    if (isSupabaseActive()) {
+      runPg(sql, params)
+        .then((res) => (cb ? cb.call(res, null) : null))
+        .catch((err) => (cb ? cb(err) : null));
+    } else {
+      db.run(sql, params, cb);
+    }
+  },
+  serialize(cb) {
+    if (isSupabaseActive()) {
+      if (cb) cb();
+    } else {
+      db.serialize(cb);
+    }
+  }
+};
+
+module.exports = { db: dbWrapper, rawSqliteDb: db, initDb, runMigrations, PREDEFINED_100_TOKENS, supabase };
+
 
