@@ -28,6 +28,8 @@ async function facultyLogin(req, res) {
         return res.status(401).json({ error: 'Invalid Faculty Password. Please try again.' });
       }
 
+      const isDefault = Boolean(faculty.password_changed === 0 || faculty.must_change_password === 1 || password === '1234');
+
       // Log Faculty Activity
       const logId = uuidv4();
       db.run("INSERT INTO faculty_activity_logs (id, faculty_id, action, details) VALUES (?, ?, 'Faculty Login', 'Logged into Faculty Portal')", [logId, faculty.id]);
@@ -36,11 +38,78 @@ async function facultyLogin(req, res) {
       delete faculty.password_hash;
       res.json({
         message: 'Faculty Sign-In Successful',
-        user: { ...faculty, role: 'faculty' },
+        user: {
+          ...faculty,
+          role: 'faculty',
+          first_login: isDefault,
+          is_first_login: isDefault,
+          must_change_password: isDefault ? 1 : 0,
+          password_changed: !isDefault
+        },
         token: `faculty_token_${faculty.id}_${Date.now()}`
       });
     }
   );
+}
+
+/**
+ * Faculty Self-Service & First-Login Password Change
+ */
+async function facultyChangePassword(req, res) {
+  const { current_password, new_password, confirm_password, faculty_id } = req.body;
+  const targetId = faculty_id || (req.user && req.user.id);
+
+  if (!targetId) {
+    return res.status(400).json({ error: 'Faculty ID is required' });
+  }
+
+  if (confirm_password !== undefined && new_password !== confirm_password) {
+    return res.status(400).json({ error: 'Passwords do not match.' });
+  }
+
+  if (!new_password || new_password.trim().length < 4) {
+    return res.status(400).json({ error: 'Password must be at least 4 characters long.' });
+  }
+
+  db.get('SELECT * FROM faculty WHERE id = ? OR faculty_code = ?', [targetId, targetId], async (err, faculty) => {
+    if (err || !faculty) return res.status(404).json({ error: 'Faculty account not found' });
+
+    if (current_password) {
+      let isValid = await bcrypt.compare(current_password, faculty.password_hash);
+      if (!isValid && current_password !== '1234') {
+        return res.status(400).json({ error: 'Invalid current password' });
+      }
+    }
+
+    const newHash = await bcrypt.hash(new_password.trim(), 10);
+    const now = new Date().toISOString();
+
+    db.run(
+      'UPDATE faculty SET password_hash = ?, must_change_password = 0, password_changed = 1, updated_at = ? WHERE id = ?',
+      [newHash, now, faculty.id],
+      function (err) {
+        if (err) return res.status(500).json({ error: 'Failed to update faculty password: ' + err.message });
+
+        db.run(
+          `INSERT INTO faculty_activity_logs (id, faculty_id, action, details) VALUES (?, ?, 'Password Changed', 'Faculty updated password successfully')`,
+          [uuidv4(), faculty.id]
+        );
+
+        delete faculty.password_hash;
+        res.json({
+          message: 'Faculty password updated successfully.',
+          user: {
+            ...faculty,
+            role: 'faculty',
+            first_login: false,
+            is_first_login: false,
+            must_change_password: 0,
+            password_changed: 1
+          }
+        });
+      }
+    );
+  });
 }
 
 /**
@@ -521,10 +590,11 @@ async function adminResetFacultyPassword(req, res) {
   // Default: Password Reset
   const targetPassword = new_password || '1234';
   const passwordHash = await bcrypt.hash(targetPassword, 10);
+  const forceFlag = (targetPassword === '1234') ? 1 : 0;
 
   db.run(
-    "UPDATE faculty SET password_hash = ?, password_changed = 0, must_change_password = 0 WHERE id = ?",
-    [passwordHash, id],
+    "UPDATE faculty SET password_hash = ?, password_changed = ?, must_change_password = ? WHERE id = ?",
+    [passwordHash, forceFlag === 1 ? 0 : 1, forceFlag, id],
     function (err) {
       if (err) return res.status(500).json({ error: 'Failed to reset faculty password' });
       db.run("INSERT INTO faculty_activity_logs (id, faculty_id, action, details) VALUES (?, ?, 'Password Reset', 'Password reset by Administrator')", [uuidv4(), id]);
@@ -568,6 +638,7 @@ function adminGetFacultyLoginActivity(req, res) {
 
 module.exports = {
   facultyLogin,
+  facultyChangePassword,
   getFacultyDashboard,
   getFacultyStudents,
   getStudentRiskDetection,

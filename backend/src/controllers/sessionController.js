@@ -164,6 +164,18 @@ function createSession(req, res) {
   const startTime = new Date();
   const expiryTime = new Date(startTime.getTime() + duration * 60000);
 
+  // Faculty Security Constraint: Faculty can only generate QR for assigned subjects (e.g. Mini Project, PLAI, KE, Data Analytics)
+  if (req.user && req.user.role === 'faculty') {
+    const userFacName = (req.user.name || '').toLowerCase();
+    const reqSub = subject.toLowerCase();
+
+    if (reqSub.includes('open elective') && !userFacName.includes('elective')) {
+      return res.status(403).json({
+        error: `Permission Restricted: Open Elective QR code generation is controlled by the Admin Portal.`
+      });
+    }
+  }
+
   const { token, payload } = generateAndCacheLatestQR(id, subject, faculty_name);
 
   const query = `

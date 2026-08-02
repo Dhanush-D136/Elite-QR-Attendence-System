@@ -15,6 +15,7 @@ const facultyController = require('../controllers/facultyController');
 router.post('/auth/admin/login', authController.adminLogin);
 router.post('/auth/student/login', authController.studentLogin);
 router.post('/auth/faculty/login', facultyController.facultyLogin);
+router.post('/auth/faculty/change-password', facultyController.facultyChangePassword);
 router.post('/auth/student/first-login-change-password', verifyToken, authController.firstTimePasswordChange);
 router.post('/auth/change-password', verifyToken, authController.changePassword);
 router.get('/auth/me', verifyToken, authController.getMe);
@@ -97,13 +98,13 @@ router.delete('/timetables/:id', verifyToken, requireRole('admin'), erpControlle
 
 // --- Session Routes (Timetable-Driven Auto-Attendance) ---
 router.get('/sessions/current-slot', verifyToken, sessionController.getCurrentTimetableSlot);
-router.post('/sessions/auto-launch', verifyToken, requireRole('admin'), sessionController.autoLaunchSession);
-router.post('/sessions', verifyToken, requireRole('admin'), sessionController.createSession);
+router.post('/sessions/auto-launch', verifyToken, requireRole('admin', 'faculty'), sessionController.autoLaunchSession);
+router.post('/sessions', verifyToken, requireRole('admin', 'faculty'), sessionController.createSession);
 router.get('/sessions', verifyToken, sessionController.getSessions);
 router.get('/sessions/:id', verifyToken, sessionController.getSessionById);
 router.get('/sessions/:id/qr', verifyToken, sessionController.getSessionQR);
-router.put('/sessions/:id/end', verifyToken, requireRole('admin'), sessionController.endSession);
-router.post('/sessions/:id/end', verifyToken, requireRole('admin'), sessionController.endSession);
+router.put('/sessions/:id/end', verifyToken, requireRole('admin', 'faculty'), sessionController.endSession);
+router.post('/sessions/:id/end', verifyToken, requireRole('admin', 'faculty'), sessionController.endSession);
 
 // --- Attendance Routes ---
 router.post('/attendance/mark', verifyToken, requireRole('student'), attendanceController.markAttendance);

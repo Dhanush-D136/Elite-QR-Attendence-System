@@ -48,9 +48,21 @@ function convertSqlToPostgres(sql) {
   let paramIndex = 1;
   converted = converted.replace(/\?/g, () => `$${paramIndex++}`);
 
-  // SQLite specific SQL keyword conversions
-  converted = converted.replace(/INSERT OR IGNORE INTO/gi, 'INSERT INTO');
-  converted = converted.replace(/INSERT OR REPLACE INTO/gi, 'INSERT INTO');
+  // Handle SQLite INSERT OR IGNORE INTO -> PostgreSQL ON CONFLICT DO NOTHING
+  if (/INSERT\s+OR\s+IGNORE\s+INTO/gi.test(converted)) {
+    converted = converted.replace(/INSERT\s+OR\s+IGNORE\s+INTO/gi, 'INSERT INTO');
+    if (!/ON\s+CONFLICT/gi.test(converted)) {
+      converted = converted.trim() + ' ON CONFLICT DO NOTHING';
+    }
+  }
+
+  // Handle SQLite INSERT OR REPLACE INTO -> PostgreSQL ON CONFLICT (id) DO NOTHING / UPDATE
+  if (/INSERT\s+OR\s+REPLACE\s+INTO/gi.test(converted)) {
+    converted = converted.replace(/INSERT\s+OR\s+REPLACE\s+INTO/gi, 'INSERT INTO');
+    if (!/ON\s+CONFLICT/gi.test(converted)) {
+      converted = converted.trim() + ' ON CONFLICT (id) DO NOTHING';
+    }
+  }
 
   // Convert SQLite LIKE to PostgreSQL ILIKE for case-insensitive text search
   converted = converted.replace(/\bLIKE\b/gi, 'ILIKE');
@@ -86,102 +98,6 @@ async function runPg(sql, params = []) {
   };
 }
 
-/**
- * Automatic On-Startup Migration: Reads SQLite smartattend.db & populates Supabase PostgreSQL
- */
-async function autoMigrateSqliteToSupabase(client) {
-  const sqlite3 = require('sqlite3').verbose();
-  const sqlitePath = path.join(__dirname, 'smartattend.db');
-
-  if (!fs.existsSync(sqlitePath)) {
-    console.log('[SUPABASE AUTO-MIGRATION] SQLite smartattend.db not found. Skipping auto-migration.');
-    return;
-  }
-
-  console.log('====================================================');
-  console.log('🚀 [SUPABASE AUTO-MIGRATION] Verifying & Seeding Supabase PostgreSQL from SQLite smartattend.db...');
-  console.log('====================================================');
-
-  const sqliteDb = new sqlite3.Database(sqlitePath, sqlite3.OPEN_READONLY);
-
-  const tablesToMigrate = [
-    'users',
-    'attendance_tokens',
-    'attendance_sessions',
-    'attendance_records',
-    'violation_logs',
-    'login_logs',
-    'password_audit_logs',
-    'departments',
-    'classes',
-    'sections',
-    'subjects',
-    'timetables',
-    'system_settings',
-    'faculty',
-    'faculty_subject_mapping',
-    'faculty_timetable_mapping',
-    'faculty_subjects',
-    'faculty_remarks',
-    'faculty_documents',
-    'faculty_announcements',
-    'faculty_leave_requests',
-    'faculty_activity_logs',
-    'class_details'
-  ];
-
-  for (const table of tablesToMigrate) {
-    try {
-      const sqliteRows = await new Promise((resolve) => {
-        sqliteDb.all(`SELECT * FROM ${table}`, [], (err, rows) => {
-          if (err) resolve([]);
-          else resolve(rows || []);
-        });
-      });
-
-      if (sqliteRows.length === 0) continue;
-
-      let inserted = 0;
-      for (const row of sqliteRows) {
-        const keys = Object.keys(row);
-        const values = Object.values(row);
-        if (keys.length === 0) continue;
-
-        const colNames = keys.map((k) => `"${k}"`).join(', ');
-        const paramPlaceholders = keys.map((_, idx) => `$${idx + 1}`).join(', ');
-        const primaryKey = keys.includes('id') ? 'id' : keys[0];
-
-        const updateSet = keys
-          .filter((k) => k !== primaryKey)
-          .map((k) => `"${k}" = EXCLUDED."${k}"`)
-          .join(', ');
-
-        let insertQuery = `INSERT INTO public."${table}" (${colNames}) VALUES (${paramPlaceholders})`;
-        if (updateSet) {
-          insertQuery += ` ON CONFLICT ("${primaryKey}") DO UPDATE SET ${updateSet}`;
-        } else {
-          insertQuery += ` ON CONFLICT ("${primaryKey}") DO NOTHING`;
-        }
-
-        try {
-          await client.query(insertQuery, values);
-          inserted++;
-        } catch (e) {
-          // Ignore duplicate conflicts
-        }
-      }
-      console.log(`  ✓ Auto-migrated ${table}: ${inserted}/${sqliteRows.length} rows inserted into Supabase.`);
-    } catch (tblErr) {
-      console.warn(`  ⚠️ Table '${table}' auto-migration note:`, tblErr.message);
-    }
-  }
-
-  sqliteDb.close();
-  console.log('====================================================');
-  console.log('🎉 [SUPABASE AUTO-MIGRATION] Complete! All SQLite production records seeded into Supabase PostgreSQL.');
-  console.log('====================================================');
-}
-
 async function initSupabasePostgres() {
   if (!pool) {
     isSupabaseActive = false;
@@ -200,9 +116,6 @@ async function initSupabasePostgres() {
       await client.query(sqlContent);
       console.log('✅ Supabase PostgreSQL tables, indexes, and RLS policies verified and migrated.');
     }
-
-    // Auto-migrate SQLite data into Supabase if empty
-    await autoMigrateSqliteToSupabase(client);
 
     client.release();
     isSupabaseActive = true;
