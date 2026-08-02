@@ -120,6 +120,7 @@ router.get('/students', verifyToken, requireRole('admin'), studentController.get
 router.post('/students', verifyToken, requireRole('admin'), studentController.createStudent);
 router.post('/students/bulk-delete', verifyToken, requireRole('admin'), studentController.bulkDeleteStudents);
 router.post('/students/bulk-import', verifyToken, requireRole('admin'), studentController.bulkImportStudents);
+router.post('/students/bulk-reset-passwords', verifyToken, requireRole('admin'), studentController.bulkResetStudentPasswords);
 router.get('/students/login-activity', verifyToken, requireRole('admin'), studentController.getLoginActivity);
 router.get('/students/password-audit-logs', verifyToken, requireRole('admin'), studentController.getPasswordAuditLogs);
 router.get('/students/:id/profile-details', verifyToken, requireRole('admin'), studentController.getStudentProfileDetails);

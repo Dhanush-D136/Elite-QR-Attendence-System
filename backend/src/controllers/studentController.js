@@ -370,6 +370,49 @@ async function resetStudentPassword(req, res) {
   );
 }
 
+// Bulk Admin Reset Student Passwords
+async function bulkResetStudentPasswords(req, res) {
+  const { studentIds, resetType, customPassword } = req.body;
+
+  if (!Array.isArray(studentIds) || studentIds.length === 0) {
+    return res.status(400).json({ error: 'No student IDs provided for bulk password reset.' });
+  }
+
+  let newPass = '1234';
+  if (resetType === 'custom' && customPassword && customPassword.trim() !== '') {
+    newPass = customPassword.trim();
+  }
+
+  const passwordHash = await bcrypt.hash(newPass, 10);
+  let updatedCount = 0;
+
+  for (const stId of studentIds) {
+    await new Promise((resolve) => {
+      db.run(
+        "UPDATE users SET password_hash = ?, must_change_password = 1, is_first_login = 1, first_login = 1, password_changed = 0 WHERE id = ? AND role = 'student'",
+        [passwordHash, stId],
+        function (err) {
+          if (!err && this.changes > 0) {
+            updatedCount++;
+            const auditId = uuidv4();
+            const actionText = resetType === 'custom' ? `Bulk Reset to Custom Temp Password (${newPass})` : 'Bulk Reset to Default Password (1234)';
+            db.run(
+              `INSERT INTO password_audit_logs (id, student_id, changed_by, action, changed_at) VALUES (?, ?, 'Admin', ?, CURRENT_TIMESTAMP)`,
+              [auditId, stId, actionText]
+            );
+          }
+          resolve(true);
+        }
+      );
+    });
+  }
+
+  res.json({
+    message: `Successfully reset passwords for ${updatedCount} student account(s) to temporary password "${newPass}". Mandatory password change flag applied.`,
+    updatedCount
+  });
+}
+
 // Force Student Password Change on Next Login
 function forceStudentPasswordChange(req, res) {
   const { id } = req.params;
@@ -530,6 +573,7 @@ module.exports = {
   bulkImportStudents,
   resetStudentDevice,
   resetStudentPassword,
+  bulkResetStudentPasswords,
   forceStudentPasswordChange,
   updateStudentAccountStatus,
   getStudentProfileDetails,

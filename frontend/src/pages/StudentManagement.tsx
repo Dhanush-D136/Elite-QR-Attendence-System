@@ -69,6 +69,7 @@ export const StudentManagement: React.FC = () => {
   const [showViewModal, setShowViewModal] = useState(false);
   const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
   const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
+  const [showBulkResetModal, setShowBulkResetModal] = useState(false);
   const [showResetPasswordModal, setShowResetPasswordModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
 
@@ -85,6 +86,8 @@ export const StudentManagement: React.FC = () => {
   const [resetPassTarget, setResetPassTarget] = useState<User | null>(null);
   const [resetPassType, setResetPassType] = useState<'default' | 'custom'>('default');
   const [customGeneratedPassword, setCustomGeneratedPassword] = useState('');
+  const [bulkResetType, setBulkResetType] = useState<'default' | 'custom'>('default');
+  const [bulkCustomPass, setBulkCustomPass] = useState('');
 
   const [editingStudent, setEditingStudent] = useState<{
     id: string;
@@ -377,6 +380,60 @@ export const StudentManagement: React.FC = () => {
       }
     };
     reader.readAsBinaryString(file);
+  };
+
+  // Export Security & Password Status Report to Excel (.xlsx)
+  const handleExportSecurityReport = () => {
+    const exportData = (selectedStudentIds.length > 0
+      ? students.filter((st) => selectedStudentIds.includes(st.id))
+      : students
+    ).map((st) => {
+      const vh = (st as any).vh_number || (st.roll_number ? 'VH' + st.roll_number.slice(-5) : 'VH13936');
+      const email = st.email || `${vh.toLowerCase()}@velhightech.com`;
+      const isDefault = Boolean((st as any).password_status === 'Default Password' || (st as any).must_change_password === 1);
+      const isBound = Boolean((st as any).device_fingerprint);
+
+      return {
+        'Register Number': st.roll_number,
+        'Student Name': st.name,
+        'VH Number': vh,
+        'Official Email': email,
+        Department: st.department || 'AI & DS',
+        Year: st.year || 3,
+        Section: st.section || 'A',
+        'Account Status': st.status || 'Active',
+        'Password Security Status': isDefault ? 'Default Password (Action Required)' : 'Custom Password (Secured)',
+        'Mandatory Password Reset Flag': isDefault ? 'Yes - Action Required' : 'No - Standard',
+        'Password Changed Date': (st as any).password_changed_at ? new Date((st as any).password_changed_at).toLocaleString() : 'N/A',
+        'Hardware Device Registered': isBound ? 'Bound' : 'Not Registered'
+      };
+    });
+
+    const ws = XLSX.utils.json_to_sheet(exportData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Security & Passwords');
+    XLSX.writeFile(wb, `Student_Security_Password_Status_${new Date().toISOString().split('T')[0]}.xlsx`);
+  };
+
+  // Bulk Reset Password Handler
+  const handleBulkResetPasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (selectedStudentIds.length === 0) return;
+
+    try {
+      const res = await api.post('/students/bulk-reset-passwords', {
+        studentIds: selectedStudentIds,
+        resetType: bulkResetType,
+        customPassword: bulkCustomPass
+      });
+
+      alert(res.data.message || 'Bulk password reset successful!');
+      setShowBulkResetModal(false);
+      setSelectedStudentIds([]);
+      fetchStudents();
+    } catch (err: any) {
+      alert(err.response?.data?.error || 'Failed to execute bulk password reset.');
+    }
   };
 
   // Export to Excel (.xlsx)
@@ -714,6 +771,23 @@ export const StudentManagement: React.FC = () => {
 
               {/* Export Buttons */}
               <div className="flex items-center gap-1.5 ml-auto sm:ml-0">
+                {selectedStudentIds.length > 0 && (
+                  <button
+                    onClick={() => setShowBulkResetModal(true)}
+                    className="px-3 py-2 rounded-xl bg-amber-600 text-white hover:bg-amber-700 text-xs font-bold flex items-center gap-1.5 shadow-sm"
+                  >
+                    <Key className="w-3.5 h-3.5" />
+                    Bulk Reset ({selectedStudentIds.length})
+                  </button>
+                )}
+                <button
+                  onClick={handleExportSecurityReport}
+                  className="px-3 py-2 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 hover:bg-amber-100 text-xs font-bold flex items-center gap-1.5"
+                  title="Export Security & Password Status Report (Excel)"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-amber-600" />
+                  Security Report
+                </button>
                 <button
                   onClick={handleExportCSV}
                   className="p-2 rounded-xl bg-[#FAFAFA] border border-[#E7E7E7] text-[#111827] hover:bg-[#F3F0FF] text-xs font-bold"
@@ -1786,6 +1860,94 @@ export const StudentManagement: React.FC = () => {
                   className="px-6 py-2.5 rounded-full bg-amber-600 font-extrabold text-xs text-white shadow-floating hover:bg-amber-700"
                 >
                   Reset Password Now
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ================================================== */}
+      {/* MODAL 6B: BULK RESET PASSWORDS MODAL */}
+      {/* ================================================== */}
+      {showBulkResetModal && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-md rounded-[28px] p-6 border border-[#E7E7E7] shadow-2xl space-y-4 animate-fade-in relative">
+            <div className="flex items-center justify-between pb-3 border-b border-[#E7E7E7]">
+              <div>
+                <h3 className="font-display font-bold text-lg text-[#111827]">🔑 Bulk Password Reset Control</h3>
+                <p className="text-xs text-[#6B7280] font-medium">Reset passwords for {selectedStudentIds.length} selected student(s)</p>
+              </div>
+              <button onClick={() => setShowBulkResetModal(false)} className="text-[#6B7280] hover:text-[#111827]">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleBulkResetPasswordSubmit} className="space-y-4">
+              <div className="space-y-2">
+                <label className="block text-xs font-bold text-[#111827]">Select Password Reset Strategy</label>
+                <div className="space-y-2">
+                  <label className="flex items-center gap-2 p-3 rounded-2xl border border-[#E7E7E7] cursor-pointer hover:bg-[#FAFAFA]">
+                    <input
+                      type="radio"
+                      name="bulkResetType"
+                      checked={bulkResetType === 'default'}
+                      onChange={() => setBulkResetType('default')}
+                      className="text-[#6D5DFC]"
+                    />
+                    <div>
+                      <span className="text-xs font-bold text-[#111827] block">Reset All to Default Password (1234)</span>
+                      <span className="text-[10px] text-[#6B7280]">Resets all selected accounts to "1234" and requires immediate password update on next login.</span>
+                    </div>
+                  </label>
+
+                  <label className="flex items-center gap-2 p-3 rounded-2xl border border-[#E7E7E7] cursor-pointer hover:bg-[#FAFAFA]">
+                    <input
+                      type="radio"
+                      name="bulkResetType"
+                      checked={bulkResetType === 'custom'}
+                      onChange={() => setBulkResetType('custom')}
+                      className="text-[#6D5DFC]"
+                    />
+                    <div>
+                      <span className="text-xs font-bold text-[#111827] block">Set Custom Temporary Password</span>
+                      <span className="text-[10px] text-[#6B7280]">Specify a custom temporary password to apply to all selected students.</span>
+                    </div>
+                  </label>
+                </div>
+              </div>
+
+              {bulkResetType === 'custom' && (
+                <div>
+                  <label className="block text-xs font-semibold text-[#111827] mb-1">New Custom Password *</label>
+                  <input
+                    type="text"
+                    required
+                    value={bulkCustomPass}
+                    onChange={(e) => setBulkCustomPass(e.target.value)}
+                    placeholder="e.g. TempPass@2026"
+                    className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827] font-mono"
+                  />
+                </div>
+              )}
+
+              <div className="p-3 rounded-2xl bg-amber-50 border border-amber-200 text-amber-800 text-[11px]">
+                🛡 Security Compliance: New passwords will be hashed with bcrypt. Each reset action will be recorded in the Password Audit Logs.
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#E7E7E7]">
+                <button
+                  type="button"
+                  onClick={() => setShowBulkResetModal(false)}
+                  className="px-5 py-2.5 rounded-full bg-[#FAFAFA] border border-[#E7E7E7] text-xs font-bold text-[#111827]"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-6 py-2.5 rounded-full bg-amber-600 font-extrabold text-xs text-white shadow-floating hover:bg-amber-700"
+                >
+                  Reset {selectedStudentIds.length} Passwords
                 </button>
               </div>
             </form>
