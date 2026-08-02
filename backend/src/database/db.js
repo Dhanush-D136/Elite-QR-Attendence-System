@@ -87,30 +87,6 @@ function runMigrations() {
             });
           }
         });
-
-        // Mandatory Student Email Standardization Migration: Purge all fake email domains
-        db.run(`
-          UPDATE users 
-          SET vh_number = CASE 
-                WHEN vh_number IS NOT NULL AND vh_number LIKE 'VH%' THEN vh_number 
-                WHEN phone IS NOT NULL AND phone LIKE 'VH%' THEN phone 
-                WHEN roll_number IS NOT NULL THEN 'VH' || SUBSTR(roll_number, -5)
-                ELSE 'VH13936'
-              END,
-              email = LOWER(
-                CASE 
-                  WHEN vh_number IS NOT NULL AND vh_number LIKE 'VH%' THEN vh_number 
-                  WHEN phone IS NOT NULL AND phone LIKE 'VH%' THEN phone 
-                  WHEN roll_number IS NOT NULL THEN 'VH' || SUBSTR(roll_number, -5)
-                  ELSE 'VH13936'
-                END
-              ) || '@velhightech.com'
-          WHERE role = 'student'
-        `, (stErr) => {
-          if (!stErr) {
-            console.log('[STUDENT EMAIL MIGRATION] All student accounts purged of fake email domains and standardized to official @velhightech.com emails.');
-          }
-        });
       }
 
       // 2. Migrate attendance_sessions table
