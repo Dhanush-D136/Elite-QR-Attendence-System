@@ -112,8 +112,8 @@ export const TimetablePage: React.FC<TimetablePageProps> = ({ onNavigate }) => {
 
   const openAddModal = () => {
     setEditingTt(null);
-    const initialSubName = subjects[0]?.name || '';
-    const initialFacName = subjects[0]?.faculty_name || '';
+    const subList = Array.isArray(subjects) && subjects.length > 0 ? subjects : [];
+    const firstSub = subList[0];
     setFormData({
       department,
       year,
@@ -122,8 +122,8 @@ export const TimetablePage: React.FC<TimetablePageProps> = ({ onNavigate }) => {
       date: new Date().toISOString().split('T')[0],
       day: selectedDay,
       period_number: '1',
-      subject_name: initialSubName,
-      faculty_name: initialFacName,
+      subject_name: firstSub ? firstSub.name : '',
+      faculty_name: firstSub ? (firstSub.faculty_name || '') : '',
       start_time: '08:15 AM',
       end_time: '09:05 AM',
       room_number: 'F305'
