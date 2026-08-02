@@ -60,6 +60,22 @@ export const TimetablePage: React.FC<TimetablePageProps> = ({ onNavigate }) => {
 
   const fetchData = async () => {
     try {
+      const resSub = await api.get('/subjects').catch(() => ({ data: { subjects: [] } }));
+      const subList = resSub.data?.subjects || resSub.data || [];
+      setSubjects(subList);
+    } catch (e) {
+      console.error('Failed to load subjects:', e);
+    }
+
+    try {
+      const resDept = await api.get('/departments').catch(() => ({ data: { departments: [] } }));
+      const deptList = resDept.data?.departments || resDept.data || [];
+      setDepartments(deptList);
+    } catch (e) {
+      console.error('Failed to load departments:', e);
+    }
+
+    try {
       const params = new URLSearchParams();
       if (department && department !== 'All') params.append('department', department);
       if (year && year !== 'All') params.append('year', year);
@@ -67,15 +83,9 @@ export const TimetablePage: React.FC<TimetablePageProps> = ({ onNavigate }) => {
       if (sortBy) params.append('sort_by', sortBy);
       if (searchSubject) params.append('subject', searchSubject);
 
-      const [resTt, resDept, resSub] = await Promise.all([
-        api.get(`/timetable?${params.toString()}`),
-        api.get('/departments'),
-        api.get('/subjects')
-      ]);
-      const list = resTt.data.timetables || resTt.data || [];
-      setTimetables(list);
-      setDepartments(resDept.data.departments || []);
-      setSubjects(resSub.data.subjects || []);
+      const resTt = await api.get(`/timetable?${params.toString()}`).catch(() => ({ data: { timetables: [] } }));
+      const ttList = resTt.data?.timetables || resTt.data || [];
+      setTimetables(ttList);
     } catch (err) {
       console.error('Failed to fetch timetables:', err);
     }
@@ -110,9 +120,20 @@ export const TimetablePage: React.FC<TimetablePageProps> = ({ onNavigate }) => {
     };
   }, [department, year, section, sortBy, searchSubject]);
 
-  const openAddModal = () => {
+  const openAddModal = async () => {
     setEditingTt(null);
-    const subList = Array.isArray(subjects) && subjects.length > 0 ? subjects : [];
+    let subList = Array.isArray(subjects) && subjects.length > 0 ? subjects : [];
+    
+    if (subList.length === 0) {
+      try {
+        const res = await api.get('/subjects');
+        subList = res.data?.subjects || res.data || [];
+        setSubjects(subList);
+      } catch (e) {
+        console.error('Failed to fetch subjects on modal open:', e);
+      }
+    }
+
     const firstSub = subList[0];
     setFormData({
       department,

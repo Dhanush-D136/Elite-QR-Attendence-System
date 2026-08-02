@@ -183,7 +183,7 @@ function getReportsData(req, res) {
               // Find last session timestamp
               let lastClassDate = 'No sessions held';
               if (matchedSessions.length > 0) {
-                const sortedSessions = [...matchedSessions].sort((a, b) => (b.start_time || '').localeCompare(a.start_time || ''));
+                const sortedSessions = [...matchedSessions].sort((a, b) => String(b.start_time || '').localeCompare(String(a.start_time || '')));
                 const rawDate = sortedSessions[0].start_time;
                 lastClassDate = rawDate ? new Date(rawDate).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' }) : 'Recently Conducted';
               }
@@ -198,10 +198,10 @@ function getReportsData(req, res) {
                 const stPct = classesHeld > 0 ? Math.min(100, Math.round((stPresentCount / classesHeld) * 100)) : null;
                 
                 // Check if attended today
-                const isPresentToday = stRecords.some((r) => (r.attendance_time || '').startsWith(todayDate));
+                const isPresentToday = stRecords.some((r) => String(r.attendance_time || '').startsWith(todayDate));
                 
                 // Get last attended date
-                const sortedStRecords = [...stRecords].sort((a, b) => (b.attendance_time || '').localeCompare(a.attendance_time || ''));
+                const sortedStRecords = [...stRecords].sort((a, b) => String(b.attendance_time || '').localeCompare(String(a.attendance_time || '')));
                 const lastAttendedDate = sortedStRecords[0] ? new Date(sortedStRecords[0].attendance_time).toLocaleDateString() : 'Never';
 
                 let statusStr = '--';
