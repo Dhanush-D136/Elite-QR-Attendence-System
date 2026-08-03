@@ -408,6 +408,17 @@ function initDb() {
         )
       `);
 
+      // Create Attendance Backups table
+      db.run(`
+        CREATE TABLE IF NOT EXISTS attendance_backups (
+          backup_id TEXT PRIMARY KEY,
+          backup_name TEXT NOT NULL,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          total_records INTEGER NOT NULL DEFAULT 0,
+          backup_data TEXT NOT NULL
+        )
+      `);
+
       // Create Violation Logs table
       db.run(`
         CREATE TABLE IF NOT EXISTS violation_logs (

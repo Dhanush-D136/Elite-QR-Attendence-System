@@ -390,20 +390,17 @@ CREATE TABLE IF NOT EXISTS public.faculty_activity_logs (
 
 ALTER TABLE public.faculty_activity_logs ENABLE ROW LEVEL SECURITY;
 
--- 23. Class Details Table
-CREATE TABLE IF NOT EXISTS public.class_details (
-  id INTEGER PRIMARY KEY DEFAULT 1,
-  department TEXT NOT NULL,
-  year TEXT NOT NULL,
-  section TEXT NOT NULL,
-  semester TEXT NOT NULL,
-  room TEXT NOT NULL,
-  class_advisor TEXT NOT NULL,
-  academic_year TEXT NOT NULL,
-  batch TEXT NOT NULL
+-- 24. Attendance Backups Table
+CREATE TABLE IF NOT EXISTS public.attendance_backups (
+  backup_id TEXT PRIMARY KEY,
+  backup_name TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+  total_records INTEGER NOT NULL DEFAULT 0,
+  backup_data JSONB NOT NULL
 );
 
-ALTER TABLE public.class_details ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.attendance_backups ENABLE ROW LEVEL SECURITY;
+CREATE INDEX IF NOT EXISTS idx_backups_created_at ON public.attendance_backups(created_at DESC);
 
 -- ====================================================================
 -- RLS POLICIES FOR SUPABASE SERVICE ROLE / SERVER-SIDE ACCESS
@@ -420,6 +417,9 @@ CREATE POLICY "Allow server full access to attendance_sessions" ON public.attend
 
 DROP POLICY IF EXISTS "Allow server full access to attendance_records" ON public.attendance_records;
 CREATE POLICY "Allow server full access to attendance_records" ON public.attendance_records FOR ALL TO service_role USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow server full access to attendance_backups" ON public.attendance_backups;
+CREATE POLICY "Allow server full access to attendance_backups" ON public.attendance_backups FOR ALL TO service_role USING (true) WITH CHECK (true);
 
 DROP POLICY IF EXISTS "Allow server full access to violation_logs" ON public.violation_logs;
 CREATE POLICY "Allow server full access to violation_logs" ON public.violation_logs FOR ALL TO service_role USING (true) WITH CHECK (true);
@@ -459,3 +459,4 @@ CREATE POLICY "Allow server full access to faculty" ON public.faculty FOR ALL TO
 
 DROP POLICY IF EXISTS "Allow server full access to class_details" ON public.class_details;
 CREATE POLICY "Allow server full access to class_details" ON public.class_details FOR ALL TO service_role USING (true) WITH CHECK (true);
+

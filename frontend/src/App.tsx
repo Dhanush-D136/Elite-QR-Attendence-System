@@ -19,6 +19,7 @@ import { TimetablePage } from './pages/TimetablePage';
 import { StudentManagement } from './pages/StudentManagement';
 import { FacultyManagement } from './pages/FacultyManagement';
 import { FacultyDashboard } from './pages/FacultyDashboard';
+import { AttendanceManagementPage } from './pages/AttendanceManagementPage';
 import { RefreshCw } from 'lucide-react';
 
 const MainLayout: React.FC = () => {
@@ -103,6 +104,7 @@ const MainLayout: React.FC = () => {
                 />
               )}
               {activeTab === 'reports' && <AttendanceReportsPage onNavigate={handleNavigate} />}
+              {activeTab === 'attendance-management' && <AttendanceManagementPage />}
               {activeTab === 'security' && <SecurityLogs />}
               {activeTab === 'profile' && <ProfilePage />}
               {activeTab === 'settings' && <ProfilePage />}

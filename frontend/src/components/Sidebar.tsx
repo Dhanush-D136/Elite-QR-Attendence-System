@@ -8,6 +8,7 @@ import {
   UserCheck,
   QrCode,
   FileSpreadsheet,
+  Database,
   ShieldAlert,
   User,
   Camera,
@@ -34,9 +35,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => 
     { id: 'subjects', label: 'Subject Management', icon: BookOpen },
     { id: 'sessions', label: 'Live QR Session', icon: QrCode },
     { id: 'reports', label: 'Reports & Analytics', icon: FileSpreadsheet },
+    { id: 'attendance-management', label: 'Attendance Data Management', icon: Database },
     { id: 'security', label: 'Security Logs', icon: ShieldAlert },
     { id: 'profile', label: 'Profile Settings', icon: User },
   ];
+
 
   const studentNavItems = [
     { id: 'student-dashboard', label: 'My Dashboard', icon: LayoutDashboard },

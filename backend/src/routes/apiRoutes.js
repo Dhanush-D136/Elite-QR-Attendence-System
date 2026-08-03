@@ -146,4 +146,21 @@ router.post('/analytics/repair-integrity', verifyToken, requireRole('admin'), an
 router.get('/violations', verifyToken, requireRole('admin'), violationController.getViolationLogs);
 router.delete('/violations', verifyToken, requireRole('admin'), violationController.clearViolationLogs);
 
+// --- Attendance Data Management & Backup System (Admin Only) ---
+const multer = require('multer');
+const uploadMemory = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } });
+const attendanceBackupController = require('../controllers/attendanceBackupController');
+
+router.get('/admin/attendance-management/export', verifyToken, requireRole('admin'), attendanceBackupController.exportAttendance);
+router.post('/admin/attendance-management/import', verifyToken, requireRole('admin'), uploadMemory.single('file'), attendanceBackupController.importAttendance);
+router.post('/admin/attendance-management/backup', verifyToken, requireRole('admin'), attendanceBackupController.createFullBackup);
+router.get('/admin/attendance-management/backups', verifyToken, requireRole('admin'), attendanceBackupController.getBackupsList);
+router.get('/admin/attendance-management/backups/:id/download', verifyToken, requireRole('admin'), attendanceBackupController.downloadBackup);
+router.post('/admin/attendance-management/backups/:id/restore', verifyToken, requireRole('admin'), attendanceBackupController.restoreBackup);
+router.delete('/admin/attendance-management/backups/:id', verifyToken, requireRole('admin'), attendanceBackupController.deleteBackup);
+router.post('/admin/attendance-management/reset-today', verifyToken, requireRole('admin'), attendanceBackupController.resetTodayAttendance);
+router.post('/admin/attendance-management/reset-all', verifyToken, requireRole('admin'), attendanceBackupController.resetAllAttendance);
+router.post('/admin/attendance-management/undo-reset', verifyToken, requireRole('admin'), attendanceBackupController.undoLastReset);
+
 module.exports = router;
+
