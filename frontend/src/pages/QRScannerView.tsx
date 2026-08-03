@@ -3,7 +3,7 @@ import { Html5Qrcode } from 'html5-qrcode';
 import confetti from 'canvas-confetti';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
-import { RefreshCw, CheckCircle2, AlertCircle, Terminal, ArrowLeft, Zap, MapPin, ShieldCheck, QrCode } from 'lucide-react';
+import { RefreshCw, CheckCircle2, AlertCircle, Terminal, ArrowLeft, Zap, MapPin, ShieldCheck, QrCode, ZoomIn, ZoomOut } from 'lucide-react';
 
 interface QRScannerViewProps {
   onSuccessReturn: () => void;
@@ -15,6 +15,11 @@ export const QRScannerView: React.FC<QRScannerViewProps> = ({ onSuccessReturn })
 
   const [cameraInitialized, setCameraInitialized] = useState<boolean>(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
+
+  // Camera Zoom State
+  const [zoomLevel, setZoomLevel] = useState<number>(1);
+  const [minZoom, setMinZoom] = useState<number>(1);
+  const [maxZoom, setMaxZoom] = useState<number>(5);
 
   // QR Scan State
   const [qrScanned, setQrScanned] = useState<boolean>(false);
@@ -33,6 +38,43 @@ export const QRScannerView: React.FC<QRScannerViewProps> = ({ onSuccessReturn })
 
   const html5QrcodeScannerRef = useRef<Html5Qrcode | null>(null);
   const isProcessingRef = useRef<boolean>(false);
+
+  // Zoom Handler: Dynamic Hardware & CSS Scale Zoom
+  const applyZoom = async (newZoomLevel: number) => {
+    const clampedZoom = Math.min(Math.max(newZoomLevel, minZoom), maxZoom);
+    setZoomLevel(clampedZoom);
+
+    // 1. Native Hardware Camera Zoom (Android/Chrome MediaStreamTrack)
+    try {
+      const videoElem = document.querySelector('#reader-stream-canvas video') as HTMLVideoElement | null;
+      if (videoElem && videoElem.srcObject) {
+        const stream = videoElem.srcObject as MediaStream;
+        const track = stream.getVideoTracks()[0];
+        if (track && typeof track.getCapabilities === 'function') {
+          const capabilities = track.getCapabilities() as any;
+          if (capabilities.zoom) {
+            if (capabilities.zoom.min !== undefined && capabilities.zoom.min !== minZoom) {
+              setMinZoom(capabilities.zoom.min);
+            }
+            if (capabilities.zoom.max !== undefined && capabilities.zoom.max !== maxZoom) {
+              setMaxZoom(capabilities.zoom.max);
+            }
+            await track.applyConstraints({ advanced: [{ zoom: clampedZoom }] } as any);
+          }
+        }
+      }
+    } catch (err) {
+      console.log('Hardware camera zoom apply constraint note:', err);
+    }
+
+    // 2. Smooth CSS Transform Scale Fallback (Guarantees visual zoom across all mobile devices)
+    const videoElem = document.querySelector('#reader-stream-canvas video') as HTMLVideoElement | null;
+    if (videoElem) {
+      videoElem.style.transform = `scale(${clampedZoom})`;
+      videoElem.style.transformOrigin = 'center center';
+      videoElem.style.transition = 'transform 0.15s ease-out';
+    }
+  };
 
   // Start Camera
   const startCamera = async () => {
@@ -148,9 +190,14 @@ export const QRScannerView: React.FC<QRScannerViewProps> = ({ onSuccessReturn })
       setInsertStatus(`✅ RECORD SAVED (ID: ${res.data.attendanceId || record?.id})`);
       setWebSocketStatus('⚡ Live Dashboard Updated via WebSockets');
 
+      const now = record?.attendance_time ? new Date(record.attendance_time) : new Date();
+
       setSuccessData({
+        studentName: record?.student_name || user?.name || 'Student',
         subject: record?.subject || 'Lecture Session',
-        time: new Date(record?.attendance_time || Date.now()).toLocaleTimeString(),
+        period: record?.period_number ? `Period ${record.period_number}` : (record?.period ? `Period ${record.period}` : 'Period 1'),
+        time: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+        date: now.toLocaleDateString([], { year: 'numeric', month: 'short', day: 'numeric' }),
         attendanceCode: aCode,
         status: 'PRESENT',
         attendanceId: res.data.attendanceId || record?.id
@@ -177,36 +224,69 @@ export const QRScannerView: React.FC<QRScannerViewProps> = ({ onSuccessReturn })
     }
   };
 
-  // Success View Screen
+  // Mobile Success View Component
   if (successData) {
     return (
-      <div className="bg-white max-w-md mx-auto p-8 rounded-[24px] border border-[#12B76A]/40 text-center space-y-6 shadow-enterprise animate-fade-in">
-        <div className="w-20 h-20 rounded-full bg-[#ECFDF5] border border-[#12B76A]/30 text-[#12B76A] flex items-center justify-center mx-auto shadow-sm">
-          <CheckCircle2 className="w-12 h-12" />
+      <div className="w-full max-w-sm sm:max-w-md mx-auto p-5 sm:p-7 rounded-[24px] bg-white border border-[#12B76A]/40 text-center space-y-5 shadow-enterprise animate-fade-in my-3 overflow-hidden">
+        {/* Success Icon */}
+        <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-[#ECFDF5] border border-[#12B76A]/30 text-[#12B76A] flex items-center justify-center mx-auto shadow-sm">
+          <CheckCircle2 className="w-10 h-10 sm:w-12 sm:h-12" />
         </div>
 
-        <div>
-          <span className="px-3 py-1 rounded-full bg-[#ECFDF5] text-[#12B76A] border border-[#12B76A]/30 text-xs font-bold uppercase tracking-wider">
-            Verified & Present
+        {/* Header */}
+        <div className="space-y-1">
+          <span className="inline-block px-3 py-1 rounded-full bg-[#ECFDF5] text-[#12B76A] border border-[#12B76A]/30 text-xs font-extrabold uppercase tracking-wider">
+            Verified & Recorded
           </span>
-          <h2 className="font-display font-extrabold text-2xl text-[#111827] mt-3">{successData.subject}</h2>
-          <p className="text-xs text-[#6B7280] font-medium mt-1">Attendance recorded successfully in institutional database.</p>
+          <h2 className="font-display font-black text-xl sm:text-2xl text-[#111827] mt-2 leading-tight">
+            ✅ Attendance Marked Successfully
+          </h2>
+          <p className="text-xs text-[#6B7280] font-medium pt-0.5">
+            Institutional verification complete.
+          </p>
         </div>
 
-        <div className="grid grid-cols-2 gap-3 text-left">
-          <div className="p-3.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7]">
-            <p className="text-[10px] text-[#6B7280] font-semibold uppercase">Attendance Code</p>
-            <p className="font-mono font-bold text-[#6D5DFC] text-lg mt-0.5">{successData.attendanceCode}</p>
+        {/* Student & Lecture Details Card */}
+        <div className="bg-[#FAFAFA] rounded-2xl p-4 border border-[#E7E7E7] space-y-3 text-center">
+          <div>
+            <span className="text-[10px] font-extrabold text-[#6D5DFC] uppercase tracking-wider block">Student Name</span>
+            <p className="font-extrabold text-base sm:text-lg text-[#111827] truncate px-2">{successData.studentName}</p>
           </div>
-          <div className="p-3.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7]">
-            <p className="text-[10px] text-[#6B7280] font-semibold uppercase">Timestamp</p>
-            <p className="font-mono font-bold text-[#111827] text-xs mt-1">{successData.time}</p>
+
+          <div className="h-[1px] bg-[#E7E7E7] w-full my-1.5" />
+
+          <div className="grid grid-cols-2 gap-2 text-center">
+            <div>
+              <span className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider block">Subject</span>
+              <p className="font-bold text-xs sm:text-sm text-[#111827] truncate px-1">{successData.subject}</p>
+            </div>
+            <div>
+              <span className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider block">Period</span>
+              <p className="font-bold text-xs sm:text-sm text-[#111827]">{successData.period}</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2 text-center pt-1">
+            <div>
+              <span className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider block">Time</span>
+              <p className="font-mono font-bold text-xs text-[#111827]">{successData.time}</p>
+            </div>
+            <div>
+              <span className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider block">Date</span>
+              <p className="font-mono font-bold text-xs text-[#111827]">{successData.date}</p>
+            </div>
           </div>
         </div>
 
-        <div className="p-3.5 rounded-2xl bg-[#F3F0FF] border border-[#6D5DFC]/20 flex items-center justify-between text-xs text-[#6D5DFC] font-bold">
-          <span>Returning to Dashboard...</span>
-          <span className="font-mono text-[#6D5DFC] font-extrabold">{countdown}s</span>
+        {/* Return Button / Countdown */}
+        <div className="pt-1">
+          <button
+            onClick={onSuccessReturn}
+            className="w-full py-3.5 px-5 rounded-2xl bg-[#12B76A] hover:bg-[#0E9F5B] text-white text-sm font-extrabold flex items-center justify-center gap-2 shadow-md transition-all active:scale-[0.98]"
+          >
+            <span>Return to Dashboard</span>
+            <span className="bg-white/20 px-2 py-0.5 rounded-full font-mono text-xs">({countdown}s)</span>
+          </button>
         </div>
       </div>
     );
@@ -281,6 +361,56 @@ export const QRScannerView: React.FC<QRScannerViewProps> = ({ onSuccessReturn })
               <p className="text-xs text-[#6B7280] font-semibold">Recording Attendance Record...</p>
             </div>
           )}
+        </div>
+
+        {/* Student Camera Zoom Controls */}
+        <div className="bg-[#FAFAFA] border border-[#E7E7E7] rounded-2xl p-3.5 space-y-2.5 shadow-sm">
+          <div className="flex items-center justify-between text-xs font-bold text-[#111827] px-1">
+            <span className="flex items-center gap-1.5 text-[#6D5DFC]">
+              <ZoomIn className="w-4 h-4 text-[#6D5DFC]" />
+              Camera Zoom Controls
+            </span>
+            <span className="px-2.5 py-0.5 rounded-full bg-[#F3F0FF] text-[#6D5DFC] font-mono text-xs font-extrabold border border-[#6D5DFC]/20">
+              {zoomLevel.toFixed(1)}x
+            </span>
+          </div>
+
+          <div className="flex items-center gap-3">
+            {/* Zoom Out Button */}
+            <button
+              type="button"
+              onClick={() => applyZoom(zoomLevel - 0.5)}
+              disabled={zoomLevel <= minZoom}
+              className="p-2.5 rounded-xl bg-white border border-[#E7E7E7] text-[#111827] hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed shadow-sm active:scale-95 transition-all"
+              title="Zoom Out"
+            >
+              <ZoomOut className="w-4 h-4 text-[#111827]" />
+            </button>
+
+            {/* Zoom Slider Control */}
+            <div className="flex-1 flex items-center px-1">
+              <input
+                type="range"
+                min={minZoom}
+                max={maxZoom}
+                step="0.1"
+                value={zoomLevel}
+                onChange={(e) => applyZoom(parseFloat(e.target.value))}
+                className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-[#6D5DFC]"
+              />
+            </div>
+
+            {/* Zoom In Button */}
+            <button
+              type="button"
+              onClick={() => applyZoom(zoomLevel + 0.5)}
+              disabled={zoomLevel >= maxZoom}
+              className="p-2.5 rounded-xl bg-white border border-[#E7E7E7] text-[#111827] hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed shadow-sm active:scale-95 transition-all"
+              title="Zoom In"
+            >
+              <ZoomIn className="w-4 h-4 text-[#111827]" />
+            </button>
+          </div>
         </div>
 
         {/* Location & Status Cards Required by User Prompt */}
