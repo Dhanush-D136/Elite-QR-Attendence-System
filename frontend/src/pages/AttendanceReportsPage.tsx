@@ -30,6 +30,7 @@ import {
   BarChart3
 } from 'lucide-react';
 import { SpellAttendanceReportPage } from './SpellAttendanceReportPage';
+import { StudentAttendanceIntelligence } from '../components/StudentAttendanceIntelligence';
 
 interface SubjectStat {
   id: string;
@@ -72,7 +73,7 @@ export const AttendanceReportsPage: React.FC<AttendanceReportsPageProps> = ({ on
   const isFaculty = user?.role === 'student' ? false : !isAdmin;
 
   const [selectedSubject, setSelectedSubject] = useState<SubjectStat | null>(null);
-  const [activeTab, setActiveTab] = useState<'subjects' | 'records' | 'defaulters' | 'monthly' | 'spell'>('subjects');
+  const [activeTab, setActiveTab] = useState<'subjects' | 'records' | 'defaulters' | 'monthly' | 'spell' | 'intelligence'>('subjects');
 
 
   // Live Data States
@@ -579,6 +580,7 @@ export const AttendanceReportsPage: React.FC<AttendanceReportsPageProps> = ({ on
           <div className="flex items-center gap-2 overflow-x-auto pb-1 border-b border-[#E7E7E7]">
             {[
               { id: 'subjects', label: `Subject Analytics (${displayedSubjects.length})`, icon: BookOpen },
+              { id: 'intelligence', label: 'Period Attendance Intelligence', icon: Sparkles },
               { id: 'spell', label: 'Spell Attendance (Date-Wise)', icon: BarChart3 },
               { id: 'records', label: `Attendance Log & CRUD (${attendanceRecords.length})`, icon: ListChecks },
               { id: 'defaulters', label: `Defaulters List (${defaultersList.length})`, icon: AlertTriangle },
@@ -602,6 +604,9 @@ export const AttendanceReportsPage: React.FC<AttendanceReportsPageProps> = ({ on
               );
             })}
           </div>
+
+          {/* TAB: PERIOD ATTENDANCE INTELLIGENCE */}
+          {activeTab === 'intelligence' && <StudentAttendanceIntelligence />}
 
           {/* TAB: SPELL ATTENDANCE REPORT */}
           {activeTab === 'spell' && <SpellAttendanceReportPage />}

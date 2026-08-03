@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { DynamicQRDisplay } from '../components/DynamicQRDisplay';
 import { StudentManagement } from './StudentManagement';
+import { StudentAttendanceIntelligence } from '../components/StudentAttendanceIntelligence';
 
 interface ClassDetails {
   department: string;
@@ -265,6 +266,7 @@ export const ClassManagementPage: React.FC = () => {
     { id: 'faculty', label: `Faculty (${faculties.length})`, icon: UserCheck },
     { id: 'timetable', label: 'Master Timetable', icon: Calendar },
     { id: 'attendance', label: 'Live QR Attendance', icon: QrCode },
+    { id: 'intelligence', label: 'Attendance Intelligence', icon: Sparkles },
     { id: 'analytics', label: 'Analytics & Reports', icon: BarChart3 }
   ];
 
@@ -880,6 +882,9 @@ export const ClassManagementPage: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* TAB 8: ATTENDANCE INTELLIGENCE */}
+      {activeTab === 'intelligence' && <StudentAttendanceIntelligence />}
 
       {/* Subject Modal */}
       {showSubjectModal && (
