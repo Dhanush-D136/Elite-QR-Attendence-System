@@ -240,7 +240,7 @@ export const Login: React.FC = () => {
                     role === 'student'
                       ? 'e.g. 113024243032 or vh13936@velhightech.com'
                       : role === 'faculty'
-                      ? 'e.g. FAC001 or nivetha@velhightech.com'
+                      ? 'e.g. VEL TECH or FAC001'
                       : 'Enter Admin Email'
                   }
                   className="w-full px-4 py-3.5 rounded-2xl bg-[#F8FAFC] border border-[#E2E8F0] text-[#111827] placeholder-[#94A3B8] focus:outline-none focus:border-[#6D5DFC] focus:bg-white focus:ring-4 focus:ring-[#6D5DFC]/10 text-xs pl-11 font-medium transition-all"

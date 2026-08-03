@@ -682,17 +682,17 @@ export const FacultyDashboard: React.FC = () => {
             <div>
               <div className="flex items-center gap-2">
                 <span className="px-2.5 py-0.5 rounded-full bg-white/20 text-white font-mono text-[10px] font-bold uppercase tracking-wider border border-white/30">
-                  Faculty Workspace
+                  Faculty Common Check
                 </span>
                 <span className="px-2.5 py-0.5 rounded-full bg-[#12B76A] text-white font-mono text-[10px] font-extrabold uppercase">
-                  {facultyObj.faculty_code}
+                  VEL TECH
                 </span>
               </div>
               <h1 className="font-display font-extrabold text-2xl sm:text-3xl text-white tracking-tight mt-1">
-                {facultyObj.name}
+                Faculty Common Check Portal
               </h1>
               <p className="text-xs text-purple-100 font-medium">
-                {facultyObj.designation} • {facultyObj.department} Department
+                Centralized Institution Faculty Dashboard • Live Supabase Telemetry Sync
               </p>
             </div>
           </div>
