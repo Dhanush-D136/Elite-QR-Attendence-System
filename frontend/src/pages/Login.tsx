@@ -58,115 +58,98 @@ export const Login: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#0F172A] text-[#111827] flex flex-col lg:flex-row relative overflow-hidden font-sans select-none">
-      {/* Background Soft Noise & Ambient Glow Gradients */}
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,_var(--tw-gradient-stops))] from-[#1E1B4B]/30 via-[#0F172A] to-[#020617] pointer-events-none" />
+    <div className="min-h-screen w-full bg-[#0F172A] text-[#111827] relative overflow-hidden font-sans select-none flex flex-col justify-between p-6 sm:p-10 lg:p-12">
+      {/* Full-Height Full-Screen Background Hero Cover Image */}
+      <img
+        src="/family.jpg"
+        alt="Elite Minds Family Hero Cover"
+        className="absolute inset-0 w-full h-full object-cover object-center transform hover:scale-102 transition-transform duration-1000 ease-out filter contrast-105 brightness-95 z-0"
+        onError={(e) => {
+          (e.target as HTMLImageElement).src = '/hero_banner.png';
+        }}
+      />
 
-      {/* LEFT SIDE: 65% BRAND EXPERIENCE & HERO FAMILY COVER */}
-      <div className="lg:w-[65%] w-full relative min-h-[340px] sm:min-h-[420px] lg:min-h-screen bg-[#0B0F19] flex flex-col justify-between p-6 sm:p-10 lg:p-14 overflow-hidden">
-        {/* Full-Height Hero Background Cover Image */}
-        <img
-          src="/family.jpg"
-          alt="Elite Minds Family Hero Cover"
-          className="absolute inset-0 w-full h-full object-cover object-center transform hover:scale-105 transition-transform duration-1000 ease-out filter contrast-105 brightness-95 z-0"
-          onError={(e) => {
-            (e.target as HTMLImageElement).src = '/hero_banner.png';
-          }}
-        />
+      {/* Soft Shading Overlays (Seamless Canvas - No Hard Vertical Split) */}
+      <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/30 to-black/45 z-0" />
+      <div className="absolute inset-0 bg-gradient-to-r from-black/85 via-black/45 to-black/35 hidden lg:block z-0" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_50%,rgba(109,93,252,0.18),transparent_70%)] z-0" />
 
-        {/* Soft Shading Overlays to Keep Photograph Clear & Visible */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/25 to-black/45 z-0" />
-        <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/30 to-transparent hidden lg:block z-0" />
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_50%,rgba(109,93,252,0.2),transparent_70%)] z-0" />
-
-        {/* TOP BRANDING BAR */}
-        <div className="relative z-10 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-[#6D5DFC] to-[#4F7CFF] text-white flex items-center justify-center shadow-lg border border-white/20">
-              <Shield className="w-6 h-6" />
-            </div>
-            <div>
-              <span className="font-display font-extrabold text-white text-xl tracking-tight block">
-                ELITE MINDS
-              </span>
-              <span className="text-[#A594FF] text-[11px] font-mono font-bold tracking-wider block">
-                Elite Minds Family Portal
-              </span>
-            </div>
+      {/* TOP BRANDING BAR */}
+      <div className="relative z-10 flex items-center justify-between max-w-7xl w-full mx-auto">
+        <div className="flex items-center gap-3">
+          <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-[#6D5DFC] to-[#4F7CFF] text-white flex items-center justify-center shadow-lg border border-white/20">
+            <Shield className="w-6 h-6" />
           </div>
-
-          <div className="hidden sm:flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/10 backdrop-blur-md border border-white/15 text-white text-xs font-bold shadow-sm">
-            <Sparkles className="w-3.5 h-3.5 text-[#A594FF] animate-pulse" />
-            <span>Academic Portal v2.4</span>
+          <div>
+            <span className="font-display font-extrabold text-white text-xl tracking-tight block">
+              ELITE MINDS
+            </span>
+            <span className="text-[#A594FF] text-[11px] font-mono font-bold tracking-wider block">
+              Elite Minds Attendance Portal
+            </span>
           </div>
         </div>
 
-        {/* CENTER-LEFT HERO BRANDING & METRICS */}
-        <div className="relative z-10 my-auto py-8 lg:py-12 space-y-6 max-w-2xl">
-          {/* Floating Family Badge */}
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/15 backdrop-blur-md border border-white/20 text-white text-xs font-semibold shadow-md">
-            <Heart className="w-3.5 h-3.5 text-rose-400 fill-rose-400" />
-            <span>One Family • One Mission</span>
-          </div>
+        <div className="hidden sm:flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/10 backdrop-blur-md border border-white/15 text-white text-xs font-bold shadow-sm">
+          <Sparkles className="w-3.5 h-3.5 text-[#A594FF] animate-pulse" />
+          <span>Academic Portal v2.4</span>
+        </div>
+      </div>
 
+      {/* MAIN CONTENT AREA: HERO LEFT & FLOATING GLASS LOGIN RIGHT */}
+      <div className="relative z-10 my-auto py-6 lg:py-10 flex flex-col lg:flex-row items-center justify-between gap-8 lg:gap-12 w-full max-w-7xl mx-auto">
+        {/* LEFT HERO SECTION */}
+        <div className="w-full lg:w-[56%] space-y-6">
           {/* Main Title & Subtitle */}
           <div className="space-y-3">
-            <h1 className="font-display font-extrabold text-4xl sm:text-5xl lg:text-6xl text-white tracking-tight leading-none drop-shadow-xl">
-              ELITE MINDS <br />
+            <h1 className="font-display font-extrabold text-4xl sm:text-5xl lg:text-6xl text-white tracking-tight leading-none drop-shadow-2xl">
+              Elite Minds <br />
               <span className="bg-gradient-to-r from-[#A594FF] via-white to-[#6D5DFC] bg-clip-text text-transparent">
-                Family Portal
+                Attendance Portal
               </span>
             </h1>
 
-            <p className="text-sm sm:text-base text-slate-200 font-semibold leading-relaxed max-w-lg drop-shadow-md">
-              Learning Together. Growing Together. Achieving Together.
-            </p>
+            <div className="text-sm sm:text-base text-slate-200 font-semibold leading-relaxed max-w-lg drop-shadow-md space-y-1">
+              <p>Smart Attendance.</p>
+              <p>Intelligent Analytics.</p>
+              <p>Seamless Academic Management.</p>
+            </div>
           </div>
 
-          {/* INSTITUTION FAMILY METRIC COUNTERS */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-4 max-w-lg border-t border-white/20">
-            <div className="p-3 rounded-2xl bg-white/10 backdrop-blur-md border border-white/15">
+          {/* INSTITUTION FAMILY METRIC CARDS */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-4 max-w-xl border-t border-white/20">
+            <div className="p-3.5 rounded-2xl bg-white/10 backdrop-blur-md border border-white/15 hover:bg-white/15 transition-all shadow-sm">
               <span className="font-display font-extrabold text-2xl sm:text-3xl text-white block">62+</span>
               <span className="text-[11px] text-slate-200 font-bold uppercase tracking-wider block">Students</span>
             </div>
-            <div className="p-3 rounded-2xl bg-white/10 backdrop-blur-md border border-white/15">
+            <div className="p-3.5 rounded-2xl bg-white/10 backdrop-blur-md border border-white/15 hover:bg-white/15 transition-all shadow-sm">
               <span className="font-display font-extrabold text-2xl sm:text-3xl text-[#A594FF] block">10+</span>
               <span className="text-[11px] text-slate-200 font-bold uppercase tracking-wider block">Subjects</span>
             </div>
-            <div className="p-3 rounded-2xl bg-white/10 backdrop-blur-md border border-white/15">
+            <div className="p-3.5 rounded-2xl bg-white/10 backdrop-blur-md border border-white/15 hover:bg-white/15 transition-all shadow-sm">
               <span className="font-display font-extrabold text-2xl sm:text-3xl text-[#12B76A] block">100%</span>
               <span className="text-[11px] text-slate-200 font-bold uppercase tracking-wider block">Digital</span>
             </div>
-            <div className="p-3 rounded-2xl bg-white/10 backdrop-blur-md border border-white/15">
+            <div className="p-3.5 rounded-2xl bg-white/10 backdrop-blur-md border border-white/15 hover:bg-white/15 transition-all shadow-sm">
               <span className="font-display font-extrabold text-2xl sm:text-3xl text-amber-300 block">1</span>
               <span className="text-[11px] text-slate-200 font-bold uppercase tracking-wider block">Elite Family</span>
             </div>
           </div>
         </div>
 
-        {/* FOOTER CAPTION */}
-        <div className="relative z-10 hidden lg:flex items-center justify-between text-xs text-slate-200 font-medium">
-          <p>© 2026 Elite Minds Family • Built With Pride ❤️</p>
-          <p className="flex items-center gap-1.5 text-white font-semibold">
-            <CheckCircle2 className="w-3.5 h-3.5 text-[#12B76A]" /> System Status: Operational
-          </p>
-        </div>
-      </div>
-
-      {/* RIGHT SIDE: 35% AUTHENTICATION EXPERIENCE (FLOATING GLASS OVERLAP CARD) */}
-      <div className="lg:w-[35%] w-full flex flex-col justify-center p-4 sm:p-8 lg:p-10 z-20 relative lg:-ml-24 my-auto">
-        {/* FLOATING GLASS AUTHENTICATION PANEL */}
-        <div className="w-full max-w-md mx-auto bg-white/95 backdrop-blur-2xl rounded-[32px] p-6 sm:p-9 border border-white/80 shadow-[0_25px_70px_-15px_rgba(0,0,0,0.35)] space-y-6 animate-fade-in relative">
-          
-          {/* Header Title */}
-          <div className="space-y-1 text-center sm:text-left">
-            <h2 className="font-display font-extrabold text-2xl sm:text-3xl text-[#111827] tracking-tight">
-              Welcome back to the Elite Minds Family ❤️
-            </h2>
-            <p className="text-xs text-[#6B7280] font-medium">
-              Access your academic workspace securely.
-            </p>
-          </div>
+        {/* RIGHT SIDE: FLOATING FROSTED GLASS AUTHENTICATION CARD */}
+        <div className="w-full lg:w-[44%] max-w-md">
+          <div className="w-full bg-white/95 backdrop-blur-2xl rounded-[32px] p-6 sm:p-9 border border-white/80 shadow-[0_25px_70px_-15px_rgba(0,0,0,0.35)] space-y-6 animate-fade-in relative">
+            
+            {/* Header Title */}
+            <div className="space-y-1 text-center sm:text-left">
+              <h2 className="font-display font-extrabold text-2xl sm:text-3xl text-[#111827] tracking-tight">
+                Welcome to Elite Minds Family
+              </h2>
+              <p className="text-xs text-[#6B7280] font-medium">
+                Smart Attendance. Intelligent Analytics. Seamless Academic Excellence.
+              </p>
+            </div>
 
           {/* ANIMATED SEGMENTED CONTROL ROLE SWITCHER (3-WAY) */}
           <div className="relative p-1.5 rounded-2xl bg-[#F1F5F9] border border-[#E2E8F0] grid grid-cols-3 text-xs font-bold gap-1">
@@ -306,7 +289,16 @@ export const Login: React.FC = () => {
               <Shield className="w-3 h-3 text-[#12B76A]" /> Enterprise Grade
             </span>
           </div>
+          </div>
         </div>
+      </div>
+
+      {/* FOOTER CAPTION */}
+      <div className="relative z-10 hidden lg:flex items-center justify-between text-xs text-slate-300 font-medium max-w-7xl w-full mx-auto pt-4">
+        <p>© 2026 Elite Minds Family • Built With Pride</p>
+        <p className="flex items-center gap-1.5 text-white font-semibold">
+          <CheckCircle2 className="w-3.5 h-3.5 text-[#12B76A]" /> System Status: Operational
+        </p>
       </div>
 
       {/* Forgot Password Modal */}
