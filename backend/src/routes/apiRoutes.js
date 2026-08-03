@@ -139,6 +139,7 @@ router.put('/students/:id/status', verifyToken, requireRole('admin'), studentCon
 // --- Analytics & Dashboard Routes ---
 router.get('/analytics/dashboard', verifyToken, requireRole('admin'), analyticsController.getDashboardMetrics);
 router.get('/analytics/reports', verifyToken, requireRole('admin'), analyticsController.getReportsData);
+router.get('/analytics/period-intelligence', verifyToken, analyticsController.getPeriodAttendanceIntelligence);
 router.get('/analytics/audit-integrity', verifyToken, requireRole('admin'), analyticsController.auditDataIntegrity);
 router.post('/analytics/repair-integrity', verifyToken, requireRole('admin'), analyticsController.repairDataIntegrity);
 

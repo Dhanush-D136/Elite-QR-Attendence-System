@@ -4,6 +4,7 @@ import api from '../services/api';
 import { getSocket } from '../services/socket';
 import { DynamicQRDisplay } from '../components/DynamicQRDisplay';
 import { SpellAttendanceReportPage } from './SpellAttendanceReportPage';
+import { StudentAttendanceIntelligence } from '../components/StudentAttendanceIntelligence';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -46,7 +47,7 @@ import {
 
 export const FacultyDashboard: React.FC = () => {
   const { user, logout, updateUser } = useAuth();
-  const [activeTab, setActiveTab] = useState<'overview' | 'analytics' | 'spell_analytics' | 'qr_launcher' | 'students' | 'risk_tracker' | 'documents' | 'leave_remarks' | 'profile'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'analytics' | 'spell_analytics' | 'intelligence' | 'qr_launcher' | 'students' | 'risk_tracker' | 'documents' | 'leave_remarks' | 'profile'>('overview');
 
   // Forced Password Change State (First Login / Default Password '1234')
   const [forceCurrentPassword, setForceCurrentPassword] = useState<string>('1234');
@@ -797,6 +798,14 @@ export const FacultyDashboard: React.FC = () => {
             <Award className="w-4 h-4 text-amber-300" /> Spell Attendance Analytics
           </button>
           <button
+            onClick={() => setActiveTab('intelligence')}
+            className={`px-4 py-2.5 rounded-xl transition-all flex items-center gap-2 shrink-0 ${
+              activeTab === 'intelligence' ? 'bg-white text-[#4A00E0] shadow-md font-extrabold' : 'text-purple-100 hover:bg-white/10'
+            }`}
+          >
+            <Sparkles className="w-4 h-4 text-cyan-300" /> Student Attendance Intelligence
+          </button>
+          <button
             onClick={() => setActiveTab('qr_launcher')}
             className={`px-4 py-2.5 rounded-xl transition-all flex items-center gap-2 shrink-0 ${
               activeTab === 'qr_launcher' ? 'bg-white text-[#4A00E0] shadow-md font-extrabold' : 'text-purple-100 hover:bg-white/10'
@@ -857,6 +866,7 @@ export const FacultyDashboard: React.FC = () => {
         ) : (
           <>
             {activeTab === 'spell_analytics' && <SpellAttendanceReportPage />}
+            {activeTab === 'intelligence' && <StudentAttendanceIntelligence />}
 
             {/* ================================================== */}
             {/* TAB 1: OVERVIEW & TIMETABLE HUB */}

@@ -406,8 +406,216 @@ function repairDataIntegrity(req, res) {
           });
         }
       );
+// Student Period-Wise Attendance Intelligence API
+function getPeriodAttendanceIntelligence(req, res) {
+  const { from_date, to_date, department, year, section, subject, search } = req.query;
+
+  const todayStr = new Date().toISOString().split('T')[0];
+  const fromDate = from_date || todayStr;
+  const toDate = to_date || todayStr;
+
+  // 1. Fetch Students
+  let studentQuery = `SELECT id, name, roll_number, vh_number, email, department, year, section, profile_photo FROM users WHERE role = 'student'`;
+  const studentParams = [];
+
+  if (department && department !== 'All') {
+    studentQuery += ` AND department = ?`;
+    studentParams.push(department);
+  }
+  if (year && year !== 'All') {
+    studentQuery += ` AND year = ?`;
+    studentParams.push(parseInt(year, 10));
+  }
+  if (section && section !== 'All') {
+    studentQuery += ` AND section = ?`;
+    studentParams.push(section);
+  }
+  if (search && search.trim() !== '') {
+    studentQuery += ` AND (name LIKE ? OR roll_number LIKE ? OR vh_number LIKE ? OR email LIKE ?)`;
+    const sParam = `%${search.trim()}%`;
+    studentParams.push(sParam, sParam, sParam, sParam);
+  }
+
+  studentQuery += ` ORDER BY roll_number ASC, name ASC`;
+
+  db.all(studentQuery, studentParams, (errSt, students) => {
+    if (errSt) return res.status(500).json({ error: 'Database error fetching students: ' + errSt.message });
+
+    const studentList = students || [];
+
+    // 2. Fetch Timetables
+    db.all(`SELECT * FROM timetables WHERE (status = 'ACTIVE' OR status IS NULL OR status = '') ORDER BY CAST(period_number AS INTEGER) ASC`, [], (errTt, timetables) => {
+      const ttList = timetables || [];
+
+      // Determine today's day order and period subjects
+      const daysOfWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+      const targetDay = daysOfWeek[new Date(fromDate + 'T00:00:00').getDay()] || 'Monday';
+
+      const dayOrderMap = {
+        'Monday': 'Day Order 1',
+        'Tuesday': 'Day Order 2',
+        'Wednesday': 'Day Order 3',
+        'Thursday': 'Day Order 4',
+        'Friday': 'Day Order 5',
+        'Saturday': 'Off Day',
+        'Sunday': 'Off Day'
+      };
+      const dayOrderLabel = dayOrderMap[targetDay] || targetDay;
+
+      // Filter active timetable slots for target day
+      const dayTimetable = ttList.filter(t => (t.day || '').toLowerCase() === targetDay.toLowerCase());
+
+      const periodSubjectsMap = {};
+      for (let p = 1; p <= 8; p++) {
+        const slot = dayTimetable.find(t => Number(t.period_number) === p);
+        periodSubjectsMap[`P${p}`] = slot ? slot.subject_name : (p === 4 ? 'Break / Seminar' : `Period ${p}`);
+      }
+
+      // 3. Fetch Attendance Sessions and Attendance Records in Date Range
+      const recQuery = `
+        SELECT ar.id, ar.student_id, ar.attendance_time, ar.status,
+               s.period_number, s.date as session_date, s.subject
+        FROM attendance_records ar
+        LEFT JOIN attendance_sessions s ON ar.session_id = s.id
+        WHERE DATE(ar.attendance_time) >= DATE(?) AND DATE(ar.attendance_time) <= DATE(?)
+      `;
+
+      db.all(recQuery, [fromDate, toDate], (errRec, records) => {
+        if (errRec) return res.status(500).json({ error: 'Database error fetching records: ' + errRec.message });
+
+        const recList = records || [];
+
+        // Build attendance map for each student: student_id -> Set of "date_P1"
+        const studentPeriodSetMap = new Map();
+        const studentDailyMap = new Map();
+
+        recList.forEach(rec => {
+          if (!['present', 'late'].includes(String(rec.status).toLowerCase())) return;
+
+          const stId = rec.student_id;
+          const recDate = (rec.attendance_time || rec.session_date || '').split('T')[0] || fromDate;
+          const pNo = rec.period_number ? String(rec.period_number) : null;
+
+          if (!studentPeriodSetMap.has(stId)) {
+            studentPeriodSetMap.set(stId, new Set());
+          }
+
+          if (!studentDailyMap.has(stId)) {
+            studentDailyMap.set(stId, new Map());
+          }
+
+          const dailyMap = studentDailyMap.get(stId);
+          if (!dailyMap.has(recDate)) {
+            dailyMap.set(recDate, new Set());
+          }
+
+          if (pNo) {
+            studentPeriodSetMap.get(stId).add(`${recDate}_P${pNo}`);
+            dailyMap.get(recDate).add(`P${pNo}`);
+          } else if (rec.subject) {
+            const matchSlot = dayTimetable.find(t => (t.subject_name || '').toLowerCase() === rec.subject.toLowerCase());
+            const matchedP = matchSlot ? `P${matchSlot.period_number}` : 'P1';
+            studentPeriodSetMap.get(stId).add(`${recDate}_${matchedP}`);
+            dailyMap.get(recDate).add(matchedP);
+          }
+        });
+
+        // 4. Compute Student Master Matrix
+        const totalScheduledPerDay = Math.max(1, dayTimetable.length > 0 ? dayTimetable.length : 8);
+
+        const studentsMatrix = studentList.map(st => {
+          const stSet = studentPeriodSetMap.get(st.id) || new Set();
+          
+          const periodsGrid = {};
+          let presentCount = 0;
+
+          for (let p = 1; p <= 8; p++) {
+            const isPresent = stSet.has(`${fromDate}_P${p}`);
+            periodsGrid[`P${p}`] = isPresent ? 'P' : 'A';
+            if (isPresent) presentCount++;
+          }
+
+          const totalScheduled = totalScheduledPerDay;
+          const missedCount = Math.max(0, totalScheduled - presentCount);
+          const attPct = Number(((presentCount / totalScheduled) * 100).toFixed(1));
+
+          let statusTag = 'Safe';
+          let statusColor = 'green';
+          if (attPct < 50) {
+            statusTag = 'Critical';
+            statusColor = 'red';
+          } else if (attPct < 65) {
+            statusTag = 'High Risk';
+            statusColor = 'orange';
+          } else if (attPct < 75) {
+            statusTag = 'Warning';
+            statusColor = 'amber';
+          } else {
+            statusTag = 'Safe';
+            statusColor = 'green';
+          }
+
+          const dailyBreakdown = [];
+          const dailyMap = studentDailyMap.get(st.id) || new Map();
+          dailyMap.forEach((pSet, dStr) => {
+            dailyBreakdown.push({
+              date: dStr,
+              presentPeriods: pSet.size,
+              missedPeriods: Math.max(0, totalScheduledPerDay - pSet.size),
+              periods: Array.from(pSet)
+            });
+          });
+
+          return {
+            id: st.id,
+            roll_number: st.roll_number || st.vh_number || 'N/A',
+            vh_number: st.vh_number || '',
+            name: st.name,
+            department: st.department || 'AI & DS',
+            year: st.year || 3,
+            section: st.section || 'A',
+            profile_photo: st.profile_photo,
+            presentPeriods: presentCount,
+            totalScheduledPeriods: totalScheduled,
+            missedPeriods: missedCount,
+            attendancePercentage: attPct,
+            status: statusTag,
+            statusColor,
+            periods: periodsGrid,
+            dailyBreakdown
+          };
+        });
+
+        const totalSts = studentsMatrix.length;
+        const avgAtt = totalSts > 0 ? Number((studentsMatrix.reduce((acc, s) => acc + s.attendancePercentage, 0) / totalSts).toFixed(1)) : 0;
+        const shortageCount = studentsMatrix.filter(s => s.attendancePercentage < 75).length;
+
+        res.json({
+          success: true,
+          dateRange: { fromDate, toDate },
+          dayOrderInfo: {
+            currentDate: fromDate,
+            dayName: targetDay,
+            dayOrder: dayOrderLabel,
+            periodSubjects: periodSubjectsMap
+          },
+          summary: {
+            totalStudents: totalSts,
+            avgAttendance: avgAtt,
+            shortageCount,
+            conductedPeriodsToday: totalScheduledPerDay
+          },
+          students: studentsMatrix
+        });
+      });
     });
   });
 }
 
-module.exports = { getDashboardMetrics, getReportsData, auditDataIntegrity, repairDataIntegrity };
+module.exports = {
+  getDashboardMetrics,
+  getReportsData,
+  auditDataIntegrity,
+  repairDataIntegrity,
+  getPeriodAttendanceIntelligence
+};

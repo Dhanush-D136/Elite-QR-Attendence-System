@@ -31,6 +31,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => 
   const adminNavItems = [
     { id: 'class-management', label: 'Admin Dashboard', icon: Building2 },
     { id: 'spell-management', label: 'Spell Management', icon: Sliders },
+    { id: 'attendance-intelligence', label: 'Attendance Intelligence', icon: Sparkles },
     { id: 'students-management', label: 'Student Management', icon: Users },
     { id: 'faculty-management', label: 'Faculty Management', icon: UserCheck },
     { id: 'timetable', label: 'Timetable Management', icon: Calendar },
@@ -56,6 +57,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => 
   const mobileNavItems = isAdmin
     ? [
         { id: 'class-management', label: 'Dashboard', icon: Building2 },
+        { id: 'attendance-intelligence', label: 'Intelligence', icon: Sparkles },
         { id: 'students-management', label: 'Students', icon: Users },
         { id: 'faculty-management', label: 'Faculty', icon: UserCheck },
         { id: 'sessions', label: 'Live QR', icon: QrCode },
