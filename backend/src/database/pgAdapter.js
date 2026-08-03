@@ -67,6 +67,11 @@ function convertSqlToPostgres(sql) {
   // Convert SQLite LIKE to PostgreSQL ILIKE for case-insensitive text search
   converted = converted.replace(/\bLIKE\b/gi, 'ILIKE');
 
+  // Convert SQLite GROUP_CONCAT(expr) or GROUP_CONCAT(DISTINCT expr) to PostgreSQL STRING_AGG(expr, ', ')
+  converted = converted.replace(/GROUP_CONCAT\s*\(\s*(DISTINCT\s+)?([^)]+)\)/gi, (match, dist, col) => {
+    return `STRING_AGG(${dist || ''}${col}::text, ', ')`;
+  });
+
   return converted;
 }
 

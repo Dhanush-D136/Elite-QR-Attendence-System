@@ -252,23 +252,84 @@ async function changePassword(req, res) {
 
 // Get current profile
 function getMe(req, res) {
-  db.get(
-    'SELECT id, name, roll_number, email, role, department, year, section, phone, profile_photo, institution_name, department_name, device_fingerprint, is_first_login, first_login, must_change_password, password_changed, password_changed_at, dob, gender, blood_group, address, parent_name, parent_phone, bio FROM users WHERE id = ?',
-    [req.user.id],
-    (err, user) => {
-      if (err || !user) return res.status(404).json({ error: 'User not found' });
-      const isFirstLogin = Boolean(user.first_login === 1 || user.is_first_login === 1 || user.must_change_password === 1 || user.password_changed === 0);
-      res.json({
-        user: {
-          ...user,
-          first_login: isFirstLogin,
-          is_first_login: isFirstLogin,
-          password_changed: !isFirstLogin,
-          must_change_password: isFirstLogin ? 1 : 0
+  const userId = req.user && req.user.id;
+  const role = req.user && req.user.role;
+
+  if (!userId) {
+    return res.status(401).json({ error: 'Unauthorized. User token invalid.' });
+  }
+
+  if (role === 'faculty') {
+    db.get(
+      'SELECT id, faculty_code, name, email, phone, department, designation, qualification, experience, specialization, joining_date, assigned_class, assigned_section, profile_photo, status, password_changed, must_change_password, last_login, created_at FROM faculty WHERE id = ? OR faculty_code = ? OR email = ?',
+      [userId, userId, userId],
+      (err, faculty) => {
+        if (err || !faculty) {
+          return db.get('SELECT * FROM users WHERE id = ?', [userId], (errUser, user) => {
+            if (errUser || !user) return res.status(404).json({ error: 'User not found' });
+            const isFirstLogin = Boolean(user.first_login === 1 || user.is_first_login === 1 || user.must_change_password === 1 || user.password_changed === 0);
+            res.json({
+              user: {
+                ...user,
+                first_login: isFirstLogin,
+                is_first_login: isFirstLogin,
+                password_changed: !isFirstLogin,
+                must_change_password: isFirstLogin ? 1 : 0
+              }
+            });
+          });
         }
-      });
-    }
-  );
+        const isDefault = Boolean(faculty.password_changed === 0 || faculty.must_change_password === 1);
+        res.json({
+          user: {
+            ...faculty,
+            role: 'faculty',
+            first_login: isDefault,
+            is_first_login: isDefault,
+            must_change_password: isDefault ? 1 : 0,
+            password_changed: !isDefault
+          }
+        });
+      }
+    );
+  } else {
+    db.get(
+      'SELECT id, name, roll_number, email, role, department, year, section, phone, profile_photo, institution_name, department_name, device_fingerprint, is_first_login, first_login, must_change_password, password_changed, password_changed_at, dob, gender, blood_group, address, parent_name, parent_phone, bio FROM users WHERE id = ?',
+      [userId],
+      (err, user) => {
+        if (err || !user) {
+          return db.get(
+            'SELECT id, faculty_code, name, email, phone, department, designation, qualification, experience, specialization, joining_date, assigned_class, assigned_section, profile_photo, status, password_changed, must_change_password, last_login, created_at FROM faculty WHERE id = ? OR faculty_code = ? OR email = ?',
+            [userId, userId, userId],
+            (errFac, faculty) => {
+              if (errFac || !faculty) return res.status(404).json({ error: 'User not found' });
+              const isDefault = Boolean(faculty.password_changed === 0 || faculty.must_change_password === 1);
+              res.json({
+                user: {
+                  ...faculty,
+                  role: 'faculty',
+                  first_login: isDefault,
+                  is_first_login: isDefault,
+                  must_change_password: isDefault ? 1 : 0,
+                  password_changed: !isDefault
+                }
+              });
+            }
+          );
+        }
+        const isFirstLogin = Boolean(user.first_login === 1 || user.is_first_login === 1 || user.must_change_password === 1 || user.password_changed === 0);
+        res.json({
+          user: {
+            ...user,
+            first_login: isFirstLogin,
+            is_first_login: isFirstLogin,
+            password_changed: !isFirstLogin,
+            must_change_password: isFirstLogin ? 1 : 0
+          }
+        });
+      }
+    );
+  }
 }
 
 // Update Admin Profile

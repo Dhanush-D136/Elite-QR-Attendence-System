@@ -776,7 +776,7 @@ export const FacultyManagement: React.FC = () => {
             ) : (
               <div className="space-y-6 text-xs">
                 {/* Contact & Department Info */}
-                <div className="grid grid-cols-2 gap-3 p-4 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7]">
+                <div className="grid grid-cols-3 gap-3 p-4 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7]">
                   <div>
                     <span className="text-[10px] font-bold text-gray-400 uppercase">Department</span>
                     <strong className="text-xs text-[#111827] block font-bold mt-0.5">{selectedFaculty.department}</strong>
@@ -790,12 +790,36 @@ export const FacultyManagement: React.FC = () => {
                     <span className="text-xs font-mono text-gray-800 block mt-0.5">{selectedFaculty.phone || '+91 9876501234'}</span>
                   </div>
                   <div>
+                    <span className="text-[10px] font-bold text-gray-400 uppercase">Joining Date</span>
+                    <span className="text-xs font-mono text-gray-800 block mt-0.5">{selectedFaculty.joining_date || '2024-06-01'}</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-bold text-gray-400 uppercase">Assigned Class</span>
+                    <span className="text-xs font-bold text-purple-700 block mt-0.5">{selectedFaculty.assigned_class || 'AI&DS III-A'}</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-bold text-gray-400 uppercase">Assigned Section</span>
+                    <span className="text-xs font-bold text-blue-700 block mt-0.5">Sec {selectedFaculty.assigned_section || 'A'}</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-bold text-gray-400 uppercase">Password Status</span>
+                    <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold mt-0.5 border ${
+                      selectedFaculty.password_status === 'Custom Password' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-amber-50 text-amber-700 border-amber-200'
+                    }`}>
+                      {selectedFaculty.password_status || 'Default Password (1234)'}
+                    </span>
+                  </div>
+                  <div>
                     <span className="text-[10px] font-bold text-gray-400 uppercase">Account Status</span>
                     <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold mt-0.5 border ${
                       selectedFaculty.status === 'Locked' ? 'bg-rose-50 text-rose-700 border-rose-200' : 'bg-[#ECFDF5] text-[#12B76A] border border-[#12B76A]/20'
                     }`}>
                       {selectedFaculty.status || 'Active'}
                     </span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-bold text-gray-400 uppercase">Last Login</span>
+                    <span className="text-xs font-mono text-gray-600 block mt-0.5">{selectedFaculty.last_login ? new Date(selectedFaculty.last_login).toLocaleString() : 'Active Today'}</span>
                   </div>
                 </div>
 
