@@ -322,11 +322,14 @@ export const FacultyDashboard: React.FC = () => {
     socket.on('attendance_deleted', handleSyncAll);
     socket.on('subject_created', handleSyncAll);
     socket.on('subject_updated', handleSyncAll);
+    socket.on('subject_deleted', handleSyncAll);
     socket.on('faculty_mapping_updated', handleSyncAll);
     socket.on('timetable_created', handleSyncAll);
     socket.on('timetable_updated', handleSyncAll);
     socket.on('timetable_deleted', handleSyncAll);
     socket.on('timetable_changed', handleSyncAll);
+    socket.on('session_created', handleSyncAll);
+    socket.on('session_ended', handleSyncAll);
 
     return () => {
       socket.off('attendanceMarked', handleAttendanceMarked);
@@ -335,11 +338,14 @@ export const FacultyDashboard: React.FC = () => {
       socket.off('attendance_deleted', handleSyncAll);
       socket.off('subject_created', handleSyncAll);
       socket.off('subject_updated', handleSyncAll);
+      socket.off('subject_deleted', handleSyncAll);
       socket.off('faculty_mapping_updated', handleSyncAll);
       socket.off('timetable_created', handleSyncAll);
       socket.off('timetable_updated', handleSyncAll);
       socket.off('timetable_deleted', handleSyncAll);
       socket.off('timetable_changed', handleSyncAll);
+      socket.off('session_created', handleSyncAll);
+      socket.off('session_ended', handleSyncAll);
     };
   }, []);
 
