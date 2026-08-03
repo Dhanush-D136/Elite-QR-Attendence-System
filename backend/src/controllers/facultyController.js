@@ -713,7 +713,26 @@ function getFacultyAttendanceAnalytics(req, res) {
          FROM subjects WHERE (LOWER(TRIM(faculty_name)) LIKE '%' || LOWER(TRIM(?)) || '%' OR LOWER(TRIM(?)) LIKE '%' || LOWER(TRIM(faculty_name)) || '%') AND (is_archived = 0 OR is_archived IS NULL)`,
         [facId, requestedFacultyId, facId, requestedFacultyId, fName, fName],
         (errSub, assignedSubs) => {
-          let subjectList = assignedSubs || [];
+          const uniqueSubjectMap = new Map();
+          (assignedSubs || []).forEach((sub) => {
+            if (!sub || !sub.subject_name) return;
+            const normName = sub.subject_name.toLowerCase().trim();
+            if (!uniqueSubjectMap.has(normName)) {
+              uniqueSubjectMap.set(normName, {
+                subject_name: sub.subject_name,
+                subject_code: sub.subject_code || '21AI51T',
+                department: sub.department || 'AI & DS',
+                year: sub.year || 3,
+                section: sub.section || 'A'
+              });
+            } else {
+              const existing = uniqueSubjectMap.get(normName);
+              if (sub.subject_code && existing.subject_code && !existing.subject_code.includes(sub.subject_code)) {
+                existing.subject_code += ` / ${sub.subject_code}`;
+              }
+            }
+          });
+          const subjectList = Array.from(uniqueSubjectMap.values());
 
           // Helper to check if a session matches an assigned subject or faculty
           const isSessionMatchingFaculty = (s) => {

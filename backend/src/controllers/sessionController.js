@@ -543,20 +543,31 @@ function autoLaunchSession(req, res) {
     const expiryTime = new Date(startTime.getTime() + duration * 60000);
     const currentTimestamp = Math.floor(Date.now() / 1000);
 
+    const facName = matchedSlot.faculty_name || (req.user ? req.user.name : 'Faculty Member');
+    const facId = matchedSlot.faculty_id || (req.user ? req.user.id : null);
+    const subCode = matchedSlot.subject_code || matchedSlot.subject_id || '';
+    const dept = matchedSlot.department || 'AI & DS';
+    const yr = matchedSlot.year || 3;
+    const sec = matchedSlot.section || 'A';
+    const period = String(periodNumber || 1);
+    const sessionDate = ist.todayStr;
+
     const query = `
       INSERT INTO attendance_sessions (
-        id, subject, department, year, section, 
+        id, subject, subject_code, faculty_id, faculty_name, department, year, section, 
+        period_number, date,
         admin_lat, admin_lng, admin_latitude, admin_longitude, 
         start_time, expiry_time, end_time, duration_minutes, 
         attendance_code, active_token, token, status
       )
-      VALUES (?, ?, ?, ?, ?, 0.0, 0.0, 0.0, 0.0, ?, ?, ?, ?, ?, ?, ?, 'active')
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0.0, 0.0, 0.0, 0.0, ?, ?, ?, ?, ?, ?, ?, 'active')
     `;
 
     db.run(
       query,
       [
-        sessionId, matchedSlot.subject_name, 'AI & DS', 3, 'A',
+        sessionId, matchedSlot.subject_name, subCode, facId, facName, dept, yr, sec,
+        period, sessionDate,
         startTime.toISOString(), expiryTime.toISOString(), expiryTime.toISOString(), duration,
         attendanceCode, attendanceCode, attendanceCode
       ],
