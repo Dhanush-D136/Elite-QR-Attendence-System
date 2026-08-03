@@ -3,7 +3,8 @@ import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { getSocket } from '../services/socket';
 import { AttendanceRecord, TimetableItem, SubjectItem } from '../types';
-import { MapPin, ShieldCheck, History, Flame, CheckCircle2, XCircle, Award, Sparkles, BookOpen, Calendar, Clock, AlertTriangle, Bell, Calculator, TrendingUp } from 'lucide-react';
+import { MapPin, ShieldCheck, History, Flame, CheckCircle2, XCircle, Award, Sparkles, BookOpen, Calendar, Clock, AlertTriangle, Bell, Calculator, TrendingUp, BarChart3 } from 'lucide-react';
+import { spellAttendanceService, StudentSpellAttendanceData } from '../services/spellAttendanceService';
 
 import { HeroBanner } from '../components/HeroBanner';
 
@@ -12,25 +13,29 @@ export const StudentDashboard: React.FC = () => {
   const [history, setHistory] = useState<AttendanceRecord[]>([]);
   const [timetables, setTimetables] = useState<TimetableItem[]>([]);
   const [subjects, setSubjects] = useState<SubjectItem[]>([]);
+  const [spellData, setSpellData] = useState<StudentSpellAttendanceData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   const fetchData = async () => {
     try {
       setIsLoading(true);
-      const [resHistory, resTimetables, resSubjects] = await Promise.all([
+      const [resHistory, resTimetables, resSubjects, resSpell] = await Promise.all([
         api.get('/attendance/my-history'),
         api.get('/timetable/student'),
-        api.get('/subjects')
+        api.get('/subjects'),
+        spellAttendanceService.getStudentSpellAttendance()
       ]);
       setHistory(resHistory.data.history || []);
       setTimetables(resTimetables.data.timetables || []);
       setSubjects(resSubjects.data.subjects || []);
+      setSpellData(resSpell);
     } catch (err) {
       console.error('Failed to load student dashboard data', err);
     } finally {
       setIsLoading(false);
     }
   };
+
 
   useEffect(() => {
     fetchData();
@@ -182,8 +187,58 @@ export const StudentDashboard: React.FC = () => {
         </div>
       </div>
 
+      {/* SPELL ATTENDANCE SYSTEM (DATE-WISE ATTENDANCE) CARD */}
+      <div className="bg-white p-6 rounded-[24px] border border-[#E7E7E7] shadow-enterprise space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#E7E7E7]">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-2xl bg-[#F3F0FF] text-[#6D5DFC] border border-[#6D5DFC]/20">
+              <Calendar className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="font-display font-extrabold text-lg text-[#111827]">Spell Attendance (Date-Wise)</h2>
+              <p className="text-xs text-[#6B7280]">
+                Date-wise calculation (Attending at least 1 period per day = 1 Present Day).
+              </p>
+            </div>
+          </div>
+
+          <div className="text-xs font-bold text-[#6D5DFC] bg-[#F3F0FF] px-3.5 py-1.5 rounded-full border border-[#6D5DFC]/20 self-start sm:self-auto">
+            Selected Period: {spellData?.dateRange?.fromDate || '--'} to {spellData?.dateRange?.toDate || '--'}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="p-4 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] space-y-1">
+            <span className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider block">Working Days</span>
+            <h3 className="text-2xl font-extrabold text-[#111827]">{spellData ? spellData.workingDays : 0} Days</h3>
+            <p className="text-[10px] text-[#6B7280]">Scheduled Class Days</p>
+          </div>
+
+          <div className="p-4 rounded-2xl bg-[#ECFDF5] border border-[#10B981]/20 space-y-1">
+            <span className="text-[10px] font-bold text-[#059669] uppercase tracking-wider block">Present Days</span>
+            <h3 className="text-2xl font-extrabold text-[#059669]">{spellData ? spellData.presentDays : 0} Days</h3>
+            <p className="text-[10px] text-[#059669]">Attended 1+ Periods</p>
+          </div>
+
+          <div className="p-4 rounded-2xl bg-[#FEF2F2] border border-[#EF4444]/20 space-y-1">
+            <span className="text-[10px] font-bold text-[#DC2626] uppercase tracking-wider block">Absent Days</span>
+            <h3 className="text-2xl font-extrabold text-[#DC2626]">{spellData ? spellData.absentDays : 0} Days</h3>
+            <p className="text-[10px] text-[#DC2626]">Zero Periods Attended</p>
+          </div>
+
+          <div className="p-4 rounded-2xl bg-[#F3F0FF] border border-[#6D5DFC]/20 space-y-1">
+            <span className="text-[10px] font-bold text-[#6D5DFC] uppercase tracking-wider block">Spell Attendance</span>
+            <h3 className="text-2xl font-extrabold text-[#6D5DFC]">{spellData ? spellData.spellPercentage : 0}%</h3>
+            <p className="text-[10px] text-[#6D5DFC] font-bold">
+              {spellData && spellData.spellPercentage >= 75 ? '✓ Safe Status' : '⚠ Shortage Warning'}
+            </p>
+          </div>
+        </div>
+      </div>
+
       {/* Student Widgets Metric Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+
         {/* Attendance Percentage */}
         <div className="bg-white p-5 rounded-[24px] border border-[#E7E7E7] shadow-enterprise space-y-2 hover:border-[#6D5DFC]/40 transition-all">
           <div className="flex items-center justify-between text-[#6B7280] text-xs font-semibold">

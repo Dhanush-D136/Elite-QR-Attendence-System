@@ -45,7 +45,7 @@ import {
 
 export const FacultyDashboard: React.FC = () => {
   const { user, logout, updateUser } = useAuth();
-  const [activeTab, setActiveTab] = useState<'overview' | 'analytics' | 'qr_launcher' | 'students' | 'risk_tracker' | 'documents' | 'leave_remarks' | 'profile'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'analytics' | 'spell_analytics' | 'qr_launcher' | 'students' | 'risk_tracker' | 'documents' | 'leave_remarks' | 'profile'>('overview');
 
   // Forced Password Change State (First Login / Default Password '1234')
   const [forceCurrentPassword, setForceCurrentPassword] = useState<string>('1234');
@@ -788,6 +788,14 @@ export const FacultyDashboard: React.FC = () => {
             <BarChart3 className="w-4 h-4 text-emerald-300" /> Attendance Analytics
           </button>
           <button
+            onClick={() => setActiveTab('spell_analytics')}
+            className={`px-4 py-2.5 rounded-xl transition-all flex items-center gap-2 shrink-0 ${
+              activeTab === 'spell_analytics' ? 'bg-white text-[#4A00E0] shadow-md font-extrabold' : 'text-purple-100 hover:bg-white/10'
+            }`}
+          >
+            <Award className="w-4 h-4 text-amber-300" /> Spell Attendance Analytics
+          </button>
+          <button
             onClick={() => setActiveTab('qr_launcher')}
             className={`px-4 py-2.5 rounded-xl transition-all flex items-center gap-2 shrink-0 ${
               activeTab === 'qr_launcher' ? 'bg-white text-[#4A00E0] shadow-md font-extrabold' : 'text-purple-100 hover:bg-white/10'
@@ -847,6 +855,8 @@ export const FacultyDashboard: React.FC = () => {
           </div>
         ) : (
           <>
+            {activeTab === 'spell_analytics' && <SpellAttendanceReportPage />}
+
             {/* ================================================== */}
             {/* TAB 1: OVERVIEW & TIMETABLE HUB */}
             {/* ================================================== */}

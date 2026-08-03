@@ -162,5 +162,13 @@ router.post('/admin/attendance-management/reset-today', verifyToken, requireRole
 router.post('/admin/attendance-management/reset-all', verifyToken, requireRole('admin'), attendanceBackupController.resetAllAttendance);
 router.post('/admin/attendance-management/undo-reset', verifyToken, requireRole('admin'), attendanceBackupController.undoLastReset);
 
+// --- Spell Attendance System Routes (Date-Wise Percentage) ---
+const spellAttendanceController = require('../controllers/spellAttendanceController');
+
+router.get('/analytics/spell-attendance', verifyToken, requireRole('admin', 'faculty'), spellAttendanceController.getSpellAttendanceReport);
+router.get('/attendance/my-spell-attendance', verifyToken, requireRole('student'), spellAttendanceController.getStudentSpellAttendance);
+router.get('/faculty/spell-attendance', verifyToken, requireRole('faculty', 'admin'), spellAttendanceController.getFacultySpellAttendance);
+
 module.exports = router;
+
 
