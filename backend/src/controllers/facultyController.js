@@ -682,6 +682,381 @@ function adminGetFacultyLoginActivity(req, res) {
   );
 }
 
+function getFacultyAttendanceAnalytics(req, res) {
+  const user = req.user;
+  const requestedFacultyId = req.query.faculty_id || (user ? user.id : null);
+  const facultyName = user ? user.name : '';
+
+  db.get(
+    `SELECT * FROM faculty WHERE id = ? OR LOWER(TRIM(name)) = LOWER(TRIM(?)) OR LOWER(TRIM(email)) = LOWER(TRIM(?))`,
+    [requestedFacultyId, facultyName, user ? user.email : ''],
+    (err, facRow) => {
+      const facId = facRow ? facRow.id : requestedFacultyId;
+      const fName = facRow ? facRow.name : facultyName;
+
+      db.all(
+        `SELECT DISTINCT subject_name, subject_code, department, year, section, semester 
+         FROM faculty_subject_mapping WHERE faculty_id = ?
+         UNION
+         SELECT DISTINCT subject_name, subject_code, department, year, section, 5 as semester 
+         FROM faculty_subjects WHERE faculty_id = ?
+         UNION
+         SELECT DISTINCT name as subject_name, code as subject_code, department, year, section, semester 
+         FROM subjects WHERE LOWER(TRIM(faculty_name)) = LOWER(TRIM(?)) AND (is_archived = 0 OR is_archived IS NULL)`,
+        [facId, facId, fName],
+        (errSub, assignedSubs) => {
+          const subjectList = assignedSubs || [];
+          const assignedSubNames = new Set(subjectList.map((s) => (s.subject_name || '').toLowerCase()));
+          const assignedSubCodes = new Set(subjectList.map((s) => (s.subject_code || '').toLowerCase()));
+
+          db.all(`SELECT * FROM subjects WHERE (is_archived = 0 OR is_archived IS NULL)`, [], (errAllSub, allSubjects) => {
+            db.all(`SELECT * FROM attendance_sessions ORDER BY start_time DESC`, [], (errSess, allSessions) => {
+              let sessions = allSessions || [];
+
+              if (user && user.role === 'faculty') {
+                sessions = sessions.filter((s) => {
+                  const sName = (s.subject || '').toLowerCase();
+                  return assignedSubNames.has(sName) || assignedSubCodes.has(sName) || (s.faculty_name || '').toLowerCase() === fName.toLowerCase();
+                });
+              }
+
+              const { preset, subject, department, year, section, period, date, from_date, to_date } = req.query;
+
+              if (subject) {
+                const subFilter = subject.toLowerCase().trim();
+                sessions = sessions.filter((s) => (s.subject || '').toLowerCase().includes(subFilter));
+              }
+              if (department) {
+                sessions = sessions.filter((s) => (s.department || '').toLowerCase() === department.toLowerCase());
+              }
+              if (year) {
+                sessions = sessions.filter((s) => String(s.year) === String(year));
+              }
+              if (section) {
+                sessions = sessions.filter((s) => (s.section || 'A').toUpperCase() === section.toUpperCase());
+              }
+              if (period) {
+                sessions = sessions.filter((s) => String(s.period_number || '').toLowerCase().includes(String(period).toLowerCase()));
+              }
+
+              const now = new Date();
+              const todayStr = now.toISOString().split('T')[0];
+
+              if (date) {
+                sessions = sessions.filter((s) => (s.start_time || '').startsWith(date) || (s.date && s.date === date));
+              } else if (preset === 'today') {
+                sessions = sessions.filter((s) => (s.start_time || '').startsWith(todayStr) || (s.date && s.date === todayStr));
+              } else if (preset === 'yesterday') {
+                const yest = new Date(now);
+                yest.setDate(yest.getDate() - 1);
+                const yestStr = yest.toISOString().split('T')[0];
+                sessions = sessions.filter((s) => (s.start_time || '').startsWith(yestStr) || (s.date && s.date === yestStr));
+              } else if (preset === 'current_week') {
+                const dayOfWeek = now.getDay();
+                const diffToMon = now.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
+                const monday = new Date(now.setDate(diffToMon));
+                const mondayStr = monday.toISOString().split('T')[0];
+                sessions = sessions.filter((s) => {
+                  const sDate = (s.start_time || '').split('T')[0].split(' ')[0];
+                  return sDate >= mondayStr && sDate <= todayStr;
+                });
+              } else if (preset === 'current_month') {
+                const firstDayMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+                sessions = sessions.filter((s) => {
+                  const sDate = (s.start_time || '').split('T')[0].split(' ')[0];
+                  return sDate >= firstDayMonth && sDate <= todayStr;
+                });
+              } else if (preset === 'date_range' || (from_date && to_date)) {
+                if (from_date) {
+                  sessions = sessions.filter((s) => {
+                    const sDate = (s.start_time || '').split('T')[0].split(' ')[0];
+                    return sDate >= from_date;
+                  });
+                }
+                if (to_date) {
+                  sessions = sessions.filter((s) => {
+                    const sDate = (s.start_time || '').split('T')[0].split(' ')[0];
+                    return sDate <= to_date;
+                  });
+                }
+              }
+
+              db.all(`SELECT * FROM attendance_records`, [], (errRec, allRecords) => {
+                const recRows = allRecords || [];
+
+                db.all("SELECT id, name, roll_number, department, year, section FROM users WHERE role = 'student'", [], (errSt, allStudents) => {
+                  const studentList = allStudents || [];
+
+                  const sessionBreakdown = sessions.map((sess) => {
+                    const sessRecords = recRows.filter((r) => r.session_id === sess.id);
+                    const enrolledInDeptYearSec = studentList.filter((st) => {
+                      const matchDept = !sess.department || st.department === sess.department;
+                      const matchYear = !sess.year || String(st.year) === String(sess.year);
+                      const matchSec = !sess.section || (st.section || 'A').toUpperCase() === (sess.section || 'A').toUpperCase();
+                      return matchDept && matchYear && matchSec;
+                    });
+                    const totalStudents = Math.max(enrolledInDeptYearSec.length, 1);
+                    const presentCount = sessRecords.filter((r) => r.status === 'present' || r.status === 'late').length;
+                    const absentCount = Math.max(0, totalStudents - presentCount);
+                    const attendancePct = Math.round((presentCount / totalStudents) * 100);
+
+                    const startDate = sess.start_time ? new Date(sess.start_time) : new Date();
+                    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+                    const dayName = dayNames[startDate.getDay()];
+
+                    return {
+                      session_id: sess.id,
+                      subject_name: sess.subject,
+                      subject_code: sess.subject_code || '21AI51T',
+                      faculty_name: sess.faculty_name || fName,
+                      date: sess.date || startDate.toISOString().split('T')[0],
+                      day: dayName,
+                      period: sess.period_number ? `P${sess.period_number}` : 'P1',
+                      period_number: sess.period_number || 1,
+                      start_time: sess.start_time ? new Date(sess.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '08:30 AM',
+                      end_time: sess.end_time ? new Date(sess.end_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '09:20 AM',
+                      department: sess.department,
+                      year: sess.year,
+                      section: sess.section,
+                      total_students: totalStudents,
+                      present_count: presentCount,
+                      absent_count: absentCount,
+                      attendance_pct: attendancePct,
+                      status: sess.status
+                    };
+                  });
+
+                  const todaysSessions = sessions.filter((s) => (s.start_time || '').startsWith(todayStr) || (s.date && s.date === todayStr));
+                  let todaysTotalPresent = 0;
+                  let todaysTotalAbsent = 0;
+                  let todaysTotalStudents = 0;
+
+                  todaysSessions.forEach((ts) => {
+                    const sb = sessionBreakdown.find((b) => b.session_id === ts.id);
+                    if (sb) {
+                      todaysTotalPresent += sb.present_count;
+                      todaysTotalAbsent += sb.absent_count;
+                      todaysTotalStudents += sb.total_students;
+                    }
+                  });
+
+                  const todaysAttendanceRate = todaysTotalStudents > 0 ? Math.round((todaysTotalPresent / todaysTotalStudents) * 100) : 0;
+
+                  let totalPresentSum = 0;
+                  let totalStudentsSum = 0;
+                  sessionBreakdown.forEach((sb) => {
+                    totalPresentSum += sb.present_count;
+                    totalStudentsSum += sb.total_students;
+                  });
+                  const overallAttendancePct = totalStudentsSum > 0 ? Math.round((totalPresentSum / totalStudentsSum) * 100) : 0;
+
+                  const subjectSummaryMap = {};
+                  subjectList.forEach((sub) => {
+                    if (sub.subject_name) {
+                      subjectSummaryMap[sub.subject_name.toLowerCase()] = {
+                        subject_name: sub.subject_name,
+                        subject_code: sub.subject_code || '21AI51T',
+                        department: sub.department || 'AI & DS',
+                        year: sub.year || 3,
+                        section: sub.section || 'A',
+                        total_sessions: 0,
+                        total_present: 0,
+                        total_students: 0,
+                        attendance_percentage: 0
+                      };
+                    }
+                  });
+
+                  sessionBreakdown.forEach((sb) => {
+                    const key = (sb.subject_name || '').toLowerCase();
+                    if (key) {
+                      if (!subjectSummaryMap[key]) {
+                        subjectSummaryMap[key] = {
+                          subject_name: sb.subject_name,
+                          subject_code: sb.subject_code,
+                          department: sb.department || 'AI & DS',
+                          year: sb.year || 3,
+                          section: sb.section || 'A',
+                          total_sessions: 0,
+                          total_present: 0,
+                          total_students: 0,
+                          attendance_percentage: 0
+                        };
+                      }
+                      subjectSummaryMap[key].total_sessions += 1;
+                      subjectSummaryMap[key].total_present += sb.present_count;
+                      subjectSummaryMap[key].total_students += sb.total_students;
+                    }
+                  });
+
+                  const subjectWiseSummary = Object.values(subjectSummaryMap).map((item) => {
+                    const pct = item.total_students > 0 ? Math.round((item.total_present / item.total_students) * 100) : 0;
+                    return { ...item, attendance_percentage: pct };
+                  });
+
+                  res.json({
+                    faculty_info: {
+                      id: facId,
+                      name: fName,
+                      email: facRow ? facRow.email : (user ? user.email : ''),
+                      department: facRow ? facRow.department : 'AI & DS',
+                      designation: facRow ? facRow.designation : 'Faculty Member'
+                    },
+                    assigned_subjects: subjectList,
+                    overview: {
+                      todays_classes_count: todaysSessions.length,
+                      todays_attendance_rate: todaysAttendanceRate,
+                      total_present_today: todaysTotalPresent,
+                      total_absent_today: todaysTotalAbsent,
+                      overall_attendance_pct: overallAttendancePct,
+                      total_sessions_analyzed: sessionBreakdown.length
+                    },
+                    subject_wise_summary: subjectWiseSummary,
+                    session_breakdown: sessionBreakdown
+                  });
+                });
+              });
+            });
+          });
+        }
+      );
+    }
+  );
+}
+
+function getSessionStudentRoster(req, res) {
+  const { sessionId } = req.params;
+  const { status, search } = req.query;
+
+  db.get(`SELECT * FROM attendance_sessions WHERE id = ?`, [sessionId], (err, session) => {
+    if (err || !session) return res.status(404).json({ error: 'Attendance session not found' });
+
+    db.all(`SELECT id, name, roll_number, email, department, year, section, profile_photo, vh_number FROM users WHERE role = 'student' ORDER BY roll_number ASC`, [], (errSt, studentRows) => {
+      let enrolled = studentRows || [];
+
+      if (session.department) {
+        enrolled = enrolled.filter((st) => st.department === session.department);
+      }
+      if (session.year) {
+        enrolled = enrolled.filter((st) => String(st.year) === String(session.year));
+      }
+      if (session.section) {
+        enrolled = enrolled.filter((st) => (st.section || 'A').toUpperCase() === (session.section || 'A').toUpperCase());
+      }
+
+      db.all(`SELECT * FROM attendance_records WHERE session_id = ?`, [sessionId], (errRec, recordRows) => {
+        const recordsMap = new Map();
+        (recordRows || []).forEach((r) => recordsMap.set(r.student_id, r));
+
+        let roster = enrolled.map((st) => {
+          const rec = recordsMap.get(st.id);
+          const recStatus = rec ? rec.status : 'absent';
+          const scanTime = rec ? rec.attendance_time : null;
+
+          return {
+            student_id: st.id,
+            name: st.name,
+            roll_number: st.roll_number || st.email,
+            register_number: st.roll_number || st.vh_number || st.email,
+            email: st.email,
+            department: st.department || session.department,
+            year: st.year || session.year,
+            section: st.section || session.section,
+            profile_photo: st.profile_photo,
+            status: recStatus,
+            scan_time: scanTime ? new Date(scanTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : 'N/A',
+            raw_scan_time: scanTime,
+            distance_meters: rec ? rec.distance_meters : 0,
+            notes: rec ? rec.notes : '',
+            record_id: rec ? rec.id : null
+          };
+        });
+
+        if (status && status !== 'all') {
+          roster = roster.filter((r) => r.status.toLowerCase() === status.toLowerCase());
+        }
+
+        if (search && search.trim() !== '') {
+          const q = search.toLowerCase().trim();
+          roster = roster.filter((r) => r.name.toLowerCase().includes(q) || r.roll_number.toLowerCase().includes(q) || r.register_number.toLowerCase().includes(q));
+        }
+
+        const presentCount = recordRows ? recordRows.filter((r) => r.status === 'present').length : 0;
+        const lateCount = recordRows ? recordRows.filter((r) => r.status === 'late').length : 0;
+        const absentCount = Math.max(0, enrolled.length - presentCount - lateCount);
+
+        res.json({
+          session: session,
+          stats: {
+            total_enrolled: enrolled.length,
+            present_count: presentCount,
+            late_count: lateCount,
+            absent_count: absentCount,
+            attendance_pct: enrolled.length > 0 ? Math.round(((presentCount + lateCount) / enrolled.length) * 100) : 0
+          },
+          students: roster
+        });
+      });
+    });
+  });
+}
+
+function updateFacultyAttendanceRecord(req, res) {
+  const { id } = req.params;
+  const { student_id, session_id, status, notes } = req.body;
+
+  const newStatus = status || 'present';
+  const updatedNotes = notes || 'Attendance updated by faculty';
+
+  db.get(`SELECT * FROM attendance_records WHERE id = ? OR (student_id = ? AND session_id = ?)`, [id, student_id, session_id], (err, record) => {
+    if (record) {
+      db.run(
+        `UPDATE attendance_records SET status = ?, notes = ?, attendance_time = CURRENT_TIMESTAMP WHERE id = ?`,
+        [newStatus, updatedNotes, record.id],
+        function (updErr) {
+          if (updErr) return res.status(500).json({ error: 'Failed to update attendance record: ' + updErr.message });
+          if (global.io) {
+            global.io.emit('attendance_updated', { record_id: record.id, student_id: record.student_id, session_id: record.session_id, status: newStatus });
+            global.io.emit('attendanceMarked', { id: record.id, student_id: record.student_id, session_id: record.session_id, status: newStatus });
+          }
+          res.json({ message: 'Attendance record updated successfully in Supabase PostgreSQL!', id: record.id, status: newStatus });
+        }
+      );
+    } else {
+      const newRecordId = id !== 'new' && id ? id : uuidv4();
+      db.run(
+        `INSERT INTO attendance_records (id, student_id, session_id, attendance_code, attendance_time, student_lat, student_lng, distance_meters, status, notes)
+         VALUES (?, ?, ?, 'MANUAL_FACULTY', CURRENT_TIMESTAMP, 0.0, 0.0, 0.0, ?, ?)`,
+        [newRecordId, student_id, session_id, newStatus, updatedNotes],
+        function (insErr) {
+          if (insErr) return res.status(500).json({ error: 'Failed to create attendance record: ' + insErr.message });
+          if (global.io) {
+            global.io.emit('attendance_updated', { record_id: newRecordId, student_id, session_id, status: newStatus });
+            global.io.emit('attendanceMarked', { id: newRecordId, student_id, session_id, status: newStatus });
+          }
+          res.status(201).json({ message: 'Attendance record created successfully in Supabase PostgreSQL!', id: newRecordId, status: newStatus });
+        }
+      );
+    }
+  });
+}
+
+function deleteFacultyAttendanceRecord(req, res) {
+  const { id } = req.params;
+
+  db.get(`SELECT * FROM attendance_records WHERE id = ?`, [id], (err, rec) => {
+    if (err || !rec) return res.status(404).json({ error: 'Attendance record not found' });
+
+    db.run(`DELETE FROM attendance_records WHERE id = ?`, [id], function (delErr) {
+      if (delErr) return res.status(500).json({ error: 'Failed to delete attendance record: ' + delErr.message });
+      if (global.io) {
+        global.io.emit('attendance_deleted', { record_id: id, student_id: rec.student_id, session_id: rec.session_id });
+      }
+      res.json({ message: 'Attendance record permanently removed from Supabase PostgreSQL!' });
+    });
+  });
+}
+
 module.exports = {
   facultyLogin,
   facultyChangePassword,
@@ -702,5 +1077,9 @@ module.exports = {
   adminUpdateFaculty,
   adminResetFacultyPassword,
   adminDeleteFaculty,
-  adminGetFacultyLoginActivity
+  adminGetFacultyLoginActivity,
+  getFacultyAttendanceAnalytics,
+  getSessionStudentRoster,
+  updateFacultyAttendanceRecord,
+  deleteFacultyAttendanceRecord
 };

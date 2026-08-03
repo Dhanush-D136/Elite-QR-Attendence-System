@@ -33,12 +33,19 @@ import {
   Briefcase,
   BarChart3,
   UserX,
-  FileCheck2
+  FileCheck2,
+  X,
+  Filter,
+  ArrowUpDown,
+  Edit,
+  Trash2,
+  Database,
+  Check
 } from 'lucide-react';
 
 export const FacultyDashboard: React.FC = () => {
   const { user, logout } = useAuth();
-  const [activeTab, setActiveTab] = useState<'overview' | 'qr_launcher' | 'students' | 'risk_tracker' | 'documents' | 'leave_remarks' | 'profile'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'analytics' | 'qr_launcher' | 'students' | 'risk_tracker' | 'documents' | 'leave_remarks' | 'profile'>('overview');
 
   // State
   const [dashboardData, setDashboardData] = useState<any>(null);
@@ -47,6 +54,32 @@ export const FacultyDashboard: React.FC = () => {
   const [documents, setDocuments] = useState<any[]>([]);
   const [leaveRequests, setLeaveRequests] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+
+  // Analytics State
+  const [analyticsData, setAnalyticsData] = useState<any>(null);
+  const [analyticsPreset, setAnalyticsPreset] = useState<string>('all');
+  const [filterSubject, setFilterSubject] = useState<string>('');
+  const [filterDepartment, setFilterDepartment] = useState<string>('');
+  const [filterYear, setFilterYear] = useState<string>('');
+  const [filterSection, setFilterSection] = useState<string>('');
+  const [filterPeriod, setFilterPeriod] = useState<string>('');
+  const [filterDate, setFilterDate] = useState<string>('');
+  const [filterFromDate, setFilterFromDate] = useState<string>('');
+  const [filterToDate, setFilterToDate] = useState<string>('');
+  const [analyticsSortBy, setAnalyticsSortBy] = useState<string>('date');
+  const [analyticsSortOrder, setAnalyticsSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [isAnalyticsLoading, setIsAnalyticsLoading] = useState<boolean>(false);
+
+  // Session Roster & Correction Modal States
+  const [selectedSessionRoster, setSelectedSessionRoster] = useState<any>(null);
+  const [rosterStatusFilter, setRosterStatusFilter] = useState<string>('all');
+  const [rosterSearchQuery, setRosterSearchQuery] = useState<string>('');
+  const [showRosterModal, setShowRosterModal] = useState<boolean>(false);
+  const [isRosterLoading, setIsRosterLoading] = useState<boolean>(false);
+  const [editingStudentRecord, setEditingStudentRecord] = useState<any>(null);
+  const [editStatusValue, setEditStatusValue] = useState<string>('present');
+  const [editNotesValue, setEditNotesValue] = useState<string>('');
+  const [showRecordEditModal, setShowRecordEditModal] = useState<boolean>(false);
 
   // Live QR Launcher Session State
   const [activeSession, setActiveSession] = useState<any>(null);
@@ -205,8 +238,9 @@ export const FacultyDashboard: React.FC = () => {
 
   useEffect(() => {
     fetchFacultyData();
+    fetchAnalyticsData();
 
-    // Socket.IO real-time scan feed & timetable sync listeners
+    // Socket.IO real-time scan feed, analytics & timetable sync listeners
     const socket = getSocket();
     const handleAttendanceMarked = (data: any) => {
       setLiveRecordsCount((prev) => prev + 1);
@@ -219,27 +253,112 @@ export const FacultyDashboard: React.FC = () => {
         },
         ...prev
       ]);
+      fetchAnalyticsData();
     };
 
-    const handleTimetableSync = () => {
-      console.log('⚡ [FACULTY DASHBOARD] Real-time timetable change detected. Updating faculty schedule...');
+    const handleSyncAll = () => {
+      console.log('⚡ [FACULTY DASHBOARD] Real-time change detected. Syncing telemetry...');
       fetchFacultyData();
+      fetchAnalyticsData();
     };
 
     socket.on('attendanceMarked', handleAttendanceMarked);
-    socket.on('timetable_created', handleTimetableSync);
-    socket.on('timetable_updated', handleTimetableSync);
-    socket.on('timetable_deleted', handleTimetableSync);
-    socket.on('timetable_changed', handleTimetableSync);
+    socket.on('attendance_marked', handleSyncAll);
+    socket.on('attendance_updated', handleSyncAll);
+    socket.on('attendance_deleted', handleSyncAll);
+    socket.on('subject_created', handleSyncAll);
+    socket.on('subject_updated', handleSyncAll);
+    socket.on('faculty_mapping_updated', handleSyncAll);
+    socket.on('timetable_created', handleSyncAll);
+    socket.on('timetable_updated', handleSyncAll);
+    socket.on('timetable_deleted', handleSyncAll);
+    socket.on('timetable_changed', handleSyncAll);
 
     return () => {
       socket.off('attendanceMarked', handleAttendanceMarked);
-      socket.off('timetable_created', handleTimetableSync);
-      socket.off('timetable_updated', handleTimetableSync);
-      socket.off('timetable_deleted', handleTimetableSync);
-      socket.off('timetable_changed', handleTimetableSync);
+      socket.off('attendance_marked', handleSyncAll);
+      socket.off('attendance_updated', handleSyncAll);
+      socket.off('attendance_deleted', handleSyncAll);
+      socket.off('subject_created', handleSyncAll);
+      socket.off('subject_updated', handleSyncAll);
+      socket.off('faculty_mapping_updated', handleSyncAll);
+      socket.off('timetable_created', handleSyncAll);
+      socket.off('timetable_updated', handleSyncAll);
+      socket.off('timetable_deleted', handleSyncAll);
+      socket.off('timetable_changed', handleSyncAll);
     };
   }, []);
+
+  useEffect(() => {
+    fetchAnalyticsData();
+  }, [analyticsPreset, filterSubject, filterDepartment, filterYear, filterSection, filterPeriod, filterDate, filterFromDate, filterToDate]);
+
+  const fetchAnalyticsData = async () => {
+    try {
+      setIsAnalyticsLoading(true);
+      const params = new URLSearchParams();
+      if (analyticsPreset) params.append('preset', analyticsPreset);
+      if (filterSubject) params.append('subject', filterSubject);
+      if (filterDepartment) params.append('department', filterDepartment);
+      if (filterYear) params.append('year', filterYear);
+      if (filterSection) params.append('section', filterSection);
+      if (filterPeriod) params.append('period', filterPeriod);
+      if (filterDate) params.append('date', filterDate);
+      if (filterFromDate) params.append('from_date', filterFromDate);
+      if (filterToDate) params.append('to_date', filterToDate);
+
+      const res = await api.get(`/faculty/attendance-analytics?${params.toString()}`);
+      setAnalyticsData(res.data);
+    } catch (err) {
+      console.error('Failed to fetch attendance analytics', err);
+    } finally {
+      setIsAnalyticsLoading(false);
+    }
+  };
+
+  const openSessionRoster = async (sessionId: string) => {
+    try {
+      setIsRosterLoading(true);
+      setShowRosterModal(true);
+      const res = await api.get(`/faculty/session-students/${sessionId}?status=${rosterStatusFilter}&search=${encodeURIComponent(rosterSearchQuery)}`);
+      setSelectedSessionRoster(res.data);
+    } catch (err) {
+      console.error('Failed to fetch session roster', err);
+      alert('Failed to load session student roster');
+    } finally {
+      setIsRosterLoading(false);
+    }
+  };
+
+  const handleSaveRecordCorrection = async () => {
+    if (!editingStudentRecord || !selectedSessionRoster) return;
+    try {
+      await api.put(`/faculty/attendance-records/${editingStudentRecord.record_id || 'new'}`, {
+        student_id: editingStudentRecord.student_id,
+        session_id: selectedSessionRoster.session.id,
+        status: editStatusValue,
+        notes: editNotesValue
+      });
+      alert(`✅ Attendance status for ${editingStudentRecord.name} updated to ${editStatusValue.toUpperCase()} in Supabase PostgreSQL!`);
+      setShowRecordEditModal(false);
+      openSessionRoster(selectedSessionRoster.session.id);
+      fetchAnalyticsData();
+    } catch (err: any) {
+      alert(`❌ Failed to update attendance: ${err.response?.data?.error || err.message}`);
+    }
+  };
+
+  const handleDeleteRecord = async (recordId: string, studentName: string) => {
+    if (!confirm(`Are you sure you want to delete the attendance record for ${studentName}? This will mark them absent.`)) return;
+    try {
+      await api.delete(`/faculty/attendance-records/${recordId}`);
+      alert(`✅ Attendance record removed for ${studentName}`);
+      if (selectedSessionRoster) openSessionRoster(selectedSessionRoster.session.id);
+      fetchAnalyticsData();
+    } catch (err: any) {
+      alert(`❌ Failed to delete record: ${err.response?.data?.error || err.message}`);
+    }
+  };
 
   const fetchFacultyData = async () => {
     try {
@@ -466,6 +585,14 @@ export const FacultyDashboard: React.FC = () => {
             }`}
           >
             <BookOpen className="w-4 h-4" /> Today's Overview
+          </button>
+          <button
+            onClick={() => setActiveTab('analytics')}
+            className={`px-4 py-2.5 rounded-xl transition-all flex items-center gap-2 shrink-0 ${
+              activeTab === 'analytics' ? 'bg-white text-[#4A00E0] shadow-md font-extrabold' : 'text-purple-100 hover:bg-white/10'
+            }`}
+          >
+            <BarChart3 className="w-4 h-4 text-emerald-300" /> Attendance Analytics
           </button>
           <button
             onClick={() => setActiveTab('qr_launcher')}
@@ -701,6 +828,430 @@ export const FacultyDashboard: React.FC = () => {
                     </button>
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* ================================================== */}
+            {/* TAB 2: FACULTY ATTENDANCE ANALYTICS & HISTORICAL RECORDS */}
+            {/* ================================================== */}
+            {activeTab === 'analytics' && (
+              <div className="space-y-6 animate-fade-in">
+                {/* Subject Auto-Mapping & Sync Status Banner */}
+                <div className="p-4 sm:p-6 rounded-3xl bg-gradient-to-r from-purple-900 via-indigo-900 to-slate-900 text-white shadow-xl flex flex-col md:flex-row items-center justify-between gap-4 border border-purple-500/30 relative overflow-hidden">
+                  <div className="flex items-center gap-4 relative z-10">
+                    <div className="p-3.5 rounded-2xl bg-purple-500/20 text-purple-300 border border-purple-400/30 shadow-inner">
+                      <Database className="w-7 h-7 animate-pulse text-emerald-400" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-mono text-[10px] font-bold uppercase tracking-wider border border-emerald-500/30">
+                          Supabase PostgreSQL Cloud
+                        </span>
+                        <span className="px-2.5 py-0.5 rounded-full bg-purple-500/20 text-purple-200 font-mono text-[10px] font-bold uppercase tracking-wider border border-purple-400/20">
+                          Subject Auto-Mapped
+                        </span>
+                      </div>
+                      <h2 className="font-display font-extrabold text-xl sm:text-2xl text-white mt-1">
+                        Faculty Attendance Analytics Center
+                      </h2>
+                      <p className="text-xs text-purple-200 mt-0.5">
+                        Live telemetry from Subject Management, Timetables, and Attendance Records.
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={fetchAnalyticsData}
+                    className="px-4 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs border border-white/20 transition-all flex items-center gap-2 shrink-0 relative z-10"
+                  >
+                    <RefreshCw className={`w-4 h-4 ${isAnalyticsLoading ? 'animate-spin' : ''}`} /> Refresh Telemetry
+                  </button>
+                </div>
+
+                {/* Metric Overview Cards */}
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
+                  <div className="p-5 rounded-2xl bg-white border border-[#E7E7E7] shadow-sm">
+                    <span className="text-[10px] font-bold text-[#6D5DFC] block uppercase tracking-wider">Today's Classes</span>
+                    <strong className="text-2xl font-extrabold text-[#111827] mt-1 block">
+                      {analyticsData?.overview?.todays_classes_count ?? 0} Classes
+                    </strong>
+                    <span className="text-[11px] text-[#6B7280] mt-1 block">Scheduled Today</span>
+                  </div>
+
+                  <div className="p-5 rounded-2xl bg-white border border-[#E7E7E7] shadow-sm">
+                    <span className="text-[10px] font-bold text-[#12B76A] block uppercase tracking-wider">Today's Present</span>
+                    <strong className="text-2xl font-extrabold text-[#12B76A] mt-1 block">
+                      {analyticsData?.overview?.total_present_today ?? 0}
+                    </strong>
+                    <span className="text-[11px] text-[#12B76A] mt-1 block">Student Scans</span>
+                  </div>
+
+                  <div className="p-5 rounded-2xl bg-white border border-[#E7E7E7] shadow-sm">
+                    <span className="text-[10px] font-bold text-rose-600 block uppercase tracking-wider">Today's Absent</span>
+                    <strong className="text-2xl font-extrabold text-rose-600 mt-1 block">
+                      {analyticsData?.overview?.total_absent_today ?? 0}
+                    </strong>
+                    <span className="text-[11px] text-rose-600 mt-1 block">Absentees Today</span>
+                  </div>
+
+                  <div className="p-5 rounded-2xl bg-white border border-[#E7E7E7] shadow-sm">
+                    <span className="text-[10px] font-bold text-amber-600 block uppercase tracking-wider">Today's Rate</span>
+                    <strong className="text-2xl font-extrabold text-amber-600 mt-1 block">
+                      {analyticsData?.overview?.todays_attendance_rate ?? 0}%
+                    </strong>
+                    <span className="text-[11px] text-[#6B7280] mt-1 block">Today's Attendance %</span>
+                  </div>
+
+                  <div className="p-5 rounded-2xl bg-white border border-[#E7E7E7] shadow-sm col-span-2 sm:col-span-1">
+                    <span className="text-[10px] font-bold text-indigo-600 block uppercase tracking-wider">Filtered Overall %</span>
+                    <strong className="text-2xl font-extrabold text-indigo-600 mt-1 block">
+                      {analyticsData?.overview?.overall_attendance_pct ?? 0}%
+                    </strong>
+                    <span className="text-[11px] text-[#6B7280] mt-1 block">Across {analyticsData?.overview?.total_sessions_analyzed ?? 0} Sessions</span>
+                  </div>
+                </div>
+
+                {/* Subject-Wise Summary Cards */}
+                <div className="bg-white rounded-3xl p-6 border border-[#E7E7E7] shadow-sm space-y-4">
+                  <h3 className="font-display font-extrabold text-lg text-[#111827] flex items-center gap-2">
+                    <BookOpen className="w-5 h-5 text-[#6D5DFC]" /> Assigned Subject Attendance Summary
+                  </h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    {!analyticsData?.subject_wise_summary || analyticsData?.subject_wise_summary?.length === 0 ? (
+                      <p className="text-xs text-gray-500 col-span-3 py-4 text-center">No assigned subjects found for analytics.</p>
+                    ) : (
+                      analyticsData?.subject_wise_summary?.map((sub: any, idx: number) => (
+                        <div key={idx} className="p-4 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] hover:border-[#6D5DFC]/40 transition-all space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="px-2.5 py-0.5 rounded-full bg-[#F3F0FF] text-[#6D5DFC] font-mono text-[10px] font-extrabold uppercase">
+                              {sub.subject_code}
+                            </span>
+                            <span className="text-xs font-extrabold text-[#111827]">{sub.attendance_percentage}% Rate</span>
+                          </div>
+                          <h4 className="font-bold text-sm text-[#111827]">{sub.subject_name}</h4>
+                          <div className="flex items-center justify-between text-xs text-gray-600">
+                            <span>Total Sessions: {sub.total_sessions}</span>
+                            <span>Present: {sub.total_present} / {sub.total_students}</span>
+                          </div>
+                          <div className="w-full h-2 rounded-full bg-gray-200 overflow-hidden">
+                            <div
+                              className={`h-full rounded-full transition-all duration-500 ${
+                                sub.attendance_percentage >= 75
+                                  ? 'bg-[#12B76A]'
+                                  : sub.attendance_percentage >= 60
+                                  ? 'bg-amber-500'
+                                  : 'bg-rose-500'
+                              }`}
+                              style={{ width: `${sub.attendance_percentage}%` }}
+                            />
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+
+                {/* Filter Bar & Preset Buttons */}
+                <div className="bg-white rounded-3xl p-6 border border-[#E7E7E7] shadow-sm space-y-4">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                    <h3 className="font-display font-extrabold text-lg text-[#111827] flex items-center gap-2">
+                      <Filter className="w-5 h-5 text-[#6D5DFC]" /> Historical Attendance Filters
+                    </h3>
+
+                    {/* Date Presets */}
+                    <div className="flex items-center gap-1.5 overflow-x-auto text-xs font-bold w-full sm:w-auto scrollbar-none">
+                      {[
+                        { id: 'today', label: 'Today' },
+                        { id: 'yesterday', label: 'Yesterday' },
+                        { id: 'current_week', label: 'Current Week' },
+                        { id: 'current_month', label: 'Current Month' },
+                        { id: 'all', label: 'All Records' },
+                        { id: 'date_range', label: 'Date Range' }
+                      ].map((preset) => (
+                        <button
+                          key={preset.id}
+                          onClick={() => {
+                            setAnalyticsPreset(preset.id);
+                            if (preset.id !== 'date_range') {
+                              setFilterFromDate('');
+                              setFilterToDate('');
+                            }
+                          }}
+                          className={`px-3 py-1.5 rounded-xl transition-all ${
+                            analyticsPreset === preset.id
+                              ? 'bg-[#6D5DFC] text-white font-extrabold shadow-sm'
+                              : 'bg-[#FAFAFA] text-gray-700 hover:bg-gray-200 border border-[#E7E7E7]'
+                          }`}
+                        >
+                          {preset.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Filter Inputs Grid */}
+                  <div className="grid grid-cols-2 sm:grid-cols-6 gap-3 pt-2 border-t border-[#E7E7E7]">
+                    <div>
+                      <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Subject</label>
+                      <input
+                        type="text"
+                        placeholder="Search Subject..."
+                        value={filterSubject}
+                        onChange={(e) => setFilterSubject(e.target.value)}
+                        className="w-full px-3 py-2 rounded-xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs font-medium text-[#111827]"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Department</label>
+                      <select
+                        value={filterDepartment}
+                        onChange={(e) => setFilterDepartment(e.target.value)}
+                        className="w-full px-3 py-2 rounded-xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs font-medium text-[#111827]"
+                      >
+                        <option value="">All Departments</option>
+                        <option value="AI & DS">AI & DS</option>
+                        <option value="CSE">CSE</option>
+                        <option value="ECE">ECE</option>
+                        <option value="IT">IT</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Year</label>
+                      <select
+                        value={filterYear}
+                        onChange={(e) => setFilterYear(e.target.value)}
+                        className="w-full px-3 py-2 rounded-xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs font-medium text-[#111827]"
+                      >
+                        <option value="">All Years</option>
+                        <option value="1">1st Year</option>
+                        <option value="2">2nd Year</option>
+                        <option value="3">3rd Year</option>
+                        <option value="4">4th Year</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Section</label>
+                      <select
+                        value={filterSection}
+                        onChange={(e) => setFilterSection(e.target.value)}
+                        className="w-full px-3 py-2 rounded-xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs font-medium text-[#111827]"
+                      >
+                        <option value="">All Sections</option>
+                        <option value="A">Section A</option>
+                        <option value="B">Section B</option>
+                        <option value="C">Section C</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Period</label>
+                      <input
+                        type="text"
+                        placeholder="Period (e.g. 1)"
+                        value={filterPeriod}
+                        onChange={(e) => setFilterPeriod(e.target.value)}
+                        className="w-full px-3 py-2 rounded-xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs font-medium text-[#111827]"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Specific Date</label>
+                      <input
+                        type="date"
+                        value={filterDate}
+                        onChange={(e) => {
+                          setFilterDate(e.target.value);
+                          if (e.target.value) setAnalyticsPreset('specific');
+                        }}
+                        className="w-full px-3 py-2 rounded-xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs font-medium text-[#111827]"
+                      />
+                    </div>
+                  </div>
+
+                  {analyticsPreset === 'date_range' && (
+                    <div className="flex items-center gap-3 pt-2 border-t border-[#E7E7E7]">
+                      <div className="flex-1">
+                        <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">From Date</label>
+                        <input
+                          type="date"
+                          value={filterFromDate}
+                          onChange={(e) => setFilterFromDate(e.target.value)}
+                          className="w-full px-3 py-2 rounded-xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs font-medium text-[#111827]"
+                        />
+                      </div>
+                      <div className="flex-1">
+                        <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">To Date</label>
+                        <input
+                          type="date"
+                          value={filterToDate}
+                          onChange={(e) => setFilterToDate(e.target.value)}
+                          className="w-full px-3 py-2 rounded-xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs font-medium text-[#111827]"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Class Attendance Breakdown Table */}
+                <div className="bg-white rounded-3xl p-6 border border-[#E7E7E7] shadow-sm space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="font-display font-extrabold text-lg text-[#111827] flex items-center gap-2">
+                        <TrendingUp className="w-5 h-5 text-[#6D5DFC]" /> Class Attendance Breakdown
+                      </h3>
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        Showing {analyticsData?.session_breakdown?.length || 0} class sessions directly from Supabase PostgreSQL
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="overflow-x-auto rounded-2xl border border-[#E7E7E7]">
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-[#FAFAFA] text-gray-700 font-extrabold border-b border-[#E7E7E7]">
+                        <tr>
+                          <th
+                            onClick={() => {
+                              setAnalyticsSortBy('date');
+                              setAnalyticsSortOrder(analyticsSortOrder === 'asc' ? 'desc' : 'asc');
+                            }}
+                            className="p-3.5 cursor-pointer hover:bg-gray-200 transition-all"
+                          >
+                            <div className="flex items-center gap-1">
+                              Date / Day <ArrowUpDown className="w-3 h-3 text-gray-400" />
+                            </div>
+                          </th>
+                          <th
+                            onClick={() => {
+                              setAnalyticsSortBy('subject');
+                              setAnalyticsSortOrder(analyticsSortOrder === 'asc' ? 'desc' : 'asc');
+                            }}
+                            className="p-3.5 cursor-pointer hover:bg-gray-200 transition-all"
+                          >
+                            <div className="flex items-center gap-1">
+                              Subject <ArrowUpDown className="w-3 h-3 text-gray-400" />
+                            </div>
+                          </th>
+                          <th className="p-3.5">Faculty</th>
+                          <th
+                            onClick={() => {
+                              setAnalyticsSortBy('period');
+                              setAnalyticsSortOrder(analyticsSortOrder === 'asc' ? 'desc' : 'asc');
+                            }}
+                            className="p-3.5 cursor-pointer hover:bg-gray-200 transition-all"
+                          >
+                            <div className="flex items-center gap-1">
+                              Period / Time <ArrowUpDown className="w-3 h-3 text-gray-400" />
+                            </div>
+                          </th>
+                          <th className="p-3.5">Dept/Year/Sec</th>
+                          <th className="p-3.5">Total Enrolled</th>
+                          <th
+                            onClick={() => {
+                              setAnalyticsSortBy('present_count');
+                              setAnalyticsSortOrder(analyticsSortOrder === 'asc' ? 'desc' : 'asc');
+                            }}
+                            className="p-3.5 cursor-pointer hover:bg-gray-200 transition-all text-emerald-700"
+                          >
+                            <div className="flex items-center gap-1">
+                              Present <ArrowUpDown className="w-3 h-3 text-emerald-400" />
+                            </div>
+                          </th>
+                          <th
+                            onClick={() => {
+                              setAnalyticsSortBy('absent_count');
+                              setAnalyticsSortOrder(analyticsSortOrder === 'asc' ? 'desc' : 'asc');
+                            }}
+                            className="p-3.5 cursor-pointer hover:bg-gray-200 transition-all text-rose-700"
+                          >
+                            <div className="flex items-center gap-1">
+                              Absent <ArrowUpDown className="w-3 h-3 text-rose-400" />
+                            </div>
+                          </th>
+                          <th
+                            onClick={() => {
+                              setAnalyticsSortBy('attendance_pct');
+                              setAnalyticsSortOrder(analyticsSortOrder === 'asc' ? 'desc' : 'asc');
+                            }}
+                            className="p-3.5 cursor-pointer hover:bg-gray-200 transition-all text-indigo-700"
+                          >
+                            <div className="flex items-center gap-1">
+                              Attendance % <ArrowUpDown className="w-3 h-3 text-indigo-400" />
+                            </div>
+                          </th>
+                          <th className="p-3.5 text-right">Student View</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-[#E7E7E7]">
+                        {!analyticsData?.session_breakdown || analyticsData?.session_breakdown?.length === 0 ? (
+                          <tr>
+                            <td colSpan={10} className="p-8 text-center text-gray-500 font-medium">
+                              No attendance session records match your selected filters.
+                            </td>
+                          </tr>
+                        ) : (
+                          [...(analyticsData?.session_breakdown || [])]
+                            .sort((a: any, b: any) => {
+                              let valA = a[analyticsSortBy];
+                              let valB = b[analyticsSortBy];
+                              if (analyticsSortBy === 'date') {
+                                valA = a.date + ' ' + a.period_number;
+                                valB = b.date + ' ' + b.period_number;
+                              }
+                              if (valA < valB) return analyticsSortOrder === 'asc' ? -1 : 1;
+                              if (valA > valB) return analyticsSortOrder === 'asc' ? 1 : -1;
+                              return 0;
+                            })
+                            .map((sess: any, i: number) => (
+                              <tr key={i} className="hover:bg-[#FAFAFA] transition-all">
+                                <td className="p-3.5 font-bold text-[#111827]">
+                                  <div>{sess.date}</div>
+                                  <span className="text-[10px] text-gray-500 font-normal">{sess.day}</span>
+                                </td>
+                                <td className="p-3.5">
+                                  <div className="font-bold text-[#111827]">{sess.subject_name}</div>
+                                  <span className="font-mono text-[10px] text-[#6D5DFC] font-semibold">{sess.subject_code}</span>
+                                </td>
+                                <td className="p-3.5 font-medium text-gray-700">{sess.faculty_name}</td>
+                                <td className="p-3.5 font-bold text-gray-800">
+                                  <div>{sess.period}</div>
+                                  <span className="text-[10px] text-gray-500 font-normal">{sess.start_time} - {sess.end_time}</span>
+                                </td>
+                                <td className="p-3.5 text-gray-600 font-medium">
+                                  {sess.department} • Yr {sess.year} • Sec {sess.section}
+                                </td>
+                                <td className="p-3.5 font-bold text-gray-900">{sess.total_students}</td>
+                                <td className="p-3.5 font-extrabold text-[#12B76A]">{sess.present_count}</td>
+                                <td className="p-3.5 font-extrabold text-rose-600">{sess.absent_count}</td>
+                                <td className="p-3.5">
+                                  <span
+                                    className={`px-2.5 py-1 rounded-full font-extrabold text-[11px] ${
+                                      sess.attendance_pct >= 75
+                                        ? 'bg-[#ECFDF5] text-[#12B76A] border border-[#12B76A]/30'
+                                        : sess.attendance_pct >= 60
+                                        ? 'bg-amber-50 text-amber-700 border border-amber-300'
+                                        : 'bg-rose-50 text-rose-700 border border-rose-200'
+                                    }`}
+                                  >
+                                    {sess.attendance_pct}%
+                                  </span>
+                                </td>
+                                <td className="p-3.5 text-right">
+                                  <button
+                                    onClick={() => openSessionRoster(sess.session_id)}
+                                    className="px-3.5 py-1.5 rounded-xl bg-[#F3F0FF] hover:bg-[#6D5DFC] text-[#6D5DFC] hover:text-white font-extrabold text-xs transition-all flex items-center gap-1.5 ml-auto shadow-sm"
+                                  >
+                                    <Eye className="w-3.5 h-3.5" /> View Roster
+                                  </button>
+                                </td>
+                              </tr>
+                            ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
               </div>
             )}
 
@@ -1224,6 +1775,229 @@ export const FacultyDashboard: React.FC = () => {
                 >
                   <Download className="w-4 h-4" /> Download Official PDF Analysis Report
                 </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* MODAL: STUDENT-WISE ATTENDANCE ROSTER VIEW */}
+        {showRosterModal && selectedSessionRoster && (
+          <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-md flex items-center justify-center p-4">
+            <div className="bg-white w-full max-w-4xl rounded-[32px] p-6 sm:p-8 border border-[#E7E7E7] shadow-2xl space-y-6 max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between pb-4 border-b border-[#E7E7E7]">
+                <div>
+                  <span className="px-2.5 py-0.5 rounded-full bg-[#F3F0FF] text-[#6D5DFC] font-mono text-[10px] font-bold uppercase tracking-wider border border-[#6D5DFC]/20">
+                    Student Attendance Roster
+                  </span>
+                  <h3 className="font-display font-extrabold text-xl text-[#111827] mt-1">
+                    {selectedSessionRoster.session.subject} ({selectedSessionRoster.session.period_number ? `Period ${selectedSessionRoster.session.period_number}` : 'P1'})
+                  </h3>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    Target Class: {selectedSessionRoster.session.department} • Year {selectedSessionRoster.session.year} • Section {selectedSessionRoster.session.section}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowRosterModal(false)}
+                  className="p-2 rounded-full hover:bg-gray-100 text-gray-500"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Roster Metric Summary */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="p-3.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7]">
+                  <span className="text-[10px] font-bold text-gray-500 uppercase">Enrolled</span>
+                  <strong className="text-lg font-extrabold text-[#111827] block">{selectedSessionRoster.stats.total_enrolled} Students</strong>
+                </div>
+                <div className="p-3.5 rounded-2xl bg-[#ECFDF5] border border-[#12B76A]/30">
+                  <span className="text-[10px] font-bold text-[#12B76A] uppercase">Present</span>
+                  <strong className="text-lg font-extrabold text-[#12B76A] block">{selectedSessionRoster.stats.present_count} Students</strong>
+                </div>
+                <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200">
+                  <span className="text-[10px] font-bold text-rose-700 uppercase">Absent</span>
+                  <strong className="text-lg font-extrabold text-rose-700 block">{selectedSessionRoster.stats.absent_count} Students</strong>
+                </div>
+                <div className="p-3.5 rounded-2xl bg-[#F3F0FF] border border-[#6D5DFC]/30">
+                  <span className="text-[10px] font-bold text-[#6D5DFC] uppercase">Attendance Rate</span>
+                  <strong className="text-lg font-extrabold text-[#6D5DFC] block">{selectedSessionRoster.stats.attendance_pct}%</strong>
+                </div>
+              </div>
+
+              {/* Roster Controls: Search & Filter Pills */}
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
+                <div className="flex items-center gap-1.5 text-xs font-bold w-full sm:w-auto">
+                  {['all', 'present', 'absent', 'late'].map((st) => (
+                    <button
+                      key={st}
+                      onClick={() => {
+                        setRosterStatusFilter(st);
+                        openSessionRoster(selectedSessionRoster.session.id);
+                      }}
+                      className={`px-3 py-1.5 rounded-xl capitalize transition-all ${
+                        rosterStatusFilter === st
+                          ? 'bg-[#6D5DFC] text-white shadow-sm font-extrabold'
+                          : 'bg-[#FAFAFA] text-gray-700 hover:bg-gray-200 border border-[#E7E7E7]'
+                      }`}
+                    >
+                      {st} Only
+                    </button>
+                  ))}
+                </div>
+
+                <div className="relative w-full sm:w-64">
+                  <Search className="w-4 h-4 text-gray-400 absolute left-3 top-2.5" />
+                  <input
+                    type="text"
+                    placeholder="Search Name or Roll No..."
+                    value={rosterSearchQuery}
+                    onChange={(e) => {
+                      setRosterSearchQuery(e.target.value);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') openSessionRoster(selectedSessionRoster.session.id);
+                    }}
+                    className="w-full pl-9 pr-3 py-2 rounded-xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs font-medium text-[#111827]"
+                  />
+                </div>
+              </div>
+
+              {/* Roster Table */}
+              <div className="overflow-x-auto rounded-2xl border border-[#E7E7E7] max-h-80 overflow-y-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-[#FAFAFA] text-gray-700 font-extrabold border-b border-[#E7E7E7] sticky top-0 bg-white z-10">
+                    <tr>
+                      <th className="p-3">Student Name</th>
+                      <th className="p-3">Register Number</th>
+                      <th className="p-3">Dept / Year / Sec</th>
+                      <th className="p-3">Status</th>
+                      <th className="p-3">Scan Time</th>
+                      <th className="p-3 text-right">Correct / Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#E7E7E7]">
+                    {selectedSessionRoster.students.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="p-6 text-center text-gray-500">
+                          No student records match the roster filter.
+                        </td>
+                      </tr>
+                    ) : (
+                      selectedSessionRoster.students.map((st: any, idx: number) => (
+                        <tr key={idx} className="hover:bg-[#FAFAFA] transition-all">
+                          <td className="p-3 font-bold text-[#111827]">
+                            <div className="flex items-center gap-2">
+                              <img
+                                src={st.profile_photo || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100'}
+                                alt=""
+                                className="w-7 h-7 rounded-full object-cover border border-gray-200"
+                              />
+                              <span>{st.name}</span>
+                            </div>
+                          </td>
+                          <td className="p-3 font-mono font-bold text-gray-700">{st.register_number}</td>
+                          <td className="p-3 text-gray-600 font-medium">
+                            {st.department} • Yr {st.year} • Sec {st.section}
+                          </td>
+                          <td className="p-3 font-bold">
+                            <span
+                              className={`px-2.5 py-0.5 rounded-full uppercase text-[10px] font-extrabold ${
+                                st.status === 'present'
+                                  ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                                  : st.status === 'late'
+                                  ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                                  : 'bg-rose-100 text-rose-800 border border-rose-300'
+                              }`}
+                            >
+                              {st.status}
+                            </span>
+                          </td>
+                          <td className="p-3 text-gray-600 font-mono text-[11px]">{st.scan_time}</td>
+                          <td className="p-3 text-right flex items-center justify-end gap-1.5">
+                            <button
+                              onClick={() => {
+                                setEditingStudentRecord(st);
+                                setEditStatusValue(st.status === 'absent' ? 'present' : st.status);
+                                setEditNotesValue(st.notes || '');
+                                setShowRecordEditModal(true);
+                              }}
+                              className="p-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold transition-all"
+                              title="Correct Attendance"
+                            >
+                              <Edit className="w-3.5 h-3.5" />
+                            </button>
+                            {st.record_id && (
+                              <button
+                                onClick={() => handleDeleteRecord(st.record_id, st.name)}
+                                className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold transition-all"
+                                title="Delete Record"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* MODAL: CORRECT / UPDATE ATTENDANCE RECORD */}
+        {showRecordEditModal && editingStudentRecord && (
+          <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-md flex items-center justify-center p-4">
+            <div className="bg-white w-full max-w-md rounded-[32px] p-6 border border-[#E7E7E7] shadow-2xl space-y-4">
+              <div className="flex items-center justify-between pb-3 border-b border-[#E7E7E7]">
+                <h4 className="font-bold text-[#111827]">Correct Attendance for {editingStudentRecord.name}</h4>
+                <button onClick={() => setShowRecordEditModal(false)} className="text-gray-400 hover:text-gray-600">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-[11px] font-bold text-[#111827] mb-1">Attendance Status *</label>
+                  <select
+                    value={editStatusValue}
+                    onChange={(e) => setEditStatusValue(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs font-bold text-[#111827]"
+                  >
+                    <option value="present">PRESENT</option>
+                    <option value="late">LATE ENTRY</option>
+                    <option value="absent">ABSENT</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-[#111827] mb-1">Correction Reason / Notes</label>
+                  <textarea
+                    rows={2}
+                    value={editNotesValue}
+                    onChange={(e) => setEditNotesValue(e.target.value)}
+                    placeholder="Reason for correction..."
+                    className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827]"
+                  />
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowRecordEditModal(false)}
+                    className="px-4 py-2 rounded-xl bg-gray-100 text-gray-700 font-bold text-xs"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSaveRecordCorrection}
+                    className="px-5 py-2 rounded-xl bg-[#6D5DFC] text-white font-bold text-xs shadow-md"
+                  >
+                    Save to Supabase
+                  </button>
+                </div>
               </div>
             </div>
           </div>

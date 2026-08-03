@@ -25,6 +25,10 @@ router.post('/auth/student/register-device', verifyToken, requireRole('student')
 
 // --- Faculty Ecosystem Routes ---
 router.get('/faculty/dashboard', facultyController.getFacultyDashboard);
+router.get('/faculty/attendance-analytics', verifyToken, facultyController.getFacultyAttendanceAnalytics);
+router.get('/faculty/session-students/:sessionId', verifyToken, facultyController.getSessionStudentRoster);
+router.put('/faculty/attendance-records/:id', verifyToken, facultyController.updateFacultyAttendanceRecord);
+router.delete('/faculty/attendance-records/:id', verifyToken, facultyController.deleteFacultyAttendanceRecord);
 router.get('/faculty/students', facultyController.getFacultyStudents);
 router.get('/faculty/risk-detection', facultyController.getStudentRiskDetection);
 router.post('/faculty/remarks', facultyController.addFacultyRemark);

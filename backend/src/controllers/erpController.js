@@ -152,24 +152,84 @@ function getSubjects(req, res) {
   });
 }
 
+function autoMapSubjectToFaculty(subjectId, subjectName, subjectCode, department, year, section, semester, facultyName, callback) {
+  if (!facultyName || facultyName.trim() === '') {
+    if (callback) callback();
+    return;
+  }
+  const cleanFacName = facultyName.trim();
+  db.get(
+    `SELECT id, name FROM faculty WHERE LOWER(TRIM(name)) = LOWER(?) OR LOWER(TRIM(email)) = LOWER(?) OR LOWER(TRIM(faculty_code)) = LOWER(?)`,
+    [cleanFacName, cleanFacName, cleanFacName],
+    (err, facRow) => {
+      if (err || !facRow) {
+        if (callback) callback();
+        return;
+      }
+      const facultyId = facRow.id;
+      const mapId1 = 'FS-' + uuidv4().slice(0, 8);
+      const mapId2 = 'FSM-' + uuidv4().slice(0, 8);
+
+      db.run(`DELETE FROM faculty_subjects WHERE subject_code = ? OR subject_name = ?`, [subjectCode, subjectName], () => {
+        db.run(`DELETE FROM faculty_subject_mapping WHERE subject_code = ? OR subject_name = ? OR subject_id = ?`, [subjectCode, subjectName, subjectId], () => {
+          db.run(
+            `INSERT INTO faculty_subjects (id, faculty_id, subject_code, subject_name, department, year, section)
+             VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            [mapId1, facultyId, subjectCode, subjectName, department || 'AI & DS', parseInt(year || 3), section || 'A'],
+            () => {
+              db.run(
+                `INSERT INTO faculty_subject_mapping (id, faculty_id, subject_id, subject_name, subject_code, department, year, section, semester)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                [mapId2, facultyId, subjectId, subjectName, subjectCode, department || 'AI & DS', parseInt(year || 3), section || 'A', parseInt(semester || 5)],
+                () => {
+                  db.run(
+                    `UPDATE timetables SET faculty_id = ?, faculty_name = ? WHERE subject_name = ? OR subject_id = ?`,
+                    [facultyId, facRow.name, subjectName, subjectId],
+                    () => {
+                      if (global.io) {
+                        global.io.emit('faculty_mapping_updated', {
+                          faculty_id: facultyId,
+                          faculty_name: facRow.name,
+                          subject_code: subjectCode,
+                          subject_name: subjectName
+                        });
+                        global.io.emit('subject_mapped', { subject_id: subjectId, faculty_id: facultyId });
+                      }
+                      if (callback) callback();
+                    }
+                  );
+                }
+              );
+            }
+          );
+        });
+      });
+    }
+  );
+}
+
 function createSubject(req, res) {
   const { name, code, type, department, year, semester, section, faculty_name, credits, status, description } = req.body;
   if (!name || !code) return res.status(400).json({ error: 'Subject Name and Subject Code are required.' });
 
   const id = 'sub-' + uuidv4();
+  const cleanName = name.trim();
+  const cleanCode = code.trim().toUpperCase();
+  const cleanFacName = faculty_name ? faculty_name.trim() : 'Faculty Member';
+
   db.run(
     `INSERT INTO subjects (id, name, code, type, department, year, semester, section, faculty_name, credits, description, status, is_archived) 
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
     [
       id,
-      name.trim(),
-      code.trim().toUpperCase(),
+      cleanName,
+      cleanCode,
       type || 'Theory',
       department || 'AI & DS',
       parseInt(year || 3),
       parseInt(semester || 5),
       section || 'A',
-      faculty_name || 'Faculty Member',
+      cleanFacName,
       parseInt(credits || 3),
       description || '',
       status || 'Active'
@@ -181,8 +241,10 @@ function createSubject(req, res) {
         }
         return res.status(500).json({ error: 'Failed to create subject: ' + err.message });
       }
-      broadcastTimetableEvent('subject_created', { id, name, code });
-      res.status(201).json({ message: 'Subject created successfully and synchronized across modules!', id });
+      autoMapSubjectToFaculty(id, cleanName, cleanCode, department || 'AI & DS', year || 3, section || 'A', semester || 5, cleanFacName, () => {
+        broadcastTimetableEvent('subject_created', { id, name: cleanName, code: cleanCode, faculty_name: cleanFacName });
+        res.status(201).json({ message: 'Subject created successfully, auto-mapped to faculty, and synchronized across modules!', id });
+      });
     }
   );
 }
@@ -191,19 +253,23 @@ function updateSubject(req, res) {
   const { id } = req.params;
   const { name, code, type, department, year, semester, section, faculty_name, credits, status, description } = req.body;
 
+  const cleanName = name ? name.trim() : '';
+  const cleanCode = code ? code.trim().toUpperCase() : '';
+  const cleanFacName = faculty_name ? faculty_name.trim() : '';
+
   db.run(
     `UPDATE subjects 
      SET name = ?, code = ?, type = ?, department = ?, year = ?, semester = ?, section = ?, faculty_name = ?, credits = ?, status = ?, description = ? 
      WHERE id = ?`,
     [
-      name.trim(),
-      code.trim().toUpperCase(),
+      cleanName,
+      cleanCode,
       type || 'Theory',
       department || 'AI & DS',
       parseInt(year || 3),
       parseInt(semester || 5),
       section || 'A',
-      faculty_name,
+      cleanFacName,
       parseInt(credits || 3),
       status || 'Active',
       description,
@@ -211,8 +277,10 @@ function updateSubject(req, res) {
     ],
     function (err) {
       if (err) return res.status(500).json({ error: 'Failed to update subject: ' + err.message });
-      broadcastTimetableEvent('subject_updated', { id, name, code });
-      res.json({ message: 'Subject updated successfully across all modules!' });
+      autoMapSubjectToFaculty(id, cleanName, cleanCode, department || 'AI & DS', year || 3, section || 'A', semester || 5, cleanFacName, () => {
+        broadcastTimetableEvent('subject_updated', { id, name: cleanName, code: cleanCode, faculty_name: cleanFacName });
+        res.json({ message: 'Subject updated successfully and auto-mapped across all modules!' });
+      });
     }
   );
 }
