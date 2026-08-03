@@ -246,6 +246,9 @@ CREATE TABLE IF NOT EXISTS public.faculty (
   qualification TEXT,
   experience TEXT,
   specialization TEXT,
+  joining_date TEXT,
+  assigned_class TEXT,
+  assigned_section TEXT,
   profile_photo TEXT,
   status TEXT DEFAULT 'Active',
   password_hash TEXT NOT NULL,
@@ -257,6 +260,10 @@ CREATE TABLE IF NOT EXISTS public.faculty (
   created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
+
+ALTER TABLE public.faculty ADD COLUMN IF NOT EXISTS joining_date TEXT;
+ALTER TABLE public.faculty ADD COLUMN IF NOT EXISTS assigned_class TEXT;
+ALTER TABLE public.faculty ADD COLUMN IF NOT EXISTS assigned_section TEXT;
 
 ALTER TABLE public.faculty ENABLE ROW LEVEL SECURITY;
 CREATE INDEX IF NOT EXISTS idx_faculty_code ON public.faculty(faculty_code);

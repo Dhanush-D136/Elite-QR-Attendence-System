@@ -409,10 +409,9 @@ function adminGetFacultyManagementStats(req, res) {
 
 function adminGetFaculties(req, res) {
   db.all(
-    `SELECT f.id, f.faculty_code, f.name, f.department, f.designation, f.email, f.phone, f.qualification, f.experience, f.specialization, f.profile_photo, f.status, f.password_changed, f.must_change_password, f.last_login, f.password_hash, f.created_at,
+    `SELECT f.id, f.faculty_code, f.name, f.department, f.designation, f.email, f.phone, f.qualification, f.experience, f.specialization, f.joining_date, f.assigned_class, f.assigned_section, f.profile_photo, f.status, f.password_changed, f.must_change_password, f.last_login, f.password_hash, f.created_at,
             (SELECT GROUP_CONCAT(DISTINCT fs.subject_name) FROM faculty_subject_mapping fs WHERE fs.faculty_id = f.id) as assigned_subjects_mapped,
             (SELECT GROUP_CONCAT(DISTINCT fs2.subject_name) FROM faculty_subjects fs2 WHERE fs2.faculty_id = f.id) as assigned_subjects_legacy,
-            (SELECT GROUP_CONCAT(DISTINCT fs3.section) FROM faculty_subject_mapping fs3 WHERE fs3.faculty_id = f.id) as assigned_sections,
             (SELECT COUNT(*) FROM attendance_sessions s WHERE LOWER(s.faculty_name) LIKE '%' || LOWER(f.name) || '%') as sessions_conducted_count
      FROM faculty f
      ORDER BY f.faculty_code ASC`,
@@ -427,8 +426,8 @@ function adminGetFaculties(req, res) {
         const isDefaultPassword = await bcrypt.compare('1234', fac.password_hash);
         delete fac.password_hash;
 
-        const subjects = fac.assigned_subjects_mapped || fac.assigned_subjects_legacy || 'Knowledge Engineering, Web Tech';
-        const sections = fac.assigned_sections || 'A';
+        const subjects = fac.assigned_subjects_mapped || fac.assigned_subjects_legacy || '';
+        const sections = fac.assigned_section || 'A';
 
         formatted.push({
           ...fac,
@@ -460,7 +459,7 @@ function adminGetFacultyDetails(req, res) {
       db.all(`SELECT * FROM faculty_subject_mapping WHERE faculty_id = ?`, [faculty.id], (errSub, subjects) => {
         // Get Timetable Mappings
         db.all(
-          `SELECT t.* FROM timetables t WHERE LOWER(t.faculty_name) LIKE '%' || LOWER(?) || '%' OR LOWER(t.faculty_name) LIKE '%nivetha%' ORDER BY t.start_time ASC`,
+          `SELECT t.* FROM timetables t WHERE LOWER(t.faculty_name) LIKE '%' || LOWER(?) || '%' ORDER BY t.start_time ASC`,
           [faculty.name],
           (errTt, timetables) => {
             // Get Activity Logs
@@ -487,7 +486,7 @@ function adminGetFacultyDetails(req, res) {
 }
 
 async function adminCreateFaculty(req, res) {
-  const { faculty_code, name, department, designation, email, phone, qualification, experience, specialization, password, status, profile_photo, assigned_subjects } = req.body;
+  const { faculty_code, name, department, designation, email, phone, qualification, experience, specialization, joining_date, assigned_class, assigned_section, password, status, profile_photo, assigned_subjects } = req.body;
   if (!faculty_code || !name) {
     return res.status(400).json({ error: 'Faculty Code and Name are required' });
   }
@@ -518,8 +517,8 @@ async function adminCreateFaculty(req, res) {
       }
 
       db.run(
-        `INSERT INTO faculty (id, faculty_code, name, department, designation, email, phone, qualification, experience, specialization, profile_photo, status, password_hash, password_changed, must_change_password) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0)`,
-        [id, cleanCode, name.trim(), department || 'AI & Data Science', designation || 'Assistant Professor', cleanEmail, phone || '+91 9876501234', qualification || 'M.Tech (AI & DS)', experience || '5 Years Teaching', specialization || 'Artificial Intelligence', photo, facultyStatus, passwordHash],
+        `INSERT INTO faculty (id, faculty_code, name, department, designation, email, phone, qualification, experience, specialization, joining_date, assigned_class, assigned_section, profile_photo, status, password_hash, password_changed, must_change_password) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 1)`,
+        [id, cleanCode, name.trim(), department || 'AI & Data Science', designation || 'Assistant Professor', cleanEmail, phone || '+91 9876501234', qualification || 'M.Tech (AI & DS)', experience || '5 Years Teaching', specialization || 'Artificial Intelligence', joining_date || new Date().toISOString().split('T')[0], assigned_class || 'AI&DS III-A', assigned_section || 'A', photo, facultyStatus, passwordHash],
         function (err) {
           if (err) {
             if (
@@ -539,23 +538,23 @@ async function adminCreateFaculty(req, res) {
           }
 
           // Add Subject Mappings if provided
-          if (assigned_subjects && Array.isArray(assigned_subjects)) {
+          if (assigned_subjects && Array.isArray(assigned_subjects) && assigned_subjects.length > 0) {
             assigned_subjects.forEach((sub) => {
-              const mapId = uuidv4();
-              const subName = typeof sub === 'string' ? sub : sub.subject_name;
-              const subCode = typeof sub === 'object' ? sub.subject_code : '21AI51T';
+              const mapId1 = uuidv4();
+              const mapId2 = uuidv4();
+              const subName = typeof sub === 'string' ? sub : (sub.subject_name || sub.name);
+              const subCode = typeof sub === 'object' ? (sub.subject_code || sub.code || '21AI51T') : '21AI51T';
+              const subId = typeof sub === 'object' ? sub.id : null;
+
               db.run(
-                `INSERT INTO faculty_subject_mapping (id, faculty_id, subject_name, subject_code, department, year, section) VALUES (?, ?, ?, ?, ?, 3, 'A')`,
-                [mapId, id, subName, subCode, department || 'AI & DS']
+                `INSERT INTO faculty_subject_mapping (id, faculty_id, subject_id, subject_name, subject_code, department, year, section) VALUES (?, ?, ?, ?, ?, ?, 3, ?)`,
+                [mapId1, id, subId, subName, subCode, department || 'AI & DS', assigned_section || 'A']
+              );
+              db.run(
+                `INSERT INTO faculty_subjects (id, faculty_id, subject_code, subject_name, department, year, section) VALUES (?, ?, ?, ?, ?, 3, ?)`,
+                [mapId2, id, subCode, subName, department || 'AI & DS', assigned_section || 'A']
               );
             });
-          } else {
-            // Default Subject Mappings
-            const mapId1 = uuidv4();
-            db.run(
-              `INSERT INTO faculty_subject_mapping (id, faculty_id, subject_name, subject_code, department, year, section) VALUES (?, ?, 'Knowledge Engineering', '21AI55T', ?, 3, 'A')`,
-              [mapId1, id, department || 'AI & DS']
-            );
           }
 
           // Log Activity
@@ -570,25 +569,34 @@ async function adminCreateFaculty(req, res) {
 
 function adminUpdateFaculty(req, res) {
   const { id } = req.params;
-  const { name, department, designation, email, phone, qualification, experience, specialization, status, profile_photo, assigned_subjects } = req.body;
+  const { name, department, designation, email, phone, qualification, experience, specialization, joining_date, assigned_class, assigned_section, status, profile_photo, assigned_subjects } = req.body;
 
   db.run(
-    `UPDATE faculty SET name = COALESCE(?, name), department = COALESCE(?, department), designation = COALESCE(?, designation), email = COALESCE(?, email), phone = COALESCE(?, phone), qualification = COALESCE(?, qualification), experience = COALESCE(?, experience), specialization = COALESCE(?, specialization), status = COALESCE(?, status), profile_photo = COALESCE(?, profile_photo), updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
-    [name, department, designation, email, phone, qualification, experience, specialization, status, profile_photo, id],
+    `UPDATE faculty SET name = COALESCE(?, name), department = COALESCE(?, department), designation = COALESCE(?, designation), email = COALESCE(?, email), phone = COALESCE(?, phone), qualification = COALESCE(?, qualification), experience = COALESCE(?, experience), specialization = COALESCE(?, specialization), joining_date = COALESCE(?, joining_date), assigned_class = COALESCE(?, assigned_class), assigned_section = COALESCE(?, assigned_section), status = COALESCE(?, status), profile_photo = COALESCE(?, profile_photo), updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+    [name, department, designation, email, phone, qualification, experience, specialization, joining_date, assigned_class, assigned_section, status, profile_photo, id],
     function (err) {
       if (err) return res.status(500).json({ error: 'Failed to update faculty details: ' + err.message });
 
       // Update Subject Mappings if provided
       if (assigned_subjects && Array.isArray(assigned_subjects)) {
         db.run(`DELETE FROM faculty_subject_mapping WHERE faculty_id = ?`, [id], () => {
-          assigned_subjects.forEach((sub) => {
-            const mapId = uuidv4();
-            const subName = typeof sub === 'string' ? sub : sub.subject_name;
-            const subCode = typeof sub === 'object' ? sub.subject_code : '21AI51T';
-            db.run(
-              `INSERT INTO faculty_subject_mapping (id, faculty_id, subject_name, subject_code, department, year, section) VALUES (?, ?, ?, ?, ?, 3, 'A')`,
-              [mapId, id, subName, subCode, department || 'AI & DS']
-            );
+          db.run(`DELETE FROM faculty_subjects WHERE faculty_id = ?`, [id], () => {
+            assigned_subjects.forEach((sub) => {
+              const mapId1 = uuidv4();
+              const mapId2 = uuidv4();
+              const subName = typeof sub === 'string' ? sub : (sub.subject_name || sub.name);
+              const subCode = typeof sub === 'object' ? (sub.subject_code || sub.code || '21AI51T') : '21AI51T';
+              const subId = typeof sub === 'object' ? sub.id : null;
+
+              db.run(
+                `INSERT INTO faculty_subject_mapping (id, faculty_id, subject_id, subject_name, subject_code, department, year, section) VALUES (?, ?, ?, ?, ?, ?, 3, ?)`,
+                [mapId1, id, subId, subName, subCode, department || 'AI & DS', assigned_section || 'A']
+              );
+              db.run(
+                `INSERT INTO faculty_subjects (id, faculty_id, subject_code, subject_name, department, year, section) VALUES (?, ?, ?, ?, ?, 3, ?)`,
+                [mapId2, id, subCode, subName, department || 'AI & DS', assigned_section || 'A']
+              );
+            });
           });
         });
       }

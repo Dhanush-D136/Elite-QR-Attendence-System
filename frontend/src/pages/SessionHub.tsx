@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import api from '../services/api';
+import { useAuth } from '../context/AuthContext';
 import { getSocket } from '../services/socket';
 import { AttendanceSession, TimetableItem } from '../types';
 import { DynamicQRDisplay } from '../components/DynamicQRDisplay';
@@ -40,11 +41,13 @@ export const SessionHub: React.FC<SessionHubProps> = ({
   initialSubjectCode,
   initialPeriod
 }) => {
+  const { user } = useAuth();
   const [sessions, setSessions] = useState<AttendanceSession[]>([]);
   const [selectedSession, setSelectedSession] = useState<AttendanceSession | null>(null);
   const selectedSessionRef = useRef<AttendanceSession | null>(null);
 
   const [timetables, setTimetables] = useState<TimetableItem[]>([]);
+  const [assignedFacultySubjects, setAssignedFacultySubjects] = useState<any[]>([]);
 
   // Roster state
   const [presentStudents, setPresentStudents] = useState<any[]>([]);
@@ -82,6 +85,26 @@ export const SessionHub: React.FC<SessionHubProps> = ({
     if (initialSubjectCode) setSubjectCode(initialSubjectCode);
     if (initialPeriod) setPeriodNumber(initialPeriod);
   }, [initialSubject, initialFaculty, initialSubjectCode, initialPeriod]);
+
+  useEffect(() => {
+    if (user && user.role === 'faculty') {
+      api.get(`/faculty/dashboard?faculty_id=${user.id}`)
+        .then((res) => {
+          const subs = res.data.assignedSubjects || [];
+          setAssignedFacultySubjects(subs);
+          if (subs.length > 0 && !initialSubject) {
+            const firstSub = subs[0].subject_name || subs[0].name;
+            const firstCode = subs[0].subject_code || subs[0].code || '';
+            setSubject(firstSub);
+            setSubjectCode(firstCode);
+          }
+          if (res.data.faculty && res.data.faculty.name) {
+            setFacultyName(res.data.faculty.name);
+          }
+        })
+        .catch((err) => console.error('Error fetching faculty assigned subjects:', err));
+    }
+  }, [user]);
 
   const fetchTimetables = async () => {
     try {
@@ -530,14 +553,43 @@ export const SessionHub: React.FC<SessionHubProps> = ({
               )}
 
               <div>
-                <label className="block text-[11px] font-semibold text-[#111827] mb-1">Subject Name *</label>
-                <input
-                  type="text"
-                  required
-                  value={subject}
-                  onChange={(e) => setSubject(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-[#111827] text-xs font-medium"
-                />
+                <label className="block text-[11px] font-semibold text-[#111827] mb-1">
+                  Subject Name * {user?.role === 'faculty' && <span className="text-[10px] text-[#6D5DFC] font-bold">(Assigned Only)</span>}
+                </label>
+                {user?.role === 'faculty' && assignedFacultySubjects.length > 0 ? (
+                  <select
+                    required
+                    value={subject}
+                    onChange={(e) => {
+                      const selected = assignedFacultySubjects.find(
+                        (s) => (s.subject_name || s.name) === e.target.value
+                      );
+                      setSubject(e.target.value);
+                      if (selected) {
+                        setSubjectCode(selected.subject_code || selected.code || '');
+                      }
+                    }}
+                    className="w-full px-3.5 py-2.5 rounded-2xl bg-[#F3F0FF] border border-[#6D5DFC]/40 text-[#111827] text-xs font-bold"
+                  >
+                    {assignedFacultySubjects.map((sub, i) => (
+                      <option key={i} value={sub.subject_name || sub.name}>
+                        {sub.subject_name || sub.name} ({sub.subject_code || sub.code || 'CODE'})
+                      </option>
+                    ))}
+                  </select>
+                ) : user?.role === 'faculty' ? (
+                  <div className="p-3 rounded-2xl bg-amber-50 border border-amber-200 text-amber-800 text-xs font-bold">
+                    ⚠️ No subjects assigned by Admin yet. You cannot generate QR for unassigned subjects.
+                  </div>
+                ) : (
+                  <input
+                    type="text"
+                    required
+                    value={subject}
+                    onChange={(e) => setSubject(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-[#111827] text-xs font-medium"
+                  />
+                )}
               </div>
 
               <div>

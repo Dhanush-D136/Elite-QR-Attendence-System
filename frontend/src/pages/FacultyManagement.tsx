@@ -81,13 +81,20 @@ export const FacultyManagement: React.FC = () => {
   const [facultyQual, setFacultyQual] = useState<string>('M.Tech (AI & DS)');
   const [facultyExp, setFacultyExp] = useState<string>('6 Years Teaching');
   const [facultySpec, setFacultySpec] = useState<string>('AI & Web Security');
+  const [joiningDate, setJoiningDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [assignedClass, setAssignedClass] = useState<string>('AI&DS III-A');
+  const [assignedSection, setAssignedSection] = useState<string>('A');
   const [facultyStatus, setFacultyStatus] = useState<string>('Active');
   const [profilePhoto, setProfilePhoto] = useState<string>('');
-  const [assignedSubjectsStr, setAssignedSubjectsStr] = useState<string>('Knowledge Engineering, Web Technology');
   const [newPassword, setNewPassword] = useState<string>('1234');
+  
+  // Master Subjects & Selection State
+  const [masterSubjects, setMasterSubjects] = useState<any[]>([]);
+  const [selectedSubjectCodes, setSelectedSubjectCodes] = useState<string[]>([]);
 
   useEffect(() => {
     fetchFacultyManagementData();
+    fetchMasterSubjects();
   }, []);
 
   useEffect(() => {
@@ -95,6 +102,15 @@ export const FacultyManagement: React.FC = () => {
       fetchLoginActivityLogs();
     }
   }, [activeSubTab]);
+
+  const fetchMasterSubjects = async () => {
+    try {
+      const res = await api.get('/subjects');
+      setMasterSubjects(res.data.subjects || []);
+    } catch (err) {
+      console.error('Failed to fetch subjects list for faculty assignment', err);
+    }
+  };
 
   const fetchFacultyManagementData = async () => {
     try {
@@ -125,6 +141,29 @@ export const FacultyManagement: React.FC = () => {
     }
   };
 
+  const resetForm = () => {
+    setFacultyCode('');
+    setFacultyName('');
+    setFacultyEmail('');
+    setFacultyDept('AI & Data Science');
+    setFacultyDesig('Assistant Professor');
+    setFacultyPhone('+91 9876501234');
+    setFacultyQual('M.Tech (AI & DS)');
+    setFacultyExp('6 Years Teaching');
+    setFacultySpec('Artificial Intelligence');
+    setJoiningDate(new Date().toISOString().split('T')[0]);
+    setAssignedClass('AI&DS III-A');
+    setAssignedSection('A');
+    setFacultyStatus('Active');
+    setProfilePhoto('');
+    setSelectedSubjectCodes([]);
+  };
+
+  const openAddModal = () => {
+    resetForm();
+    setShowAddModal(true);
+  };
+
   // View Faculty Details
   const handleOpenViewModal = async (fac: any) => {
     setSelectedFaculty(fac);
@@ -143,29 +182,44 @@ export const FacultyManagement: React.FC = () => {
   // Open Edit Modal
   const openEditModal = (fac: any) => {
     setSelectedFaculty(fac);
-    setFacultyCode(fac.faculty_code);
-    setFacultyName(fac.name);
-    setFacultyEmail(fac.email);
+    setFacultyCode(fac.faculty_code || '');
+    setFacultyName(fac.name || '');
+    setFacultyEmail(fac.email || '');
     setFacultyDept(fac.department || 'AI & Data Science');
     setFacultyDesig(fac.designation || 'Assistant Professor');
     setFacultyPhone(fac.phone || '');
     setFacultyQual(fac.qualification || '');
     setFacultyExp(fac.experience || '');
     setFacultySpec(fac.specialization || '');
+    setJoiningDate(fac.joining_date || new Date().toISOString().split('T')[0]);
+    setAssignedClass(fac.assigned_class || 'AI&DS III-A');
+    setAssignedSection(fac.assigned_section || 'A');
     setFacultyStatus(fac.status || 'Active');
     setProfilePhoto(fac.profile_photo || '');
-    setAssignedSubjectsStr(fac.assigned_subjects || 'Knowledge Engineering, Web Tech');
+    
+    // Parse assigned subjects
+    const existingStr = (fac.assigned_subjects || '').toLowerCase();
+    const matchedCodes: string[] = [];
+    masterSubjects.forEach((sub) => {
+      if (existingStr.includes((sub.name || '').toLowerCase()) || existingStr.includes((sub.code || '').toLowerCase())) {
+        matchedCodes.push(sub.code);
+      }
+    });
+    setSelectedSubjectCodes(matchedCodes);
     setShowEditModal(true);
+  };
+
+  const toggleSubjectSelection = (code: string) => {
+    setSelectedSubjectCodes((prev) =>
+      prev.includes(code) ? prev.filter((c) => c !== code) : [...prev, code]
+    );
   };
 
   // Add Faculty
   const handleAddFaculty = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const subjectsList = assignedSubjectsStr
-        .split(',')
-        .map((s) => s.trim())
-        .filter(Boolean);
+      const selectedSubjectsList = masterSubjects.filter((s) => selectedSubjectCodes.includes(s.code));
 
       await api.post('/admin/faculty-management/faculties', {
         faculty_code: facultyCode,
@@ -177,10 +231,18 @@ export const FacultyManagement: React.FC = () => {
         qualification: facultyQual,
         experience: facultyExp,
         specialization: facultySpec,
+        joining_date: joiningDate,
+        assigned_class: assignedClass,
+        assigned_section: assignedSection,
         status: facultyStatus,
         password: '1234',
         profile_photo: profilePhoto,
-        assigned_subjects: subjectsList
+        assigned_subjects: selectedSubjectsList.map((s) => ({
+          id: s.id,
+          subject_name: s.name,
+          subject_code: s.code,
+          department: s.department
+        }))
       });
 
       alert(`✅ Faculty account ${facultyCode} created successfully with default password '1234'!`);
@@ -197,10 +259,7 @@ export const FacultyManagement: React.FC = () => {
     e.preventDefault();
     if (!selectedFaculty) return;
     try {
-      const subjectsList = assignedSubjectsStr
-        .split(',')
-        .map((s) => s.trim())
-        .filter(Boolean);
+      const selectedSubjectsList = masterSubjects.filter((s) => selectedSubjectCodes.includes(s.code));
 
       await api.put(`/admin/faculty-management/faculties/${selectedFaculty.id}`, {
         name: facultyName,
@@ -211,9 +270,17 @@ export const FacultyManagement: React.FC = () => {
         qualification: facultyQual,
         experience: facultyExp,
         specialization: facultySpec,
+        joining_date: joiningDate,
+        assigned_class: assignedClass,
+        assigned_section: assignedSection,
         status: facultyStatus,
         profile_photo: profilePhoto,
-        assigned_subjects: subjectsList
+        assigned_subjects: selectedSubjectsList.map((s) => ({
+          id: s.id,
+          subject_name: s.name,
+          subject_code: s.code,
+          department: s.department
+        }))
       });
 
       alert(`✅ Faculty details updated successfully for ${facultyName}!`);
@@ -275,20 +342,6 @@ export const FacultyManagement: React.FC = () => {
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Faculty Roster');
     XLSX.writeFile(wb, `Faculty_Master_Roster_${new Date().toISOString().split('T')[0]}.xlsx`);
-  };
-
-  const resetForm = () => {
-    setFacultyCode('');
-    setFacultyName('');
-    setFacultyEmail('');
-    setFacultyPhone('+91 9876501234');
-    setFacultyQual('M.Tech (AI & DS)');
-    setFacultyExp('6 Years Teaching');
-    setFacultySpec('AI & Web Security');
-    setFacultyStatus('Active');
-    setProfilePhoto('');
-    setAssignedSubjectsStr('Knowledge Engineering, Web Technology');
-    setSelectedFaculty(null);
   };
 
   const filteredFaculties = faculties.filter((f: any) => {
@@ -828,7 +881,7 @@ export const FacultyManagement: React.FC = () => {
       {/* MODAL 2: ADD FACULTY ACCOUNT */}
       {showAddModal && (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-lg rounded-[32px] p-6 border border-[#E7E7E7] shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+          <div className="bg-white w-full max-w-xl rounded-[32px] p-6 border border-[#E7E7E7] shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-3 border-b border-[#E7E7E7]">
               <h3 className="font-bold text-[#111827] text-base">Add New Faculty Account</h3>
               <button onClick={() => setShowAddModal(false)} className="p-1.5 rounded-full hover:bg-gray-100 text-gray-500">
@@ -862,18 +915,30 @@ export const FacultyManagement: React.FC = () => {
                 </div>
               </div>
 
-              <div>
-                <label className="block text-[11px] font-bold text-[#111827] mb-1">Official Email ID</label>
-                <input
-                  type="email"
-                  value={facultyEmail}
-                  onChange={(e) => setFacultyEmail(e.target.value)}
-                  placeholder="Auto-generated: fac007@velhightech.com"
-                  className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827]"
-                />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-bold text-[#111827] mb-1">Official Email ID</label>
+                  <input
+                    type="email"
+                    value={facultyEmail}
+                    onChange={(e) => setFacultyEmail(e.target.value)}
+                    placeholder="e.g. fac007@velhightech.com"
+                    className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-[#111827] mb-1">Phone Number</label>
+                  <input
+                    type="text"
+                    value={facultyPhone}
+                    onChange={(e) => setFacultyPhone(e.target.value)}
+                    placeholder="+91 9876501234"
+                    className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827]"
+                  />
+                </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className="block text-[11px] font-bold text-[#111827] mb-1">Department</label>
                   <select
@@ -898,21 +963,98 @@ export const FacultyManagement: React.FC = () => {
                     <option value="Professor & HOD">Professor & HOD</option>
                   </select>
                 </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-[#111827] mb-1">Qualification</label>
+                  <input
+                    type="text"
+                    value={facultyQual}
+                    onChange={(e) => setFacultyQual(e.target.value)}
+                    placeholder="M.Tech (AI & DS)"
+                    className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827]"
+                  />
+                </div>
               </div>
 
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-[11px] font-bold text-[#111827] mb-1">Joining Date</label>
+                  <input
+                    type="date"
+                    value={joiningDate}
+                    onChange={(e) => setJoiningDate(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-[#111827] mb-1">Assigned Class</label>
+                  <select
+                    value={assignedClass}
+                    onChange={(e) => setAssignedClass(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs font-bold text-[#111827]"
+                  >
+                    <option value="AI&DS III-A">AI&DS III-A</option>
+                    <option value="AI&DS III-B">AI&DS III-B</option>
+                    <option value="CSE III-A">CSE III-A</option>
+                    <option value="CSE III-B">CSE III-B</option>
+                    <option value="ECE III-A">ECE III-A</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-[#111827] mb-1">Assigned Section</label>
+                  <select
+                    value={assignedSection}
+                    onChange={(e) => setAssignedSection(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs font-bold text-[#111827]"
+                  >
+                    <option value="A">A</option>
+                    <option value="B">B</option>
+                    <option value="C">C</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* DYNAMIC SUBJECT SELECTION FROM SUBJECT MANAGEMENT */}
               <div>
-                <label className="block text-[11px] font-bold text-[#111827] mb-1">Assigned Subjects (Comma Separated)</label>
-                <input
-                  type="text"
-                  value={assignedSubjectsStr}
-                  onChange={(e) => setAssignedSubjectsStr(e.target.value)}
-                  placeholder="e.g. Knowledge Engineering, Programming Language for AI"
-                  className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827]"
-                />
+                <label className="block text-[11px] font-bold text-[#111827] mb-1">
+                  Assigned Subjects (From Subject Management Table)
+                </label>
+                <div className="p-3 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] max-h-40 overflow-y-auto space-y-1.5">
+                  {masterSubjects.length === 0 ? (
+                    <p className="text-xs text-gray-500 text-center py-2">Loading available subjects from Subject Management...</p>
+                  ) : (
+                    masterSubjects.map((sub: any) => {
+                      const isSelected = selectedSubjectCodes.includes(sub.code);
+                      return (
+                        <label
+                          key={sub.id || sub.code}
+                          onClick={() => toggleSubjectSelection(sub.code)}
+                          className={`flex items-center justify-between p-2 rounded-xl border text-xs cursor-pointer transition-all ${
+                            isSelected
+                              ? 'bg-purple-50 border-[#6D5DFC] text-[#6D5DFC] font-bold'
+                              : 'bg-white border-[#E7E7E7] text-gray-700 hover:bg-gray-50'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => {}}
+                              className="rounded text-[#6D5DFC]"
+                            />
+                            <span>{sub.name}</span>
+                          </div>
+                          <span className="font-mono text-[10px] px-2 py-0.5 rounded bg-gray-100 font-bold text-gray-600">
+                            {sub.code}
+                          </span>
+                        </label>
+                      );
+                    })
+                  )}
+                </div>
               </div>
 
               <div className="p-3 rounded-2xl bg-[#F3F0FF] border border-[#6D5DFC]/20 text-[11px] text-[#6D5DFC] font-bold">
-                🔑 Default password for new faculty accounts is initialized to <strong>1234</strong>.
+                🔑 Auto Login Account Created! Default password initialized to <strong>1234</strong>.
               </div>
 
               <div className="flex items-center justify-end gap-2 pt-2">
@@ -938,7 +1080,7 @@ export const FacultyManagement: React.FC = () => {
       {/* MODAL 3: EDIT FACULTY ACCOUNT */}
       {showEditModal && selectedFaculty && (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-lg rounded-[32px] p-6 border border-[#E7E7E7] shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+          <div className="bg-white w-full max-w-xl rounded-[32px] p-6 border border-[#E7E7E7] shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-3 border-b border-[#E7E7E7]">
               <h3 className="font-bold text-[#111827] text-base">Edit Faculty Details ({selectedFaculty.faculty_code})</h3>
               <button onClick={() => setShowEditModal(false)} className="p-1.5 rounded-full hover:bg-gray-100 text-gray-500">
@@ -970,40 +1112,22 @@ export const FacultyManagement: React.FC = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[11px] font-bold text-[#111827] mb-1">Department</label>
-                  <select
-                    value={facultyDept}
-                    onChange={(e) => setFacultyDept(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827]"
-                  >
-                    <option value="AI & Data Science">AI & Data Science</option>
-                    <option value="Computer Science">Computer Science</option>
-                    <option value="Information Technology">Information Technology</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-[11px] font-bold text-[#111827] mb-1">Designation</label>
-                  <select
-                    value={facultyDesig}
-                    onChange={(e) => setFacultyDesig(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827]"
-                  >
-                    <option value="Assistant Professor">Assistant Professor</option>
-                    <option value="Associate Professor">Associate Professor</option>
-                    <option value="Professor & HOD">Professor & HOD</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className="block text-[11px] font-bold text-[#111827] mb-1">Phone Contact</label>
                   <input
                     type="text"
                     value={facultyPhone}
                     onChange={(e) => setFacultyPhone(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-[#111827] mb-1">Qualification</label>
+                  <input
+                    type="text"
+                    value={facultyQual}
+                    onChange={(e) => setFacultyQual(e.target.value)}
                     className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827]"
                   />
                 </div>
@@ -1021,14 +1145,82 @@ export const FacultyManagement: React.FC = () => {
                 </div>
               </div>
 
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-[11px] font-bold text-[#111827] mb-1">Joining Date</label>
+                  <input
+                    type="date"
+                    value={joiningDate}
+                    onChange={(e) => setJoiningDate(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-[#111827] mb-1">Assigned Class</label>
+                  <select
+                    value={assignedClass}
+                    onChange={(e) => setAssignedClass(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs font-bold text-[#111827]"
+                  >
+                    <option value="AI&DS III-A">AI&DS III-A</option>
+                    <option value="AI&DS III-B">AI&DS III-B</option>
+                    <option value="CSE III-A">CSE III-A</option>
+                    <option value="CSE III-B">CSE III-B</option>
+                    <option value="ECE III-A">ECE III-A</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-[#111827] mb-1">Assigned Section</label>
+                  <select
+                    value={assignedSection}
+                    onChange={(e) => setAssignedSection(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs font-bold text-[#111827]"
+                  >
+                    <option value="A">A</option>
+                    <option value="B">B</option>
+                    <option value="C">C</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* DYNAMIC SUBJECT SELECTION FROM SUBJECT MANAGEMENT */}
               <div>
-                <label className="block text-[11px] font-bold text-[#111827] mb-1">Assigned Subjects (Comma Separated)</label>
-                <input
-                  type="text"
-                  value={assignedSubjectsStr}
-                  onChange={(e) => setAssignedSubjectsStr(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827]"
-                />
+                <label className="block text-[11px] font-bold text-[#111827] mb-1">
+                  Assigned Subjects (From Subject Management Table)
+                </label>
+                <div className="p-3 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] max-h-40 overflow-y-auto space-y-1.5">
+                  {masterSubjects.length === 0 ? (
+                    <p className="text-xs text-gray-500 text-center py-2">Loading available subjects from Subject Management...</p>
+                  ) : (
+                    masterSubjects.map((sub: any) => {
+                      const isSelected = selectedSubjectCodes.includes(sub.code);
+                      return (
+                        <label
+                          key={sub.id || sub.code}
+                          onClick={() => toggleSubjectSelection(sub.code)}
+                          className={`flex items-center justify-between p-2 rounded-xl border text-xs cursor-pointer transition-all ${
+                            isSelected
+                              ? 'bg-purple-50 border-[#6D5DFC] text-[#6D5DFC] font-bold'
+                              : 'bg-white border-[#E7E7E7] text-gray-700 hover:bg-gray-50'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => {}}
+                              className="rounded text-[#6D5DFC]"
+                            />
+                            <span>{sub.name}</span>
+                          </div>
+                          <span className="font-mono text-[10px] px-2 py-0.5 rounded bg-gray-100 font-bold text-gray-600">
+                            {sub.code}
+                          </span>
+                        </label>
+                      );
+                    })
+                  )}
+                </div>
               </div>
 
               <div className="flex items-center justify-end gap-2 pt-2">

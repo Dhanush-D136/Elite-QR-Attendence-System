@@ -44,8 +44,62 @@ import {
 } from 'lucide-react';
 
 export const FacultyDashboard: React.FC = () => {
-  const { user, logout } = useAuth();
+  const { user, logout, updateUser } = useAuth();
   const [activeTab, setActiveTab] = useState<'overview' | 'analytics' | 'qr_launcher' | 'students' | 'risk_tracker' | 'documents' | 'leave_remarks' | 'profile'>('overview');
+
+  // Forced Password Change State (First Login / Default Password '1234')
+  const [forceCurrentPassword, setForceCurrentPassword] = useState<string>('1234');
+  const [forceNewPassword, setForceNewPassword] = useState<string>('');
+  const [forceConfirmPassword, setForceConfirmPassword] = useState<string>('');
+  const [forcePassError, setForcePassError] = useState<string>('');
+  const [isForcePassSubmitting, setIsForcePassSubmitting] = useState<boolean>(false);
+
+  const mustChangePass = Boolean(
+    user && (user.must_change_password === 1 || user.is_first_login || user.first_login || user.password_changed === 0)
+  );
+
+  const handleForcePasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setForcePassError('');
+
+    if (!forceNewPassword || forceNewPassword.length < 4) {
+      setForcePassError('New password must be at least 4 characters long.');
+      return;
+    }
+    if (forceNewPassword !== forceConfirmPassword) {
+      setForcePassError('Passwords do not match.');
+      return;
+    }
+    if (forceNewPassword === '1234') {
+      setForcePassError('Please enter a custom password different from default "1234".');
+      return;
+    }
+
+    setIsForcePassSubmitting(true);
+    try {
+      const res = await api.post('/auth/faculty/change-password', {
+        faculty_id: user?.id,
+        current_password: forceCurrentPassword,
+        new_password: forceNewPassword,
+        confirm_password: forceConfirmPassword
+      });
+
+      const updatedUser = res.data.user || {
+        ...user,
+        must_change_password: 0,
+        password_changed: 1,
+        first_login: false,
+        is_first_login: false
+      };
+
+      if (updateUser) updateUser(updatedUser);
+      alert('✅ Password changed successfully! Your new password has been saved permanently in Supabase.');
+    } catch (err: any) {
+      setForcePassError(err.response?.data?.error || 'Failed to update password');
+    } finally {
+      setIsForcePassSubmitting(false);
+    }
+  };
 
   // State
   const [dashboardData, setDashboardData] = useState<any>(null);
@@ -524,6 +578,97 @@ export const FacultyDashboard: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 pb-12">
+      {/* MANDATORY FIRST LOGIN / DEFAULT PASSWORD CHANGE MODAL */}
+      {mustChangePass && (
+        <div className="fixed inset-0 z-[100] bg-slate-950/80 backdrop-blur-xl flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-md rounded-[32px] p-6 sm:p-8 border border-white/80 shadow-[0_25px_70px_-15px_rgba(0,0,0,0.5)] space-y-6 animate-scale-in">
+            <div className="text-center space-y-2">
+              <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-amber-500 to-amber-600 text-white flex items-center justify-center mx-auto shadow-lg shadow-amber-500/30">
+                <ShieldCheck className="w-7 h-7" />
+              </div>
+              <h2 className="font-display font-extrabold text-2xl text-[#111827]">
+                First Time Login Security Notice
+              </h2>
+              <p className="text-xs text-slate-500 font-medium">
+                Welcome <strong>{user?.name}</strong>! You are currently using default password <strong>1234</strong>. For security compliance, please set your new password before accessing the portal.
+              </p>
+            </div>
+
+            {forcePassError && (
+              <div className="p-3 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 shrink-0" />
+                <span>{forcePassError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleForcePasswordSubmit} className="space-y-4">
+              <div>
+                <label className="block text-[11px] font-bold text-[#111827] mb-1">
+                  Default Current Password
+                </label>
+                <input
+                  type="password"
+                  required
+                  value={forceCurrentPassword}
+                  onChange={(e) => setForceCurrentPassword(e.target.value)}
+                  placeholder="1234"
+                  className="w-full px-4 py-3 rounded-2xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-900 focus:ring-2 focus:ring-[#6D5DFC] outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-[#111827] mb-1">
+                  Create New Secret Password *
+                </label>
+                <input
+                  type="password"
+                  required
+                  minLength={4}
+                  value={forceNewPassword}
+                  onChange={(e) => setForceNewPassword(e.target.value)}
+                  placeholder="Enter new password (min 4 chars)"
+                  className="w-full px-4 py-3 rounded-2xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-900 focus:ring-2 focus:ring-[#6D5DFC] outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-[#111827] mb-1">
+                  Confirm New Password *
+                </label>
+                <input
+                  type="password"
+                  required
+                  minLength={4}
+                  value={forceConfirmPassword}
+                  onChange={(e) => setForceConfirmPassword(e.target.value)}
+                  placeholder="Re-enter new password"
+                  className="w-full px-4 py-3 rounded-2xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-900 focus:ring-2 focus:ring-[#6D5DFC] outline-none"
+                />
+              </div>
+
+              <div className="p-3 rounded-2xl bg-purple-50 border border-purple-200 text-[11px] text-[#6D5DFC] font-bold">
+                🔒 Your new password will be encrypted and saved permanently in Supabase.
+              </div>
+
+              <button
+                type="submit"
+                disabled={isForcePassSubmitting}
+                className="w-full py-3.5 rounded-full bg-[#6D5DFC] hover:bg-[#5b4be0] text-white font-extrabold text-xs shadow-lg transition-all flex items-center justify-center gap-2"
+              >
+                {isForcePassSubmitting ? (
+                  <span>Saving to Supabase...</span>
+                ) : (
+                  <>
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span>Save New Password & Continue</span>
+                  </>
+                )}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* GLASSMORPHISM PURPLE GRADIENT HERO NAVBAR */}
       <header className="bg-gradient-to-r from-[#4A00E0] via-[#6D5DFC] to-[#8E2DE2] text-white py-6 px-4 sm:px-8 shadow-xl relative overflow-hidden">
         <div className="absolute inset-0 bg-black/10 backdrop-blur-sm pointer-events-none" />
