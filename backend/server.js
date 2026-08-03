@@ -65,16 +65,18 @@ io.on('connection', (socket) => {
 
 const PORT = process.env.PORT || 5000;
 
-// Initialize Database then start server
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`====================================================`);
+  console.log(`🚀 Elite Minds Attendance Portal Backend API Server running on port ${PORT}`);
+  console.log(`⚡ Socket.IO Real-time Engine active on all network interfaces`);
+  console.log(`====================================================`);
+});
+
+// Initialize Database in background (non-blocking for Render health checks)
 initDb()
   .then(() => {
-    server.listen(PORT, '0.0.0.0', () => {
-      console.log(`====================================================`);
-      console.log(`🚀 Elite Minds Attendance Portal Backend API Server running on port ${PORT}`);
-      console.log(`⚡ Socket.IO Real-time Engine active on all network interfaces`);
-      console.log(`====================================================`);
-    });
+    console.log('✅ Database initialization complete.');
   })
   .catch((err) => {
-    console.error('Failed to initialize database:', err);
+    console.error('⚠️ Database initialization warning:', err);
   });
