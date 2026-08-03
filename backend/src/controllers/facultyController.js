@@ -1074,25 +1074,52 @@ function getSessionStudentRoster(req, res) {
     if (err || !session) return res.status(404).json({ error: 'Attendance session not found' });
 
     db.all(`SELECT id, name, roll_number, email, department, year, section, profile_photo, vh_number FROM users WHERE role = 'student' ORDER BY roll_number ASC`, [], (errSt, studentRows) => {
-      let enrolled = studentRows || [];
+      const allStudents = studentRows || [];
+      let enrolled = allStudents;
 
-      if (session.department) {
-        enrolled = enrolled.filter((st) => st.department === session.department);
-      }
-      if (session.year) {
-        enrolled = enrolled.filter((st) => String(st.year) === String(session.year));
-      }
-      if (session.section) {
-        enrolled = enrolled.filter((st) => (st.section || 'A').toUpperCase() === (session.section || 'A').toUpperCase());
+      // Filter by class if specified, but fallback to all students if filter results in 0
+      if (session.department || session.year || session.section) {
+        const filtered = enrolled.filter((st) => {
+          const matchDept = !session.department || !st.department || (st.department || '').toLowerCase().includes((session.department || '').toLowerCase()) || (session.department || '').toLowerCase().includes((st.department || '').toLowerCase());
+          const matchYear = !session.year || !st.year || String(st.year) === String(session.year);
+          const matchSec = !session.section || !st.section || (st.section || 'A').toUpperCase() === (session.section || 'A').toUpperCase();
+          return matchDept && matchYear && matchSec;
+        });
+
+        if (filtered.length > 0) {
+          enrolled = filtered;
+        }
       }
 
       db.all(`SELECT * FROM attendance_records WHERE session_id = ?`, [sessionId], (errRec, recordRows) => {
+        const recs = recordRows || [];
         const recordsMap = new Map();
-        (recordRows || []).forEach((r) => recordsMap.set(r.student_id, r));
+        recs.forEach((r) => recordsMap.set(r.student_id, r));
+
+        // Always include students who have attendance records even if filtered out
+        recs.forEach((r) => {
+          if (!enrolled.some((st) => st.id === r.student_id)) {
+            const foundInAll = allStudents.find((st) => st.id === r.student_id);
+            if (foundInAll) {
+              enrolled.push(foundInAll);
+            } else {
+              enrolled.push({
+                id: r.student_id,
+                name: r.student_name || 'Student (' + r.student_id + ')',
+                roll_number: r.register_no || r.student_id,
+                email: (r.register_no || r.student_id) + '@veltech.edu.in',
+                department: session.department || 'AI & DS',
+                year: session.year || 3,
+                section: session.section || 'A',
+                vh_number: r.register_no
+              });
+            }
+          }
+        });
 
         let roster = enrolled.map((st) => {
           const rec = recordsMap.get(st.id);
-          const recStatus = rec ? rec.status : 'absent';
+          const recStatus = rec ? (rec.status || 'present').toLowerCase() : 'absent';
           const scanTime = rec ? rec.attendance_time : null;
 
           return {
@@ -1105,7 +1132,7 @@ function getSessionStudentRoster(req, res) {
             year: st.year || session.year,
             section: st.section || session.section,
             profile_photo: st.profile_photo,
-            status: recStatus,
+            status: recStatus === 'present' ? 'present' : (recStatus === 'late' ? 'late' : 'absent'),
             scan_time: scanTime ? new Date(scanTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : 'N/A',
             raw_scan_time: scanTime,
             distance_meters: rec ? rec.distance_meters : 0,
@@ -1114,27 +1141,29 @@ function getSessionStudentRoster(req, res) {
           };
         });
 
+        const presentCount = recs.filter((r) => (r.status || '').toLowerCase() === 'present').length;
+        const lateCount = recs.filter((r) => (r.status || '').toLowerCase() === 'late').length;
+        const totalEnrolled = Math.max(enrolled.length, presentCount + lateCount);
+        const absentCount = Math.max(0, totalEnrolled - presentCount - lateCount);
+        const attendancePct = totalEnrolled > 0 ? Math.round(((presentCount + lateCount) / totalEnrolled) * 100) : 0;
+
         if (status && status !== 'all') {
           roster = roster.filter((r) => r.status.toLowerCase() === status.toLowerCase());
         }
 
         if (search && search.trim() !== '') {
           const q = search.toLowerCase().trim();
-          roster = roster.filter((r) => r.name.toLowerCase().includes(q) || r.roll_number.toLowerCase().includes(q) || r.register_number.toLowerCase().includes(q));
+          roster = roster.filter((r) => (r.name || '').toLowerCase().includes(q) || (r.roll_number || '').toLowerCase().includes(q) || (r.register_number || '').toLowerCase().includes(q));
         }
-
-        const presentCount = recordRows ? recordRows.filter((r) => r.status === 'present').length : 0;
-        const lateCount = recordRows ? recordRows.filter((r) => r.status === 'late').length : 0;
-        const absentCount = Math.max(0, enrolled.length - presentCount - lateCount);
 
         res.json({
           session: session,
           stats: {
-            total_enrolled: enrolled.length,
+            total_enrolled: totalEnrolled,
             present_count: presentCount,
             late_count: lateCount,
             absent_count: absentCount,
-            attendance_pct: enrolled.length > 0 ? Math.round(((presentCount + lateCount) / enrolled.length) * 100) : 0
+            attendance_pct: attendancePct
           },
           students: roster
         });
