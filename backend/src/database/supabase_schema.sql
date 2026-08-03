@@ -460,3 +460,28 @@ CREATE POLICY "Allow server full access to faculty" ON public.faculty FOR ALL TO
 DROP POLICY IF EXISTS "Allow server full access to class_details" ON public.class_details;
 CREATE POLICY "Allow server full access to class_details" ON public.class_details FOR ALL TO service_role USING (true) WITH CHECK (true);
 
+-- 25. Spell Management Table
+CREATE TABLE IF NOT EXISTS public.spell_management (
+  id TEXT PRIMARY KEY,
+  spell_name TEXT NOT NULL,
+  start_date TEXT NOT NULL,
+  end_date TEXT NOT NULL,
+  is_active INTEGER DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+ALTER TABLE public.spell_management ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Allow server full access to spell_management" ON public.spell_management;
+CREATE POLICY "Allow server full access to spell_management" ON public.spell_management FOR ALL TO service_role USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow public select access to spell_management" ON public.spell_management;
+CREATE POLICY "Allow public select access to spell_management" ON public.spell_management FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Allow public write access to spell_management" ON public.spell_management;
+CREATE POLICY "Allow public write access to spell_management" ON public.spell_management FOR ALL USING (true) WITH CHECK (true);
+
+INSERT INTO public.spell_management (id, spell_name, start_date, end_date, is_active)
+VALUES ('spell-default-1', 'Spell 1', '2026-08-01', '2026-09-30', 1)
+ON CONFLICT (id) DO NOTHING;

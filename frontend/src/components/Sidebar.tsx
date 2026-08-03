@@ -15,7 +15,8 @@ import {
   History,
   Sparkles,
   BookOpen,
-  Home
+  Home,
+  Sliders
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -29,6 +30,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => 
 
   const adminNavItems = [
     { id: 'class-management', label: 'Admin Dashboard', icon: Building2 },
+    { id: 'spell-management', label: 'Spell Management', icon: Sliders },
     { id: 'students-management', label: 'Student Management', icon: Users },
     { id: 'faculty-management', label: 'Faculty Management', icon: UserCheck },
     { id: 'timetable', label: 'Timetable Management', icon: Calendar },

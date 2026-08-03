@@ -25,8 +25,8 @@ export const SpellAttendanceReportPage: React.FC = () => {
   const defaultFrom = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
   const defaultTo = now.toISOString().split('T')[0];
 
-  const [fromDate, setFromDate] = useState<string>(defaultFrom);
-  const [toDate, setToDate] = useState<string>(defaultTo);
+  const [fromDate, setFromDate] = useState<string>('');
+  const [toDate, setToDate] = useState<string>('');
   const [department, setDepartment] = useState<string>('');
   const [year, setYear] = useState<string>('');
   const [section, setSection] = useState<string>('');
@@ -37,19 +37,26 @@ export const SpellAttendanceReportPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const fetchReport = async () => {
+  const fetchReport = async (overrideFrom?: string, overrideTo?: string) => {
     try {
       setIsLoading(true);
       setErrorMessage(null);
+      const queryFrom = overrideFrom !== undefined ? overrideFrom : fromDate;
+      const queryTo = overrideTo !== undefined ? overrideTo : toDate;
+
       const data = await spellAttendanceService.getSpellAttendanceReport({
-        from_date: fromDate,
-        to_date: toDate,
+        from_date: queryFrom || undefined,
+        to_date: queryTo || undefined,
         department,
         year,
         section,
         search
       });
       setReportData(data);
+      if (data.dateRange) {
+        if (!fromDate) setFromDate(data.dateRange.fromDate);
+        if (!toDate) setToDate(data.dateRange.toDate);
+      }
     } catch (err: any) {
       console.error('Failed to generate spell attendance report:', err);
       setErrorMessage(err.response?.data?.error || err.message || 'Failed to fetch spell attendance data.');
@@ -193,9 +200,16 @@ export const SpellAttendanceReportPage: React.FC = () => {
             <BarChart3 className="w-6 h-6" />
           </div>
           <div>
-            <h1 className="text-xl font-display font-extrabold text-[#111827]">Spell Attendance System</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl font-display font-extrabold text-[#111827]">Spell Attendance System</h1>
+              {reportData?.activeSpell && (
+                <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-extrabold text-[11px] border border-emerald-300">
+                  {reportData.activeSpell.spell_name} (ACTIVE)
+                </span>
+              )}
+            </div>
             <p className="text-xs text-[#6B7280]">
-              Date-wise attendance percentage calculation (1 Present Day if attended at least 1 period per day).
+              Centralized Spell Date calculation for {reportData?.activeSpell?.spell_name || 'Active Spell'} ({reportData?.dateRange?.fromDate || '--'} → {reportData?.dateRange?.toDate || '--'}).
             </p>
           </div>
         </div>

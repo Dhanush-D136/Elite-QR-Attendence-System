@@ -20,6 +20,7 @@ import { StudentManagement } from './pages/StudentManagement';
 import { FacultyManagement } from './pages/FacultyManagement';
 import { FacultyDashboard } from './pages/FacultyDashboard';
 import { AttendanceManagementPage } from './pages/AttendanceManagementPage';
+import { SpellManagementPage } from './pages/SpellManagementPage';
 import { RefreshCw } from 'lucide-react';
 
 const MainLayout: React.FC = () => {
@@ -91,6 +92,7 @@ const MainLayout: React.FC = () => {
           {isAdmin ? (
             <>
               {(activeTab === 'class-management' || activeTab === 'dashboard') && <ClassManagementPage />}
+              {activeTab === 'spell-management' && <SpellManagementPage />}
               {activeTab === 'students-management' && <StudentManagement />}
               {activeTab === 'faculty-management' && <FacultyManagement />}
               {activeTab === 'timetable' && <TimetablePage onNavigate={handleNavigate} />}

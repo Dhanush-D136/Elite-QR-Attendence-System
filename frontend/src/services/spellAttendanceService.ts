@@ -16,6 +16,13 @@ export interface SpellStudentItem {
 
 export interface SpellReportData {
   success: boolean;
+  activeSpell?: {
+    id: string;
+    spell_name: string;
+    start_date: string;
+    end_date: string;
+    is_active: number | boolean;
+  } | null;
   dateRange: {
     fromDate: string;
     toDate: string;
@@ -43,6 +50,13 @@ export interface StudentDailyBreakdown {
 
 export interface StudentSpellAttendanceData {
   success: boolean;
+  activeSpell?: {
+    id: string;
+    spell_name: string;
+    start_date: string;
+    end_date: string;
+    is_active: number | boolean;
+  } | null;
   dateRange: {
     fromDate: string;
     toDate: string;

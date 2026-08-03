@@ -1,4 +1,5 @@
 const { db } = require('../database/db');
+const { fetchActiveSpellHelper } = require('./spellManagementController');
 
 // Helper to generate array of date strings (YYYY-MM-DD) between start and end
 function getDatesInRange(startStr, endStr) {
@@ -101,13 +102,9 @@ function getSpellAttendanceReport(req, res) {
     search
   } = req.query;
 
-  // Default to current month if dates not provided
-  const now = new Date();
-  const defaultFrom = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
-  const defaultTo = now.toISOString().split('T')[0];
-
-  const fromDate = from_date || defaultFrom;
-  const toDate = to_date || defaultTo;
+  fetchActiveSpellHelper((errActive, activeSpell) => {
+    const fromDate = from_date || (activeSpell ? activeSpell.start_date : '2026-08-01');
+    const toDate = to_date || (activeSpell ? activeSpell.end_date : '2026-09-30');
 
   // Step 1: Calculate total working days in date range
   calculateWorkingDays(fromDate, toDate, department, year, section, (errWorking, workingInfo) => {
@@ -255,6 +252,7 @@ function getSpellAttendanceReport(req, res) {
 
         return res.json({
           success: true,
+          activeSpell: activeSpell || null,
           dateRange: { fromDate, toDate },
           workingDays: workingDaysCount,
           totalStudents: reportList.length,
@@ -271,6 +269,7 @@ function getSpellAttendanceReport(req, res) {
       });
     });
   });
+  });
 }
 
 /**
@@ -280,80 +279,79 @@ function getStudentSpellAttendance(req, res) {
   const studentId = req.user.id;
   const { from_date, to_date } = req.query;
 
-  const now = new Date();
-  const defaultFrom = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
-  const defaultTo = now.toISOString().split('T')[0];
+  fetchActiveSpellHelper((errActive, activeSpell) => {
+    const fromDate = from_date || (activeSpell ? activeSpell.start_date : '2026-08-01');
+    const toDate = to_date || (activeSpell ? activeSpell.end_date : '2026-09-30');
 
-  const fromDate = from_date || defaultFrom;
-  const toDate = to_date || defaultTo;
+    // Get student details first
+    db.get('SELECT department, year, section FROM users WHERE id = ?', [studentId], (errUser, student) => {
+      const dept = student ? student.department : 'AI & DS';
+      const yearVal = student ? student.year : 3;
+      const secVal = student ? student.section : 'A';
 
-  // Get student details first
-  db.get('SELECT department, year, section FROM users WHERE id = ?', [studentId], (errUser, student) => {
-    const dept = student ? student.department : 'AI & DS';
-    const yearVal = student ? student.year : 3;
-    const secVal = student ? student.section : 'A';
+      calculateWorkingDays(fromDate, toDate, dept, yearVal, secVal, (errWorking, workingInfo) => {
+        if (errWorking) {
+          return res.status(500).json({ success: false, error: 'Failed to compute working days: ' + errWorking.message });
+        }
 
-    calculateWorkingDays(fromDate, toDate, dept, yearVal, secVal, (errWorking, workingInfo) => {
-      if (errWorking) {
-        return res.status(500).json({ success: false, error: 'Failed to compute working days: ' + errWorking.message });
-      }
+        const workingDaysCount = workingInfo.workingDaysCount;
+        const workingDates = workingInfo.workingDates;
 
-      const workingDaysCount = workingInfo.workingDaysCount;
-      const workingDates = workingInfo.workingDates;
+        const recordQuery = `
+          SELECT 
+            DATE(ar.attendance_time) AS record_date,
+            s.date AS session_date,
+            s.subject,
+            ar.status,
+            ar.attendance_time
+          FROM attendance_records ar
+          LEFT JOIN attendance_sessions s ON ar.session_id = s.id
+          WHERE ar.student_id = ?
+            AND (
+              (DATE(ar.attendance_time) >= ? AND DATE(ar.attendance_time) <= ?)
+              OR (s.date >= ? AND s.date <= ?)
+            )
+        `;
 
-      const recordQuery = `
-        SELECT 
-          DATE(ar.attendance_time) AS record_date,
-          s.date AS session_date,
-          s.subject,
-          ar.status,
-          ar.attendance_time
-        FROM attendance_records ar
-        LEFT JOIN attendance_sessions s ON ar.session_id = s.id
-        WHERE ar.student_id = ?
-          AND (
-            (DATE(ar.attendance_time) >= ? AND DATE(ar.attendance_time) <= ?)
-            OR (s.date >= ? AND s.date <= ?)
-          )
-      `;
+        db.all(recordQuery, [studentId, fromDate, toDate, fromDate, toDate], (errRecs, rows) => {
+          const recordsByDate = new Map();
+          (rows || []).forEach((r) => {
+            const dateVal = r.record_date || r.session_date;
+            if (!recordsByDate.has(dateVal)) {
+              recordsByDate.set(dateVal, []);
+            }
+            recordsByDate.get(dateVal).push(r);
+          });
 
-      db.all(recordQuery, [studentId, fromDate, toDate, fromDate, toDate], (errRecs, rows) => {
-        const recordsByDate = new Map();
-        (rows || []).forEach((r) => {
-          const dateVal = r.record_date || r.session_date;
-          if (!recordsByDate.has(dateVal)) {
-            recordsByDate.set(dateVal, []);
-          }
-          recordsByDate.get(dateVal).push(r);
-        });
+          // Determine day-by-day breakdown
+          let presentDaysCount = 0;
+          const dailyBreakdown = workingDates.map((dateStr) => {
+            const recs = recordsByDate.get(dateStr) || [];
+            const isPresent = recs.some((r) => String(r.status).toLowerCase() === 'present');
+            if (isPresent) presentDaysCount++;
 
-        // Determine day-by-day breakdown
-        let presentDaysCount = 0;
-        const dailyBreakdown = workingDates.map((dateStr) => {
-          const recs = recordsByDate.get(dateStr) || [];
-          const isPresent = recs.some((r) => String(r.status).toLowerCase() === 'present');
-          if (isPresent) presentDaysCount++;
+            return {
+              date: dateStr,
+              day: getDayName(dateStr),
+              status: isPresent ? 'PRESENT' : 'ABSENT',
+              periodsAttended: recs.filter((r) => String(r.status).toLowerCase() === 'present').length,
+              totalPeriodsRecorded: recs.length
+            };
+          });
 
-          return {
-            date: dateStr,
-            day: getDayName(dateStr),
-            status: isPresent ? 'PRESENT' : 'ABSENT',
-            periodsAttended: recs.filter((r) => String(r.status).toLowerCase() === 'present').length,
-            totalPeriodsRecorded: recs.length
-          };
-        });
+          const absentDaysCount = Math.max(0, workingDaysCount - presentDaysCount);
+          const spellPercentage = workingDaysCount > 0 ? Number(((presentDaysCount / workingDaysCount) * 100).toFixed(2)) : 0.00;
 
-        const absentDaysCount = Math.max(0, workingDaysCount - presentDaysCount);
-        const spellPercentage = workingDaysCount > 0 ? Number(((presentDaysCount / workingDaysCount) * 100).toFixed(2)) : 0.00;
-
-        return res.json({
-          success: true,
-          dateRange: { fromDate, toDate },
-          workingDays: workingDaysCount,
-          presentDays: presentDaysCount,
-          absentDays: absentDaysCount,
-          spellPercentage,
-          dailyBreakdown
+          return res.json({
+            success: true,
+            activeSpell: activeSpell || null,
+            dateRange: { fromDate, toDate },
+            workingDays: workingDaysCount,
+            presentDays: presentDaysCount,
+            absentDays: absentDaysCount,
+            spellPercentage,
+            dailyBreakdown
+          });
         });
       });
     });

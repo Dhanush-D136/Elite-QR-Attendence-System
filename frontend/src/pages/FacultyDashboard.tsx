@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
 import { getSocket } from '../services/socket';
 import { DynamicQRDisplay } from '../components/DynamicQRDisplay';
+import { SpellAttendanceReportPage } from './SpellAttendanceReportPage';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';

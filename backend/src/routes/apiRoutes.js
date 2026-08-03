@@ -162,13 +162,24 @@ router.post('/admin/attendance-management/reset-today', verifyToken, requireRole
 router.post('/admin/attendance-management/reset-all', verifyToken, requireRole('admin'), attendanceBackupController.resetAllAttendance);
 router.post('/admin/attendance-management/undo-reset', verifyToken, requireRole('admin'), attendanceBackupController.undoLastReset);
 
-// --- Spell Attendance System Routes (Date-Wise Percentage) ---
+// --- Spell Attendance System Routes (Date-Wise Percentage & Management) ---
 const spellAttendanceController = require('../controllers/spellAttendanceController');
+const spellManagementController = require('../controllers/spellManagementController');
 
 router.get('/analytics/spell-attendance', verifyToken, requireRole('admin', 'faculty'), spellAttendanceController.getSpellAttendanceReport);
 router.get('/attendance/my-spell-attendance', verifyToken, requireRole('student'), spellAttendanceController.getStudentSpellAttendance);
 router.get('/faculty/spell-attendance', verifyToken, requireRole('faculty', 'admin'), spellAttendanceController.getFacultySpellAttendance);
 
+// Centralized Spell Date Management CRUD Routes
+router.get('/admin/spells', verifyToken, spellManagementController.getSpells);
+router.get('/admin/spells/active', verifyToken, spellManagementController.getActiveSpell);
+router.post('/admin/spells', verifyToken, requireRole('admin'), spellManagementController.createSpell);
+router.put('/admin/spells/:id', verifyToken, requireRole('admin'), spellManagementController.updateSpell);
+router.post('/admin/spells/:id/activate', verifyToken, requireRole('admin'), spellManagementController.setActiveSpell);
+router.post('/admin/spells/:id/duplicate', verifyToken, requireRole('admin'), spellManagementController.duplicateSpell);
+router.delete('/admin/spells/:id', verifyToken, requireRole('admin'), spellManagementController.deleteSpell);
+
 module.exports = router;
+
 
 

@@ -863,8 +863,31 @@ function initDb() {
         );
 
         CREATE UNIQUE INDEX IF NOT EXISTS idx_timetables_slot ON timetables(department, year, section, day, period_number);
+      `);
+
+      // Create Spell Management table
+      db.run(`
+        CREATE TABLE IF NOT EXISTS spell_management (
+          id TEXT PRIMARY KEY,
+          spell_name TEXT NOT NULL,
+          start_date TEXT NOT NULL,
+          end_date TEXT NOT NULL,
+          is_active INTEGER DEFAULT 0,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
       `, () => {
-        console.log('✅ Database initialized cleanly with Official Production Timetables for AI & DS III-A (40 Weekly Slots).');
+        db.get("SELECT COUNT(*) as count FROM spell_management", [], (err, row) => {
+          if (!err && row && (row.count === 0 || row.count === '0')) {
+            console.log('[DATABASE MIGRATION] Seeding initial active Spell 1...');
+            db.run(
+              `INSERT OR IGNORE INTO spell_management (id, spell_name, start_date, end_date, is_active)
+               VALUES ('spell-default-1', 'Spell 1', '2026-08-01', '2026-09-30', 1)`
+            );
+          }
+        });
+
+        console.log('✅ Database initialized cleanly with Official Production Timetables & Spell Management.');
         resolve(true);
       });
     });

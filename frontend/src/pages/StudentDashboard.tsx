@@ -143,7 +143,7 @@ export const StudentDashboard: React.FC = () => {
     return h * 60 + m;
   };
 
-  const todaysClassesSorted = [...todaysClasses].sort((a, b) => (a.period_number || 0) - (b.period_number || 0));
+  const todaysClassesSorted = [...todaysClasses].sort((a, b) => (Number(a.period_number) || 0) - (Number(b.period_number) || 0));
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -187,7 +187,7 @@ export const StudentDashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* SPELL ATTENDANCE SYSTEM (DATE-WISE ATTENDANCE) CARD */}
+      {/* SPELL ATTENDANCE SYSTEM (CURRENT SPELL) CARD */}
       <div className="bg-white p-6 rounded-[24px] border border-[#E7E7E7] shadow-enterprise space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#E7E7E7]">
           <div className="flex items-center gap-3">
@@ -195,42 +195,63 @@ export const StudentDashboard: React.FC = () => {
               <Calendar className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="font-display font-extrabold text-lg text-[#111827]">Spell Attendance (Date-Wise)</h2>
-              <p className="text-xs text-[#6B7280]">
-                Date-wise calculation (Attending at least 1 period per day = 1 Present Day).
-              </p>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-black uppercase text-[#6D5DFC] tracking-wider">Current Spell</span>
+                <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-extrabold text-[10px]">
+                  {spellData?.activeSpell?.spell_name || 'Spell 1'}
+                </span>
+              </div>
+              <h2 className="font-display font-extrabold text-lg text-[#111827]">
+                {spellData?.activeSpell?.spell_name || 'Spell 1'} Attendance Summary
+              </h2>
             </div>
           </div>
 
-          <div className="text-xs font-bold text-[#6D5DFC] bg-[#F3F0FF] px-3.5 py-1.5 rounded-full border border-[#6D5DFC]/20 self-start sm:self-auto">
-            Selected Period: {spellData?.dateRange?.fromDate || '--'} to {spellData?.dateRange?.toDate || '--'}
+          <div className="text-xs font-bold text-[#6D5DFC] bg-[#F3F0FF] px-4 py-2 rounded-2xl border border-[#6D5DFC]/20 self-start sm:self-auto flex items-center gap-1.5 shadow-sm">
+            <Clock className="w-3.5 h-3.5 text-[#6D5DFC]" />
+            <span>{spellData?.dateRange?.fromDate || '--'} to {spellData?.dateRange?.toDate || '--'}</span>
           </div>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3.5">
           <div className="p-4 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] space-y-1">
             <span className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider block">Working Days</span>
-            <h3 className="text-2xl font-extrabold text-[#111827]">{spellData ? spellData.workingDays : 0} Days</h3>
-            <p className="text-[10px] text-[#6B7280]">Scheduled Class Days</p>
+            <h3 className="text-xl font-extrabold text-[#111827]">{spellData ? spellData.workingDays : 0} Days</h3>
+            <p className="text-[10px] text-[#6B7280]">Scheduled Days</p>
           </div>
 
           <div className="p-4 rounded-2xl bg-[#ECFDF5] border border-[#10B981]/20 space-y-1">
             <span className="text-[10px] font-bold text-[#059669] uppercase tracking-wider block">Present Days</span>
-            <h3 className="text-2xl font-extrabold text-[#059669]">{spellData ? spellData.presentDays : 0} Days</h3>
+            <h3 className="text-xl font-extrabold text-[#059669]">{spellData ? spellData.presentDays : 0} Days</h3>
             <p className="text-[10px] text-[#059669]">Attended 1+ Periods</p>
           </div>
 
           <div className="p-4 rounded-2xl bg-[#FEF2F2] border border-[#EF4444]/20 space-y-1">
             <span className="text-[10px] font-bold text-[#DC2626] uppercase tracking-wider block">Absent Days</span>
-            <h3 className="text-2xl font-extrabold text-[#DC2626]">{spellData ? spellData.absentDays : 0} Days</h3>
-            <p className="text-[10px] text-[#DC2626]">Zero Periods Attended</p>
+            <h3 className="text-xl font-extrabold text-[#DC2626]">{spellData ? spellData.absentDays : 0} Days</h3>
+            <p className="text-[10px] text-[#DC2626]">0 Periods Attended</p>
+          </div>
+
+          <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 space-y-1">
+            <span className="text-[10px] font-bold text-amber-700 uppercase tracking-wider block">Classes Missed</span>
+            <h3 className="text-xl font-extrabold text-amber-700">{missedClasses} Sessions</h3>
+            <p className="text-[10px] text-amber-600">Total Unattended</p>
           </div>
 
           <div className="p-4 rounded-2xl bg-[#F3F0FF] border border-[#6D5DFC]/20 space-y-1">
-            <span className="text-[10px] font-bold text-[#6D5DFC] uppercase tracking-wider block">Spell Attendance</span>
-            <h3 className="text-2xl font-extrabold text-[#6D5DFC]">{spellData ? spellData.spellPercentage : 0}%</h3>
-            <p className="text-[10px] text-[#6D5DFC] font-bold">
-              {spellData && spellData.spellPercentage >= 75 ? '✓ Safe Status' : '⚠ Shortage Warning'}
+            <span className="text-[10px] font-bold text-[#6D5DFC] uppercase tracking-wider block">Active Streak</span>
+            <h3 className="text-xl font-extrabold text-[#6D5DFC] flex items-center gap-1">
+              <Flame className="w-4 h-4 text-amber-500 fill-amber-500" />
+              {streak} Days
+            </h3>
+            <p className="text-[10px] text-[#6D5DFC]">Consecutive</p>
+          </div>
+
+          <div className="p-4 rounded-2xl bg-gradient-to-br from-[#6D5DFC] to-[#4F46E5] text-white space-y-1 shadow-md">
+            <span className="text-[10px] font-bold text-purple-200 uppercase tracking-wider block">Spell Attendance %</span>
+            <h3 className="text-xl font-black text-white">{spellData ? spellData.spellPercentage : 0}%</h3>
+            <p className="text-[10px] text-purple-100 font-bold">
+              {spellData && spellData.spellPercentage >= 75 ? '✓ Safe Status' : '⚠ Shortage Risk'}
             </p>
           </div>
         </div>
