@@ -3,6 +3,7 @@ const jwt = require('jsonwebtoken');
 const { v4: uuidv4 } = require('uuid');
 const { db } = require('../database/db');
 const { JWT_SECRET } = require('../middleware/authMiddleware');
+const { safeDateOnly, safeTimeOnly, normalizeDate } = require('../utils/dateHelpers');
 
 /**
  * Faculty Login - Authentication using Faculty ID (FAC001) or Official Email
@@ -885,45 +886,45 @@ function getFacultyAttendanceAnalytics(req, res) {
             const todayLocal = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 
             const checkIsToday = (s) => {
-              const d1 = (s.start_time || '').split('T')[0].split(' ')[0];
+              const d1 = safeDateOnly(s.start_time);
               const d2 = s.date || '';
               return d1 === todayUTC || d1 === todayIST || d1 === todayLocal || d2 === todayUTC || d2 === todayIST || d2 === todayLocal;
             };
 
             if (date) {
-              sessions = sessions.filter((s) => (s.start_time || '').startsWith(date) || (s.date && s.date === date));
+              sessions = sessions.filter((s) => safeDateOnly(s.start_time) === date || (s.date && s.date === date));
             } else if (preset === 'today') {
               sessions = sessions.filter(checkIsToday);
             } else if (preset === 'yesterday') {
               const yest = new Date(now);
               yest.setDate(yest.getDate() - 1);
               const yestStr = yest.toISOString().split('T')[0];
-              sessions = sessions.filter((s) => (s.start_time || '').startsWith(yestStr) || (s.date && s.date === yestStr));
+              sessions = sessions.filter((s) => safeDateOnly(s.start_time) === yestStr || (s.date && s.date === yestStr));
             } else if (preset === 'current_week') {
               const dayOfWeek = now.getDay();
               const diffToMon = now.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
               const monday = new Date(now.setDate(diffToMon));
               const mondayStr = monday.toISOString().split('T')[0];
               sessions = sessions.filter((s) => {
-                const sDate = (s.start_time || '').split('T')[0].split(' ')[0];
+                const sDate = safeDateOnly(s.start_time);
                 return sDate >= mondayStr;
               });
             } else if (preset === 'current_month') {
               const firstDayMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
               sessions = sessions.filter((s) => {
-                const sDate = (s.start_time || '').split('T')[0].split(' ')[0];
+                const sDate = safeDateOnly(s.start_time);
                 return sDate >= firstDayMonth;
               });
             } else if (preset === 'date_range' || (from_date && to_date)) {
               if (from_date) {
                 sessions = sessions.filter((s) => {
-                  const sDate = (s.start_time || '').split('T')[0].split(' ')[0];
+                  const sDate = safeDateOnly(s.start_time);
                   return sDate >= from_date;
                 });
               }
               if (to_date) {
                 sessions = sessions.filter((s) => {
-                  const sDate = (s.start_time || '').split('T')[0].split(' ')[0];
+                  const sDate = safeDateOnly(s.start_time);
                   return sDate <= to_date;
                 });
               }

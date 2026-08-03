@@ -63,6 +63,25 @@ io.on('connection', (socket) => {
   });
 });
 
+// Global Express Error Protection Middleware
+app.use((err, req, res, next) => {
+  console.error('[EXPRESS ERROR HANDLER]:', err);
+  res.status(500).json({
+    success: false,
+    message: 'Internal server error',
+    error: err.message || 'Unknown error'
+  });
+});
+
+// Process-level uncaught exception & unhandled rejection safety guards
+process.on('uncaughtException', (err) => {
+  console.error('UNCAUGHT EXCEPTION:', err);
+});
+
+process.on('unhandledRejection', (err) => {
+  console.error('UNHANDLED REJECTION:', err);
+});
+
 const PORT = process.env.PORT || 5000;
 
 server.listen(PORT, '0.0.0.0', () => {

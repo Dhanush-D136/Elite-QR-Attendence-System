@@ -1,4 +1,5 @@
 const { db } = require('../database/db');
+const { safeDateOnly, safeTimeOnly } = require('../utils/dateHelpers');
 
 // Main Admin Dashboard Overview Metrics (100% Dynamic SQL)
 function getDashboardMetrics(req, res) {
@@ -126,25 +127,25 @@ function getReportsData(req, res) {
         // Date and Time filtering on sessions
         if (from_date) {
           sessionList = sessionList.filter((s) => {
-            const sessDate = (s.start_time || '').split('T')[0].split(' ')[0];
+            const sessDate = safeDateOnly(s.start_time);
             return sessDate >= from_date;
           });
         }
         if (to_date) {
           sessionList = sessionList.filter((s) => {
-            const sessDate = (s.start_time || '').split('T')[0].split(' ')[0];
+            const sessDate = safeDateOnly(s.start_time);
             return sessDate <= to_date;
           });
         }
         if (from_time) {
           sessionList = sessionList.filter((s) => {
-            const timePart = (s.start_time || '').includes('T') ? s.start_time.split('T')[1] : s.start_time.split(' ')[1] || '';
+            const timePart = safeTimeOnly(s.start_time);
             return timePart >= from_time;
           });
         }
         if (to_time) {
           sessionList = sessionList.filter((s) => {
-            const timePart = (s.start_time || '').includes('T') ? s.start_time.split('T')[1] : s.start_time.split(' ')[1] || '';
+            const timePart = safeTimeOnly(s.start_time);
             return timePart <= to_time;
           });
         }
