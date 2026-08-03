@@ -344,7 +344,7 @@ function getMe(req, res) {
                   department: 'AI & DS',
                   designation: 'Professor & Head',
                   qualification: 'Ph.D',
-                  profile_photo: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150',
+                  profile_photo: 'https://universitykart.b-cdn.net/Content/upload/admin/44wzl2yr.t4g.png',
                   first_login: false,
                   is_first_login: false,
                   must_change_password: 0,

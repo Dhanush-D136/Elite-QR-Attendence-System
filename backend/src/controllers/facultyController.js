@@ -211,7 +211,7 @@ function getFacultyDashboard(req, res) {
       department: 'AI & DS',
       designation: 'Professor & Head',
       qualification: 'Ph.D',
-      profile_photo: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150',
+      profile_photo: 'https://universitykart.b-cdn.net/Content/upload/admin/44wzl2yr.t4g.png',
       status: 'Active'
     };
 
@@ -581,7 +581,7 @@ async function adminCreateFaculty(req, res) {
   const cleanEmail = (email && email.trim() !== '') ? email.trim().toLowerCase() : `${cleanCode.toLowerCase()}@velhightech.com`;
   const id = uuidv4();
   const passwordHash = await bcrypt.hash(password || '1234', 10);
-  const photo = profile_photo || `https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150`;
+  const photo = profile_photo || `https://universitykart.b-cdn.net/Content/upload/admin/44wzl2yr.t4g.png`;
   const facultyStatus = status || 'Active';
 
   // Upfront duplication check for friendly user error response

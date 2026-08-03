@@ -553,7 +553,7 @@ export const FacultyManagement: React.FC = () => {
                     <td className="p-4">
                       <div className="flex items-center gap-3">
                         <img
-                          src={fac.profile_photo || 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150'}
+                          src={fac.profile_photo || 'https://universitykart.b-cdn.net/Content/upload/admin/44wzl2yr.t4g.png'}
                           alt=""
                           className="w-10 h-10 rounded-full object-cover border border-[#E7E7E7]"
                         />
@@ -708,7 +708,7 @@ export const FacultyManagement: React.FC = () => {
             {faculties.map((fac: any) => (
               <div key={fac.id} className="p-4 rounded-2xl border border-[#E7E7E7] bg-[#FAFAFA] flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <img src={fac.profile_photo || 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150'} alt="" className="w-10 h-10 rounded-full object-cover" />
+                  <img src={fac.profile_photo || 'https://universitykart.b-cdn.net/Content/upload/admin/44wzl2yr.t4g.png'} alt="" className="w-10 h-10 rounded-full object-cover" />
                   <div>
                     <strong className="text-sm font-bold text-[#111827] block">{fac.name} ({fac.faculty_code})</strong>
                     <span className="text-xs text-gray-500 font-mono block">{fac.email}</span>
@@ -749,7 +749,7 @@ export const FacultyManagement: React.FC = () => {
             <div className="flex items-center justify-between pb-4 border-b border-[#E7E7E7]">
               <div className="flex items-center gap-3">
                 <img
-                  src={selectedFaculty.profile_photo || 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150'}
+                  src={selectedFaculty.profile_photo || 'https://universitykart.b-cdn.net/Content/upload/admin/44wzl2yr.t4g.png'}
                   alt=""
                   className="w-14 h-14 rounded-full object-cover border-2 border-[#6D5DFC]"
                 />

@@ -319,7 +319,7 @@ export const FacultyDashboard: React.FC = () => {
   const [facultyQualification, setFacultyQualification] = useState<string>((user as any)?.qualification || 'M.Tech (AI & DS)');
   const [facultyExperience, setFacultyExperience] = useState<string>((user as any)?.experience || '6 Years Teaching');
   const [facultySpecialization, setFacultySpecialization] = useState<string>((user as any)?.specialization || 'AI & Web Security');
-  const [facultyPhoto, setFacultyPhoto] = useState<string>(user?.profile_photo || 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150');
+  const [facultyPhoto, setFacultyPhoto] = useState<string>(user?.profile_photo || 'https://universitykart.b-cdn.net/Content/upload/admin/44wzl2yr.t4g.png');
 
   // Faculty Timetable & Real-time State
   const [facultyTimetable, setFacultyTimetable] = useState<any[]>([]);
@@ -725,7 +725,7 @@ export const FacultyDashboard: React.FC = () => {
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4 relative z-10">
           <div className="flex items-center gap-4">
             <img
-              src={facultyObj.profile_photo || 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150'}
+              src={facultyObj.profile_photo || 'https://universitykart.b-cdn.net/Content/upload/admin/44wzl2yr.t4g.png'}
               alt=""
               className="w-16 h-16 rounded-full border-2 border-white/80 object-cover shadow-lg"
             />
