@@ -37,11 +37,7 @@ function runMigrations() {
       "ALTER TABLE public.attendance_sessions ADD COLUMN IF NOT EXISTS subject_id TEXT;",
       "ALTER TABLE public.attendance_sessions ADD COLUMN IF NOT EXISTS faculty_name TEXT;",
       "ALTER TABLE public.attendance_sessions ADD COLUMN IF NOT EXISTS period_number TEXT;",
-      "ALTER TABLE public.attendance_sessions ADD COLUMN IF NOT EXISTS date TEXT;",
-      "ALTER TABLE public.attendance_tokens ADD COLUMN IF NOT EXISTS session_id TEXT;",
-      "ALTER TABLE public.attendance_tokens ADD COLUMN IF NOT EXISTS qr_token TEXT;",
-      "ALTER TABLE public.attendance_tokens ADD COLUMN IF NOT EXISTS generated_at TIMESTAMPTZ;",
-      "ALTER TABLE public.attendance_tokens ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ;"
+      "ALTER TABLE public.attendance_sessions ADD COLUMN IF NOT EXISTS date TEXT;"
     ];
     pgAlterStatements.forEach((stmt) => {
       try {
@@ -166,25 +162,6 @@ function runMigrations() {
                 db.run('ALTER TABLE attendance_records ADD COLUMN notes TEXT;');
               }
             }
-
-            db.all('PRAGMA table_info(attendance_tokens)', [], (errTok, tokColumns) => {
-              if (tokColumns) {
-                const tokColNames = tokColumns.map((c) => c.name.toLowerCase());
-                const tokMigrations = [
-                  { col: 'session_id', type: 'TEXT' },
-                  { col: 'qr_token', type: 'TEXT' },
-                  { col: 'generated_at', type: 'DATETIME' },
-                  { col: 'expires_at', type: 'DATETIME' }
-                ];
-                tokMigrations.forEach(({ col, type }) => {
-                  if (!tokColNames.includes(col.toLowerCase())) {
-                    try {
-                      db.run(`ALTER TABLE attendance_tokens ADD COLUMN ${col} ${type};`);
-                    } catch (e) {}
-                  }
-                });
-              }
-            });
 
             // Verify subjects schema migrations
             db.all('PRAGMA table_info(subjects)', [], (errSub, subColumns) => {

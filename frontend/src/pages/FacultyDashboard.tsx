@@ -411,11 +411,18 @@ export const FacultyDashboard: React.FC = () => {
     }
   };
 
-  const openSessionRoster = async (sessionId: string) => {
+  const openSessionRoster = async (sessionId: string, statusOverride?: string, searchOverride?: string) => {
     try {
       setIsRosterLoading(true);
       setShowRosterModal(true);
-      const res = await api.get(`/faculty/session-students/${sessionId}?status=${rosterStatusFilter}&search=${encodeURIComponent(rosterSearchQuery)}`);
+
+      const targetStatus = statusOverride !== undefined ? statusOverride : rosterStatusFilter;
+      const targetSearch = searchOverride !== undefined ? searchOverride : rosterSearchQuery;
+
+      if (statusOverride !== undefined) setRosterStatusFilter(statusOverride);
+      if (searchOverride !== undefined) setRosterSearchQuery(searchOverride);
+
+      const res = await api.get(`/faculty/session-students/${sessionId}?status=${targetStatus}&search=${encodeURIComponent(targetSearch)}`);
       setSelectedSessionRoster(res.data);
     } catch (err) {
       console.error('Failed to fetch session roster', err);
@@ -1433,7 +1440,7 @@ export const FacultyDashboard: React.FC = () => {
                                 </td>
                                 <td className="p-3.5 text-right">
                                   <button
-                                    onClick={() => openSessionRoster(sess.session_id)}
+                                    onClick={() => openSessionRoster(sess.session_id, 'all', '')}
                                     className="px-3.5 py-1.5 rounded-xl bg-[#F3F0FF] hover:bg-[#6D5DFC] text-[#6D5DFC] hover:text-white font-extrabold text-xs transition-all flex items-center gap-1.5 ml-auto shadow-sm"
                                   >
                                     <Eye className="w-3.5 h-3.5" /> View Roster
@@ -2025,8 +2032,7 @@ export const FacultyDashboard: React.FC = () => {
                     <button
                       key={st}
                       onClick={() => {
-                        setRosterStatusFilter(st);
-                        openSessionRoster(selectedSessionRoster.session.id);
+                        openSessionRoster(selectedSessionRoster.session.id, st);
                       }}
                       className={`px-3 py-1.5 rounded-xl capitalize transition-all ${
                         rosterStatusFilter === st
@@ -2049,7 +2055,7 @@ export const FacultyDashboard: React.FC = () => {
                       setRosterSearchQuery(e.target.value);
                     }}
                     onKeyDown={(e) => {
-                      if (e.key === 'Enter') openSessionRoster(selectedSessionRoster.session.id);
+                      if (e.key === 'Enter') openSessionRoster(selectedSessionRoster.session.id, rosterStatusFilter, e.currentTarget.value);
                     }}
                     className="w-full pl-9 pr-3 py-2 rounded-xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs font-medium text-[#111827]"
                   />

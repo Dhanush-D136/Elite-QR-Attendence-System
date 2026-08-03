@@ -8,27 +8,6 @@ const activeSessionQRCodes = new Map();
 function generateAndCacheLatestQR(sessionId, subject = 'Subject', faculty = 'Faculty') {
   const { token, payload } = generateDynamicToken(sessionId, subject, faculty);
   activeSessionQRCodes.set(sessionId, payload);
-
-  const tokenId = uuidv4();
-  const generatedAt = new Date(payload.timestamp).toISOString();
-  const expiresAt = new Date(payload.expiresAt).toISOString();
-
-  db.run(
-    `INSERT INTO attendance_tokens (id, session_id, qr_token, token, generated_at, expires_at, is_active)
-     VALUES (?, ?, ?, ?, ?, ?, 1)`,
-    [tokenId, sessionId, token, payload.nonce, generatedAt, expiresAt],
-    (err) => {
-      if (err) {
-        // Fallback for pre-migration schema
-        db.run(
-          `INSERT INTO attendance_tokens (id, token, is_active) VALUES (?, ?, 1)`,
-          [tokenId, payload.nonce],
-          () => {}
-        );
-      }
-    }
-  );
-
   return { token, payload };
 }
 

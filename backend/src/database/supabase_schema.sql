@@ -44,24 +44,15 @@ CREATE INDEX IF NOT EXISTS idx_users_email ON public.users(email);
 CREATE INDEX IF NOT EXISTS idx_users_roll ON public.users(roll_number);
 CREATE INDEX IF NOT EXISTS idx_users_role ON public.users(role);
 
--- 2. Attendance Tokens Table
+-- 2. Attendance Tokens Table (100 Predefined Tokens Pool)
 CREATE TABLE IF NOT EXISTS public.attendance_tokens (
   id TEXT PRIMARY KEY,
-  session_id TEXT REFERENCES public.attendance_sessions(id) ON DELETE CASCADE,
-  qr_token TEXT,
-  token TEXT,
-  generated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-  expires_at TIMESTAMPTZ,
+  token TEXT UNIQUE NOT NULL,
   qr_image_path TEXT,
   is_used INTEGER DEFAULT 0,
-  is_active INTEGER DEFAULT 1,
+  is_active INTEGER DEFAULT 0,
   created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
-
-ALTER TABLE public.attendance_tokens ADD COLUMN IF NOT EXISTS session_id TEXT;
-ALTER TABLE public.attendance_tokens ADD COLUMN IF NOT EXISTS qr_token TEXT;
-ALTER TABLE public.attendance_tokens ADD COLUMN IF NOT EXISTS generated_at TIMESTAMPTZ;
-ALTER TABLE public.attendance_tokens ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ;
 
 ALTER TABLE public.attendance_tokens ENABLE ROW LEVEL SECURITY;
 CREATE INDEX IF NOT EXISTS idx_attendance_tokens_code ON public.attendance_tokens(token);

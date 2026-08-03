@@ -97,22 +97,11 @@ function markAttendance(req, res) {
 
     const sessionId = session.id;
 
-    // 3. Strict Server-Side Latest Nonce & Expiry Validation (6-Second Dynamic Enforcement)
-    if (parsedPayload && parsedPayload.expiresAt) {
-      if (Date.now() > parsedPayload.expiresAt + 1500) {
-        console.warn(`⚠️ [EXPIRED QR REJECTED] Scanned token timestamp expired: ${parsedPayload.expiresAt}`);
-        return res.status(400).json({
-          success: false,
-          reason: 'EXPIRED_QR',
-          message: '❌ QR Expired\nThis attendance QR has expired. Please scan the currently displayed QR.'
-        });
-      }
-    }
-
+    // 3. Strict Server-Side Latest Nonce Validation (5-Second Dynamic Enforcement)
     const latestServerPayload = activeSessionQRCodes.get(sessionId);
     if (latestServerPayload) {
       if (parsedNonce !== latestServerPayload.nonce) {
-        console.warn(`⚠️ [EXPIRED/PREVIOUS QR REJECTED] Scanned Nonce (${parsedNonce}) != Latest Server Nonce (${latestServerPayload.nonce})`);
+        console.warn(`⚠️ [EXPIRED QR REJECTED] Scanned Nonce (${parsedNonce}) != Latest Server Nonce (${latestServerPayload.nonce})`);
         return res.status(400).json({
           success: false,
           reason: 'EXPIRED_QR',

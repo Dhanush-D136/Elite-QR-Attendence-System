@@ -177,7 +177,7 @@ export const DynamicQRDisplay: React.FC<DynamicQRDisplayProps> = ({
               {/* Countdown Badge */}
               <div className="mt-3 flex items-center justify-center gap-2 text-xs font-mono text-[#111827] bg-[#ECFDF5] px-4 py-1.5 rounded-full border border-[#12B76A]/30 font-bold">
                 <Clock className="w-3.5 h-3.5 text-[#12B76A] animate-spin" />
-                <span>QR Refresh In: <strong className="text-[#12B76A] text-sm font-extrabold">{timeLeft}s</strong></span>
+                <span>6s Real-Time Server Sync: <strong className="text-[#12B76A] text-sm font-extrabold">{timeLeft}s</strong></span>
               </div>
             </>
           )}
