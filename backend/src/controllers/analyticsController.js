@@ -548,15 +548,16 @@ function getPeriodAttendanceIntelligence(req, res) {
                   dailyMap.set(recDate, new Set());
                 }
 
-                if (pNo) {
-                  studentPeriodSetMap.get(stId).add(`${recDate}_P${pNo}`);
-                  dailyMap.get(recDate).add(`P${pNo}`);
-                } else if (rec.subject) {
+                let cleanP = pNo ? String(pNo).replace(/^P/i, '') : null;
+                if (!cleanP && rec.subject) {
                   const matchSlot = dayTimetable.find(t => (t.subject_name || '').toLowerCase() === rec.subject.toLowerCase());
-                  const matchedP = matchSlot ? `P${matchSlot.period_number}` : 'P1';
-                  studentPeriodSetMap.get(stId).add(`${recDate}_${matchedP}`);
-                  dailyMap.get(recDate).add(matchedP);
+                  cleanP = matchSlot ? String(matchSlot.period_number).replace(/^P/i, '') : '1';
                 }
+                if (!cleanP) cleanP = '1';
+
+                const compoundKey = `${recDate}_P${cleanP}`;
+                studentPeriodSetMap.get(stId).add(compoundKey);
+                dailyMap.get(recDate).add(`P${cleanP}`);
 
                 if (rec.attendance_time) {
                   const curLast = studentLastScanMap.get(stId);
