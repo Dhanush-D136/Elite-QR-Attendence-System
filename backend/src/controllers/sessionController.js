@@ -224,6 +224,53 @@ function createSession(req, res) {
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0.0, 0.0, 0.0, 0.0, ?, ?, ?, ?, ?, ?, ?, 'active')
   `;
 
+  function sendSessionSuccess() {
+    console.log(`✅ [TIMETABLE 5s QR SESSION CREATED] ID: ${id}, Subject: ${subject}, Initial Nonce: ${payload.nonce}`);
+
+    const sessionPayload = {
+      sessionId: id,
+      subject,
+      department,
+      year,
+      section,
+      period: period_number,
+      faculty: faculty_name,
+      date,
+      room: room_number || 'F305',
+      attendanceCode: payload.nonce,
+      qrPayload: payload,
+      token,
+      expiryTime
+    };
+
+    const io = req.app.get('socketio');
+    if (io) {
+      io.emit('session_created', sessionPayload);
+    }
+
+    res.status(201).json({
+      message: 'Attendance session created successfully linked to timetable slot',
+      session: {
+        id,
+        subject,
+        department,
+        year,
+        section,
+        period: period_number,
+        faculty: faculty_name,
+        date,
+        room: room_number || 'F305',
+        start_time: startTime.toISOString(),
+        expiry_time: expiryTime.toISOString(),
+        duration_minutes: duration,
+        attendance_code: payload.nonce,
+        status: 'active'
+      },
+      qrPayload: payload,
+      token
+    });
+  }
+
   db.run(
     query,
     [
@@ -234,54 +281,45 @@ function createSession(req, res) {
     ],
     function (insertErr) {
       if (insertErr) {
-        console.error('❌ [CREATE SESSION FAILED]', insertErr.message);
-        return res.status(500).json({ error: 'Failed to create attendance session: ' + insertErr.message });
+        console.error('❌ [CREATE SESSION FULL INSERT FAILED, ATTEMPTING AUTO-MIGRATION & FALLBACK]', insertErr.message);
+
+        try {
+          db.run("ALTER TABLE public.attendance_sessions ADD COLUMN IF NOT EXISTS subject_code TEXT;");
+          db.run("ALTER TABLE public.attendance_sessions ADD COLUMN IF NOT EXISTS faculty_id TEXT;");
+          db.run("ALTER TABLE public.attendance_sessions ADD COLUMN IF NOT EXISTS subject_id TEXT;");
+        } catch (e) {}
+
+        const fallbackQuery = `
+          INSERT INTO attendance_sessions (
+            id, subject, department, year, section, 
+            period_number, faculty_name, date,
+            admin_lat, admin_lng, admin_latitude, admin_longitude, 
+            start_time, expiry_time, end_time, duration_minutes, 
+            attendance_code, active_token, token, status
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0.0, 0.0, 0.0, 0.0, ?, ?, ?, ?, ?, ?, ?, 'active')
+        `;
+
+        db.run(
+          fallbackQuery,
+          [
+            id, subject, department, year, section,
+            period_number, faculty_name, date,
+            startTime.toISOString(), expiryTime.toISOString(), expiryTime.toISOString(), duration,
+            payload.nonce, payload.nonce, token
+          ],
+          function (fbErr) {
+            if (fbErr) {
+              console.error('❌ [CREATE SESSION FALLBACK FAILED]', fbErr.message);
+              return res.status(500).json({ error: 'Failed to create attendance session: ' + fbErr.message });
+            }
+            return sendSessionSuccess();
+          }
+        );
+        return;
       }
 
-      console.log(`✅ [TIMETABLE 5s QR SESSION CREATED] ID: ${id}, Subject: ${subject}, Initial Nonce: ${payload.nonce}`);
-
-      const sessionPayload = {
-        sessionId: id,
-        subject,
-        department,
-        year,
-        section,
-        period: period_number,
-        faculty: faculty_name,
-        date,
-        room: room_number || 'F305',
-        attendanceCode: payload.nonce,
-        qrPayload: payload,
-        token,
-        expiryTime
-      };
-
-      const io = req.app.get('socketio');
-      if (io) {
-        io.emit('session_created', sessionPayload);
-      }
-
-      res.status(201).json({
-        message: 'Attendance session created successfully linked to timetable slot',
-        session: {
-          id,
-          subject,
-          department,
-          year,
-          section,
-          period: period_number,
-          faculty: faculty_name,
-          date,
-          room: room_number || 'F305',
-          start_time: startTime.toISOString(),
-          expiry_time: expiryTime.toISOString(),
-          duration_minutes: duration,
-          attendance_code: payload.nonce,
-          status: 'active'
-        },
-        qrPayload: payload,
-        token
-      });
+      sendSessionSuccess();
     }
   );
 }

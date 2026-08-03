@@ -28,7 +28,22 @@ const PREDEFINED_100_TOKENS = [
  */
 function runMigrations() {
   return new Promise((resolve) => {
-    console.log('[DATABASE MIGRATION] Inspecting SQLite tables and schema versioning...');
+    console.log('[DATABASE MIGRATION] Inspecting database tables and schema versioning...');
+
+    // Run direct PostgreSQL ALTER TABLE statements for Supabase compatibility
+    const pgAlterStatements = [
+      "ALTER TABLE public.attendance_sessions ADD COLUMN IF NOT EXISTS subject_code TEXT;",
+      "ALTER TABLE public.attendance_sessions ADD COLUMN IF NOT EXISTS faculty_id TEXT;",
+      "ALTER TABLE public.attendance_sessions ADD COLUMN IF NOT EXISTS subject_id TEXT;",
+      "ALTER TABLE public.attendance_sessions ADD COLUMN IF NOT EXISTS faculty_name TEXT;",
+      "ALTER TABLE public.attendance_sessions ADD COLUMN IF NOT EXISTS period_number TEXT;",
+      "ALTER TABLE public.attendance_sessions ADD COLUMN IF NOT EXISTS date TEXT;"
+    ];
+    pgAlterStatements.forEach((stmt) => {
+      try {
+        db.run(stmt, () => {});
+      } catch (e) {}
+    });
 
     // 1. Migrate users table columns if missing
     db.all('PRAGMA table_info(users)', [], (errUser, userColumns) => {

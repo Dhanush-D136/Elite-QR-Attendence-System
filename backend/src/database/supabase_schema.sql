@@ -81,6 +81,9 @@ CREATE TABLE IF NOT EXISTS public.attendance_sessions (
 
 ALTER TABLE public.attendance_sessions ADD COLUMN IF NOT EXISTS period_number TEXT;
 ALTER TABLE public.attendance_sessions ADD COLUMN IF NOT EXISTS faculty_name TEXT;
+ALTER TABLE public.attendance_sessions ADD COLUMN IF NOT EXISTS faculty_id TEXT;
+ALTER TABLE public.attendance_sessions ADD COLUMN IF NOT EXISTS subject_code TEXT;
+ALTER TABLE public.attendance_sessions ADD COLUMN IF NOT EXISTS subject_id TEXT;
 ALTER TABLE public.attendance_sessions ADD COLUMN IF NOT EXISTS date TEXT;
 ALTER TABLE public.attendance_sessions ENABLE ROW LEVEL SECURITY;
 CREATE INDEX IF NOT EXISTS idx_sessions_dept_sec ON public.attendance_sessions(department, year, section);
