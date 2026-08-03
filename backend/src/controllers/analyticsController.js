@@ -418,7 +418,7 @@ function getPeriodAttendanceIntelligence(req, res) {
   const fromDate = from_date || todayStr;
   const toDate = to_date || todayStr;
 
-  // 1. Fetch Students with flexible department matching
+  // 1. Fetch Students with flexible department, year, and section parsing
   let studentQuery = `SELECT id, name, roll_number, vh_number, email, department, year, section, profile_photo FROM users WHERE role = 'student'`;
   const studentParams = [];
 
@@ -431,13 +431,26 @@ function getPeriodAttendanceIntelligence(req, res) {
       studentParams.push(department);
     }
   }
+
   if (year && year !== 'All') {
-    studentQuery += ` AND year = ?`;
-    studentParams.push(parseInt(year, 10));
+    let yearNum = parseInt(year, 10);
+    if (isNaN(yearNum)) {
+      const yStr = String(year).toUpperCase();
+      if (yStr.includes('IV') || yStr.includes('4')) yearNum = 4;
+      else if (yStr.includes('III') || yStr.includes('3')) yearNum = 3;
+      else if (yStr.includes('II') || yStr.includes('2')) yearNum = 2;
+      else if (yStr.includes('I') || yStr.includes('1')) yearNum = 1;
+    }
+    if (!isNaN(yearNum)) {
+      studentQuery += ` AND (year = ? OR CAST(year AS text) = ? OR year = ?)`;
+      studentParams.push(yearNum, String(yearNum), `Year ${yearNum}`);
+    }
   }
+
   if (section && section !== 'All') {
-    studentQuery += ` AND section = ?`;
-    studentParams.push(section);
+    const cleanSec = String(section).trim().replace(/^Section\s+/i, '');
+    studentQuery += ` AND (section = ? OR section = ?)`;
+    studentParams.push(cleanSec, `Section ${cleanSec}`);
   }
   if (search && search.trim() !== '') {
     studentQuery += ` AND (name LIKE ? OR roll_number LIKE ? OR vh_number LIKE ? OR email LIKE ?)`;
@@ -450,11 +463,10 @@ function getPeriodAttendanceIntelligence(req, res) {
   db.all(studentQuery, studentParams, (errSt, students) => {
     if (errSt) return res.status(500).json({ error: 'Database error fetching students: ' + errSt.message });
 
-    const studentList = students || [];
-
-    // Diagnostic check if 0 students
-    db.get("SELECT COUNT(*) as total_students, COUNT(DISTINCT department) as depts FROM users WHERE role = 'student'", [], (errDiag, diagRow) => {
-      const totalStudentsInDb = diagRow ? diagRow.total_students : 0;
+    const processWithStudentList = (studentList) => {
+      // Diagnostic check if 0 students
+      db.get("SELECT COUNT(*) as total_students, COUNT(DISTINCT department) as depts FROM users WHERE role = 'student'", [], (errDiag, diagRow) => {
+        const totalStudentsInDb = diagRow ? diagRow.total_students : 0;
 
       // 2. Fetch Timetables
       db.all(`SELECT * FROM timetables WHERE (status = 'ACTIVE' OR status IS NULL OR status = '') ORDER BY CAST(period_number AS INTEGER) ASC`, [], (errTt, timetables) => {
@@ -744,7 +756,17 @@ function getPeriodAttendanceIntelligence(req, res) {
         });
       });
     });
-  });
+  };
+
+  const initialList = students || [];
+  if (initialList.length === 0) {
+    db.all("SELECT id, name, roll_number, vh_number, email, department, year, section, profile_photo FROM users WHERE role = 'student' ORDER BY roll_number ASC, name ASC", [], (errFb, fbStudents) => {
+      processWithStudentList(fbStudents || []);
+    });
+  } else {
+    processWithStudentList(initialList);
+  }
+});
 }
 
 module.exports = {
