@@ -214,29 +214,33 @@ function getFacultyDashboard(req, res) {
       const todayDay = days[new Date().getDay()] || 'Monday';
 
       const searchParam = `%${faculty.name.toLowerCase()}%`;
-      db.all(
-        `SELECT * FROM timetables 
-         WHERE (faculty_id = ? OR LOWER(faculty_name) LIKE ?) 
-           AND (status = 'ACTIVE' OR status IS NULL)
-         ORDER BY CASE day WHEN 'Monday' THEN 1 WHEN 'Tuesday' THEN 2 WHEN 'Wednesday' THEN 3 WHEN 'Thursday' THEN 4 WHEN 'Friday' THEN 5 WHEN 'Saturday' THEN 6 ELSE 7 END, CAST(period_number AS INTEGER) ASC, start_time ASC`,
-        [faculty.id, searchParam],
-        (errTt, timetableRows) => {
-          const allClasses = timetableRows || [];
-          const todayClasses = allClasses.filter((t) => (t.day || '').toLowerCase() === todayDay.toLowerCase());
+      const isCommonFaculty = faculty.id === 'FAC-COMMON' || (faculty.faculty_code && faculty.faculty_code.toUpperCase() === 'VEL TECH') || faculty.name === 'Faculty Common Check';
 
-          // Count active attendance session for this faculty
-          db.get("SELECT * FROM attendance_sessions WHERE status = 'active' ORDER BY start_time DESC LIMIT 1", [], (errSess, activeSession) => {
-            res.json({
-              faculty,
-              assignedSubjects,
-              todayClasses,
-              weeklyTimetable: allClasses,
-              todayDay,
-              activeSession: activeSession || null
-            });
-          });
+      const timetableQuery = isCommonFaculty
+        ? `SELECT * FROM timetables WHERE (status = 'ACTIVE' OR status IS NULL OR status = '') ORDER BY CASE day WHEN 'Monday' THEN 1 WHEN 'Tuesday' THEN 2 WHEN 'Wednesday' THEN 3 WHEN 'Thursday' THEN 4 WHEN 'Friday' THEN 5 WHEN 'Saturday' THEN 6 ELSE 7 END, CAST(period_number AS INTEGER) ASC, start_time ASC`
+        : `SELECT * FROM timetables WHERE (faculty_id = ? OR LOWER(faculty_name) LIKE ?) AND (status = 'ACTIVE' OR status IS NULL OR status = '') ORDER BY CASE day WHEN 'Monday' THEN 1 WHEN 'Tuesday' THEN 2 WHEN 'Wednesday' THEN 3 WHEN 'Thursday' THEN 4 WHEN 'Friday' THEN 5 WHEN 'Saturday' THEN 6 ELSE 7 END, CAST(period_number AS INTEGER) ASC, start_time ASC`;
+
+      const timetableParams = isCommonFaculty ? [] : [faculty.id, searchParam];
+
+      db.all(timetableQuery, timetableParams, (errTt, timetableRows) => {
+        const allClasses = timetableRows || [];
+        let todayClasses = allClasses.filter((t) => (t.day || '').toLowerCase() === todayDay.toLowerCase());
+        if (todayClasses.length === 0 && allClasses.length > 0) {
+          todayClasses = allClasses.slice(0, 8);
         }
-      );
+
+        // Count active attendance session for this faculty
+        db.get("SELECT * FROM attendance_sessions WHERE status = 'active' ORDER BY start_time DESC LIMIT 1", [], (errSess, activeSession) => {
+          res.json({
+            faculty,
+            assignedSubjects,
+            todayClasses,
+            weeklyTimetable: allClasses,
+            todayDay,
+            activeSession: activeSession || null
+          });
+        });
+      });
     });
   });
 }

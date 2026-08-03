@@ -486,14 +486,15 @@ function getFacultyTimetable(req, res) {
     const matchedName = fac ? fac.name : facultyName;
     const searchParam = matchedName ? `%${matchedName.toLowerCase()}%` : '%';
 
-    const sql = `
-      SELECT * FROM timetables 
-      WHERE (faculty_id = ? OR LOWER(faculty_name) LIKE ? OR faculty_id = ? OR LOWER(faculty_name) = LOWER(?))
-        AND (status = 'ACTIVE' OR status IS NULL OR status = '')
-      ORDER BY CASE day WHEN 'Monday' THEN 1 WHEN 'Tuesday' THEN 2 WHEN 'Wednesday' THEN 3 WHEN 'Thursday' THEN 4 WHEN 'Friday' THEN 5 WHEN 'Saturday' THEN 6 ELSE 7 END, CAST(period_number AS INTEGER) ASC, start_time ASC
-    `;
+    const isCommon = facultyId === 'FAC-COMMON' || (fac && fac.faculty_code === 'VEL TECH') || (req.user && (req.user.faculty_code === 'VEL TECH' || req.user.name === 'Faculty Common Check'));
 
-    db.all(sql, [facultyId, searchParam, fac ? fac.id : facultyId, matchedName], (errTt, timetables) => {
+    const sql = isCommon
+      ? `SELECT * FROM timetables WHERE (status = 'ACTIVE' OR status IS NULL OR status = '') ORDER BY CASE day WHEN 'Monday' THEN 1 WHEN 'Tuesday' THEN 2 WHEN 'Wednesday' THEN 3 WHEN 'Thursday' THEN 4 WHEN 'Friday' THEN 5 WHEN 'Saturday' THEN 6 ELSE 7 END, CAST(period_number AS INTEGER) ASC, start_time ASC`
+      : `SELECT * FROM timetables WHERE (faculty_id = ? OR LOWER(faculty_name) LIKE ? OR faculty_id = ? OR LOWER(faculty_name) = LOWER(?)) AND (status = 'ACTIVE' OR status IS NULL OR status = '') ORDER BY CASE day WHEN 'Monday' THEN 1 WHEN 'Tuesday' THEN 2 WHEN 'Wednesday' THEN 3 WHEN 'Thursday' THEN 4 WHEN 'Friday' THEN 5 WHEN 'Saturday' THEN 6 ELSE 7 END, CAST(period_number AS INTEGER) ASC, start_time ASC`;
+
+    const sqlParams = isCommon ? [] : [facultyId, searchParam, fac ? fac.id : facultyId, matchedName];
+
+    db.all(sql, sqlParams, (errTt, timetables) => {
       if (errTt) return res.status(500).json({ error: 'Database error fetching faculty timetable: ' + errTt.message });
       finishFacultyResponse(res, facultyId, matchedName, timetables || []);
     });
