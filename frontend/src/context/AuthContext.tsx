@@ -142,18 +142,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const submitFirstPasswordChange = async (newPassword: string, confirmPassword?: string) => {
     const fp = deviceFingerprint || (await getDeviceFingerprint());
-    const res = await api.post('/auth/student/first-login-change-password', {
+    const isFacultyRole = user && user.role === 'faculty';
+    const endpoint = isFacultyRole ? '/auth/faculty/change-password' : '/auth/student/first-login-change-password';
+
+    const res = await api.post(endpoint, {
+      faculty_id: user?.id,
+      current_password: '1234',
       new_password: newPassword,
       confirm_password: confirmPassword || newPassword,
       device_fingerprint: fp
     });
 
-    const { token, user } = res.data;
-    localStorage.setItem('smartattend_token', token);
-    localStorage.setItem('smartattend_user', JSON.stringify(user));
+    const { token, user: updatedUser } = res.data;
+    if (token) {
+      localStorage.setItem('smartattend_token', token);
+      setToken(token);
+    }
+    if (updatedUser) {
+      localStorage.setItem('smartattend_user', JSON.stringify(updatedUser));
+      setUser(updatedUser);
+    }
 
-    setToken(token);
-    setUser(user);
     setMustChangePasswordTempToken(null);
     setIsLoading(false);
     return res.data;

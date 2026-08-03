@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { KeyRound, ShieldAlert, CheckCircle2, Lock, Smartphone } from 'lucide-react';
 
 export const FirstLoginModal: React.FC = () => {
-  const { submitFirstPasswordChange, deviceFingerprint } = useAuth();
+  const { user, submitFirstPasswordChange, deviceFingerprint } = useAuth();
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
@@ -44,7 +44,7 @@ export const FirstLoginModal: React.FC = () => {
           </div>
           <h2 className="font-display font-extrabold text-2xl text-[#111827]">Set New Password</h2>
           <div className="p-3 rounded-2xl bg-[#F3F0FF] border border-[#6D5DFC]/20 text-[#6D5DFC] text-xs font-semibold leading-relaxed">
-            Welcome! Please set a new password for your student account to continue.
+            Welcome! Please set a new password for your {user?.role === 'faculty' ? 'faculty' : 'student'} account to continue.
           </div>
         </div>
 
