@@ -112,6 +112,9 @@ function runMigrations() {
           { col: 'created_at', type: 'DATETIME' },
           { col: 'period_number', type: 'TEXT' },
           { col: 'faculty_name', type: 'TEXT' },
+          { col: 'faculty_id', type: 'TEXT' },
+          { col: 'subject_code', type: 'TEXT' },
+          { col: 'subject_id', type: 'TEXT' },
           { col: 'date', type: 'TEXT' }
         ];
 

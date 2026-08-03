@@ -203,24 +203,32 @@ function createSession(req, res) {
     }
   }
 
+  const faculty_id = (req.user && req.user.role === 'faculty') ? req.user.id : (req.body.faculty_id || null);
+  if (req.user && req.user.role === 'faculty' && req.user.name) {
+    faculty_name = req.user.name;
+  } else {
+    faculty_name = faculty_name || (req.user ? req.user.name : 'Faculty Member');
+  }
+  const cleanSubjectCode = subject_code || req.body.code || '';
+
   const { token, payload } = generateAndCacheLatestQR(id, subject, faculty_name);
 
   const query = `
     INSERT INTO attendance_sessions (
-      id, subject, department, year, section, 
-      period_number, faculty_name, date,
+      id, subject, subject_code, faculty_id, faculty_name, department, year, section, 
+      period_number, date,
       admin_lat, admin_lng, admin_latitude, admin_longitude, 
       start_time, expiry_time, end_time, duration_minutes, 
       attendance_code, active_token, token, status
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0.0, 0.0, 0.0, 0.0, ?, ?, ?, ?, ?, ?, ?, 'active')
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0.0, 0.0, 0.0, 0.0, ?, ?, ?, ?, ?, ?, ?, 'active')
   `;
 
   db.run(
     query,
     [
-      id, subject, department, year, section,
-      period_number, faculty_name, date,
+      id, subject, cleanSubjectCode, faculty_id, faculty_name, department, year, section,
+      period_number, date,
       startTime.toISOString(), expiryTime.toISOString(), expiryTime.toISOString(), duration,
       payload.nonce, payload.nonce, token
     ],

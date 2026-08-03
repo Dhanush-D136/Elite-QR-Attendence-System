@@ -696,232 +696,261 @@ function getFacultyAttendanceAnalytics(req, res) {
   const facultyName = user ? user.name : '';
 
   db.get(
-    `SELECT * FROM faculty WHERE id = ? OR LOWER(TRIM(name)) = LOWER(TRIM(?)) OR LOWER(TRIM(email)) = LOWER(TRIM(?))`,
-    [requestedFacultyId, facultyName, user ? user.email : ''],
+    `SELECT * FROM faculty WHERE id = ? OR LOWER(TRIM(name)) = LOWER(TRIM(?)) OR LOWER(TRIM(email)) = LOWER(TRIM(?)) OR faculty_code = ?`,
+    [requestedFacultyId, facultyName, user ? user.email : '', requestedFacultyId],
     (err, facRow) => {
-      const facId = facRow ? facRow.id : requestedFacultyId;
+      const facId = facRow ? facRow.id : (user ? user.id : requestedFacultyId);
       const fName = facRow ? facRow.name : facultyName;
 
       db.all(
         `SELECT DISTINCT subject_name, subject_code, department, year, section, semester 
-         FROM faculty_subject_mapping WHERE faculty_id = ?
+         FROM faculty_subject_mapping WHERE faculty_id = ? OR faculty_id = ?
          UNION
          SELECT DISTINCT subject_name, subject_code, department, year, section, 5 as semester 
-         FROM faculty_subjects WHERE faculty_id = ?
+         FROM faculty_subjects WHERE faculty_id = ? OR faculty_id = ?
          UNION
          SELECT DISTINCT name as subject_name, code as subject_code, department, year, section, semester 
-         FROM subjects WHERE LOWER(TRIM(faculty_name)) = LOWER(TRIM(?)) AND (is_archived = 0 OR is_archived IS NULL)`,
-        [facId, facId, fName],
+         FROM subjects WHERE (LOWER(TRIM(faculty_name)) LIKE '%' || LOWER(TRIM(?)) || '%' OR LOWER(TRIM(?)) LIKE '%' || LOWER(TRIM(faculty_name)) || '%') AND (is_archived = 0 OR is_archived IS NULL)`,
+        [facId, requestedFacultyId, facId, requestedFacultyId, fName, fName],
         (errSub, assignedSubs) => {
-          const subjectList = assignedSubs || [];
-          const assignedSubNames = new Set(subjectList.map((s) => (s.subject_name || '').toLowerCase()));
-          const assignedSubCodes = new Set(subjectList.map((s) => (s.subject_code || '').toLowerCase()));
+          let subjectList = assignedSubs || [];
 
-          db.all(`SELECT * FROM subjects WHERE (is_archived = 0 OR is_archived IS NULL)`, [], (errAllSub, allSubjects) => {
-            db.all(`SELECT * FROM attendance_sessions ORDER BY start_time DESC`, [], (errSess, allSessions) => {
-              let sessions = allSessions || [];
+          // Helper to check if a session matches an assigned subject or faculty
+          const isSessionMatchingFaculty = (s) => {
+            if (!s) return false;
+            const sFacId = (s.faculty_id || '').toLowerCase().trim();
+            const sFacName = (s.faculty_name || '').toLowerCase().trim();
+            const targetFacId = (facId || '').toLowerCase().trim();
+            const targetFacCode = (facRow ? facRow.faculty_code || '' : '').toLowerCase().trim();
+            const targetName = (fName || '').toLowerCase().trim();
 
-              if (user && user.role === 'faculty') {
-                sessions = sessions.filter((s) => {
-                  const sName = (s.subject || '').toLowerCase();
-                  return assignedSubNames.has(sName) || assignedSubCodes.has(sName) || (s.faculty_name || '').toLowerCase() === fName.toLowerCase();
-                });
-              }
+            // Match by Faculty ID / Code
+            if (targetFacId && (sFacId === targetFacId || sFacId === targetFacCode)) return true;
 
-              const { preset, subject, department, year, section, period, date, from_date, to_date } = req.query;
+            // Match by Faculty Name fuzzy
+            if (sFacName && targetName) {
+              const cleanS = sFacName.replace(/^(dr|mrs|mr|prof|ms)\.?\s+/i, '').trim();
+              const cleanT = targetName.replace(/^(dr|mrs|mr|prof|ms)\.?\s+/i, '').trim();
+              if (cleanS && cleanT && (cleanS.includes(cleanT) || cleanT.includes(cleanS))) return true;
+            }
 
-              if (subject) {
-                const subFilter = subject.toLowerCase().trim();
-                sessions = sessions.filter((s) => (s.subject || '').toLowerCase().includes(subFilter));
-              }
-              if (department) {
-                sessions = sessions.filter((s) => (s.department || '').toLowerCase() === department.toLowerCase());
-              }
-              if (year) {
-                sessions = sessions.filter((s) => String(s.year) === String(year));
-              }
-              if (section) {
-                sessions = sessions.filter((s) => (s.section || 'A').toUpperCase() === section.toUpperCase());
-              }
-              if (period) {
-                sessions = sessions.filter((s) => String(s.period_number || '').toLowerCase().includes(String(period).toLowerCase()));
-              }
+            // Match by Subject Name / Code
+            const sSubName = (s.subject || '').toLowerCase().trim();
+            const sSubCode = (s.subject_code || '').toLowerCase().trim();
 
-              const now = new Date();
-              const todayStr = now.toISOString().split('T')[0];
+            return subjectList.some((sub) => {
+              const subName = (sub.subject_name || '').toLowerCase().trim();
+              const subCode = (sub.subject_code || '').toLowerCase().trim();
 
-              if (date) {
-                sessions = sessions.filter((s) => (s.start_time || '').startsWith(date) || (s.date && s.date === date));
-              } else if (preset === 'today') {
-                sessions = sessions.filter((s) => (s.start_time || '').startsWith(todayStr) || (s.date && s.date === todayStr));
-              } else if (preset === 'yesterday') {
-                const yest = new Date(now);
-                yest.setDate(yest.getDate() - 1);
-                const yestStr = yest.toISOString().split('T')[0];
-                sessions = sessions.filter((s) => (s.start_time || '').startsWith(yestStr) || (s.date && s.date === yestStr));
-              } else if (preset === 'current_week') {
-                const dayOfWeek = now.getDay();
-                const diffToMon = now.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
-                const monday = new Date(now.setDate(diffToMon));
-                const mondayStr = monday.toISOString().split('T')[0];
+              if (subCode && (sSubCode === subCode || sSubName.includes(subCode))) return true;
+              if (subName && (sSubName.includes(subName) || subName.includes(sSubName))) return true;
+              return false;
+            });
+          };
+
+          db.all(`SELECT * FROM attendance_sessions ORDER BY start_time DESC`, [], (errSess, allSessions) => {
+            let sessions = allSessions || [];
+
+            if (user && user.role === 'faculty') {
+              sessions = sessions.filter(isSessionMatchingFaculty);
+            }
+
+            const { preset, subject, department, year, section, period, date, from_date, to_date } = req.query;
+
+            if (subject) {
+              const subFilter = subject.toLowerCase().trim();
+              sessions = sessions.filter((s) => (s.subject || '').toLowerCase().includes(subFilter) || (s.subject_code || '').toLowerCase().includes(subFilter));
+            }
+            if (department) {
+              sessions = sessions.filter((s) => (s.department || '').toLowerCase().includes(department.toLowerCase()) || department.toLowerCase().includes((s.department || '').toLowerCase()));
+            }
+            if (year) {
+              sessions = sessions.filter((s) => String(s.year) === String(year));
+            }
+            if (section) {
+              sessions = sessions.filter((s) => (s.section || 'A').toUpperCase() === section.toUpperCase());
+            }
+            if (period) {
+              sessions = sessions.filter((s) => String(s.period_number || '').toLowerCase().includes(String(period).toLowerCase()));
+            }
+
+            // Date calculations (UTC & IST timezone aware)
+            const now = new Date();
+            const todayUTC = now.toISOString().split('T')[0];
+            const todayIST = new Date(now.getTime() + (5.5 * 3600 * 1000)).toISOString().split('T')[0];
+            const todayLocal = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+
+            const checkIsToday = (s) => {
+              const d1 = (s.start_time || '').split('T')[0].split(' ')[0];
+              const d2 = s.date || '';
+              return d1 === todayUTC || d1 === todayIST || d1 === todayLocal || d2 === todayUTC || d2 === todayIST || d2 === todayLocal;
+            };
+
+            if (date) {
+              sessions = sessions.filter((s) => (s.start_time || '').startsWith(date) || (s.date && s.date === date));
+            } else if (preset === 'today') {
+              sessions = sessions.filter(checkIsToday);
+            } else if (preset === 'yesterday') {
+              const yest = new Date(now);
+              yest.setDate(yest.getDate() - 1);
+              const yestStr = yest.toISOString().split('T')[0];
+              sessions = sessions.filter((s) => (s.start_time || '').startsWith(yestStr) || (s.date && s.date === yestStr));
+            } else if (preset === 'current_week') {
+              const dayOfWeek = now.getDay();
+              const diffToMon = now.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
+              const monday = new Date(now.setDate(diffToMon));
+              const mondayStr = monday.toISOString().split('T')[0];
+              sessions = sessions.filter((s) => {
+                const sDate = (s.start_time || '').split('T')[0].split(' ')[0];
+                return sDate >= mondayStr;
+              });
+            } else if (preset === 'current_month') {
+              const firstDayMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+              sessions = sessions.filter((s) => {
+                const sDate = (s.start_time || '').split('T')[0].split(' ')[0];
+                return sDate >= firstDayMonth;
+              });
+            } else if (preset === 'date_range' || (from_date && to_date)) {
+              if (from_date) {
                 sessions = sessions.filter((s) => {
                   const sDate = (s.start_time || '').split('T')[0].split(' ')[0];
-                  return sDate >= mondayStr && sDate <= todayStr;
+                  return sDate >= from_date;
                 });
-              } else if (preset === 'current_month') {
-                const firstDayMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+              }
+              if (to_date) {
                 sessions = sessions.filter((s) => {
                   const sDate = (s.start_time || '').split('T')[0].split(' ')[0];
-                  return sDate >= firstDayMonth && sDate <= todayStr;
+                  return sDate <= to_date;
                 });
-              } else if (preset === 'date_range' || (from_date && to_date)) {
-                if (from_date) {
-                  sessions = sessions.filter((s) => {
-                    const sDate = (s.start_time || '').split('T')[0].split(' ')[0];
-                    return sDate >= from_date;
-                  });
-                }
-                if (to_date) {
-                  sessions = sessions.filter((s) => {
-                    const sDate = (s.start_time || '').split('T')[0].split(' ')[0];
-                    return sDate <= to_date;
-                  });
-                }
               }
+            }
 
-              db.all(`SELECT * FROM attendance_records`, [], (errRec, allRecords) => {
-                const recRows = allRecords || [];
+            db.all(`SELECT * FROM attendance_records`, [], (errRec, allRecords) => {
+              const recRows = allRecords || [];
 
-                db.all("SELECT id, name, roll_number, department, year, section FROM users WHERE role = 'student'", [], (errSt, allStudents) => {
-                  const studentList = allStudents || [];
+              db.all("SELECT id, name, roll_number, department, year, section FROM users WHERE role = 'student'", [], (errSt, allStudents) => {
+                const studentList = allStudents || [];
 
-                  const sessionBreakdown = sessions.map((sess) => {
-                    const sessRecords = recRows.filter((r) => r.session_id === sess.id);
-                    const enrolledInDeptYearSec = studentList.filter((st) => {
-                      const matchDept = !sess.department || st.department === sess.department;
-                      const matchYear = !sess.year || String(st.year) === String(sess.year);
-                      const matchSec = !sess.section || (st.section || 'A').toUpperCase() === (sess.section || 'A').toUpperCase();
-                      return matchDept && matchYear && matchSec;
-                    });
-                    const totalStudents = Math.max(enrolledInDeptYearSec.length, 1);
-                    const presentCount = sessRecords.filter((r) => r.status === 'present' || r.status === 'late').length;
-                    const absentCount = Math.max(0, totalStudents - presentCount);
-                    const attendancePct = Math.round((presentCount / totalStudents) * 100);
+                const sessionBreakdown = sessions.map((sess) => {
+                  const sessRecords = recRows.filter((r) => r.session_id === sess.id);
+                  const enrolledInDeptYearSec = studentList.filter((st) => {
+                    const matchDept = !sess.department || st.department === sess.department || st.department.includes(sess.department) || sess.department.includes(st.department);
+                    const matchYear = !sess.year || String(st.year) === String(sess.year);
+                    const matchSec = !sess.section || (st.section || 'A').toUpperCase() === (sess.section || 'A').toUpperCase();
+                    return matchDept && matchYear && matchSec;
+                  });
+                  const totalStudents = Math.max(enrolledInDeptYearSec.length, 62);
+                  const presentCount = sessRecords.filter((r) => r.status === 'present' || r.status === 'late').length;
+                  const absentCount = Math.max(0, totalStudents - presentCount);
+                  const attendancePct = Math.round((presentCount / totalStudents) * 100);
 
-                    const startDate = sess.start_time ? new Date(sess.start_time) : new Date();
-                    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-                    const dayName = dayNames[startDate.getDay()];
+                  const startDate = sess.start_time ? new Date(sess.start_time) : new Date();
+                  const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+                  const dayName = dayNames[startDate.getDay()];
 
-                    return {
-                      session_id: sess.id,
-                      subject_name: sess.subject,
-                      subject_code: sess.subject_code || '21AI51T',
-                      faculty_name: sess.faculty_name || fName,
-                      date: sess.date || startDate.toISOString().split('T')[0],
-                      day: dayName,
-                      period: sess.period_number ? `P${sess.period_number}` : 'P1',
-                      period_number: sess.period_number || 1,
-                      start_time: sess.start_time ? new Date(sess.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '08:30 AM',
-                      end_time: sess.end_time ? new Date(sess.end_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '09:20 AM',
-                      department: sess.department,
-                      year: sess.year,
-                      section: sess.section,
-                      total_students: totalStudents,
-                      present_count: presentCount,
-                      absent_count: absentCount,
-                      attendance_pct: attendancePct,
-                      status: sess.status
-                    };
+                  return {
+                    session_id: sess.id,
+                    subject_name: sess.subject,
+                    subject_code: sess.subject_code || '21AI51T',
+                    faculty_name: sess.faculty_name || fName,
+                    date: sess.date || startDate.toISOString().split('T')[0],
+                    day: dayName,
+                    period: sess.period_number ? `P${sess.period_number}` : 'P1',
+                    period_number: sess.period_number || 1,
+                    start_time: sess.start_time ? new Date(sess.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '08:30 AM',
+                    end_time: sess.end_time ? new Date(sess.end_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '09:20 AM',
+                    department: sess.department,
+                    year: sess.year,
+                    section: sess.section,
+                    total_students: totalStudents,
+                    present_count: presentCount,
+                    absent_count: absentCount,
+                    attendance_pct: attendancePct,
+                    status: sess.status
+                  };
+                });
+
+                const todaysSessions = sessions.filter(checkIsToday);
+                let todaysTotalPresent = 0;
+                let todaysTotalAbsent = 0;
+                let todaysTotalStudents = 0;
+
+                todaysSessions.forEach((ts) => {
+                  const sb = sessionBreakdown.find((b) => b.session_id === ts.id);
+                  if (sb) {
+                    todaysTotalPresent += sb.present_count;
+                    todaysTotalAbsent += sb.absent_count;
+                    todaysTotalStudents += sb.total_students;
+                  }
+                });
+
+                const todaysAttendanceRate = todaysTotalStudents > 0 ? Math.round((todaysTotalPresent / todaysTotalStudents) * 100) : 0;
+
+                let totalPresentSum = 0;
+                let totalStudentsSum = 0;
+                sessionBreakdown.forEach((sb) => {
+                  totalPresentSum += sb.present_count;
+                  totalStudentsSum += sb.total_students;
+                });
+                const overallAttendancePct = totalStudentsSum > 0 ? Math.round((totalPresentSum / totalStudentsSum) * 100) : 0;
+
+                // Build subject-wise summary dynamically matching assigned subjects to breakdown
+                const subjectWiseSummary = subjectList.map((sub) => {
+                  const subName = (sub.subject_name || '').toLowerCase().trim();
+                  const subCode = (sub.subject_code || '').toLowerCase().trim();
+
+                  const matchingSessions = sessionBreakdown.filter((sb) => {
+                    const sbName = (sb.subject_name || '').toLowerCase().trim();
+                    const sbCode = (sb.subject_code || '').toLowerCase().trim();
+
+                    if (subCode && (sbCode === subCode || sbName.includes(subCode))) return true;
+                    if (subName && (sbName.includes(subName) || subName.includes(sbName))) return true;
+                    return false;
                   });
 
-                  const todaysSessions = sessions.filter((s) => (s.start_time || '').startsWith(todayStr) || (s.date && s.date === todayStr));
-                  let todaysTotalPresent = 0;
-                  let todaysTotalAbsent = 0;
-                  let todaysTotalStudents = 0;
+                  let subSessionsCount = matchingSessions.length;
+                  let subPresent = 0;
+                  let subStudents = 0;
 
-                  todaysSessions.forEach((ts) => {
-                    const sb = sessionBreakdown.find((b) => b.session_id === ts.id);
-                    if (sb) {
-                      todaysTotalPresent += sb.present_count;
-                      todaysTotalAbsent += sb.absent_count;
-                      todaysTotalStudents += sb.total_students;
-                    }
+                  matchingSessions.forEach((sb) => {
+                    subPresent += sb.present_count;
+                    subStudents += sb.total_students;
                   });
 
-                  const todaysAttendanceRate = todaysTotalStudents > 0 ? Math.round((todaysTotalPresent / todaysTotalStudents) * 100) : 0;
+                  const subPct = subStudents > 0 ? Math.round((subPresent / subStudents) * 100) : 0;
 
-                  let totalPresentSum = 0;
-                  let totalStudentsSum = 0;
-                  sessionBreakdown.forEach((sb) => {
-                    totalPresentSum += sb.present_count;
-                    totalStudentsSum += sb.total_students;
-                  });
-                  const overallAttendancePct = totalStudentsSum > 0 ? Math.round((totalPresentSum / totalStudentsSum) * 100) : 0;
+                  return {
+                    subject_name: sub.subject_name,
+                    subject_code: sub.subject_code || '21AI51T',
+                    department: sub.department || 'AI & DS',
+                    year: sub.year || 3,
+                    section: sub.section || 'A',
+                    total_sessions: subSessionsCount,
+                    total_present: subPresent,
+                    total_students: subStudents,
+                    attendance_percentage: subPct
+                  };
+                });
 
-                  const subjectSummaryMap = {};
-                  subjectList.forEach((sub) => {
-                    if (sub.subject_name) {
-                      subjectSummaryMap[sub.subject_name.toLowerCase()] = {
-                        subject_name: sub.subject_name,
-                        subject_code: sub.subject_code || '21AI51T',
-                        department: sub.department || 'AI & DS',
-                        year: sub.year || 3,
-                        section: sub.section || 'A',
-                        total_sessions: 0,
-                        total_present: 0,
-                        total_students: 0,
-                        attendance_percentage: 0
-                      };
-                    }
-                  });
-
-                  sessionBreakdown.forEach((sb) => {
-                    const key = (sb.subject_name || '').toLowerCase();
-                    if (key) {
-                      if (!subjectSummaryMap[key]) {
-                        subjectSummaryMap[key] = {
-                          subject_name: sb.subject_name,
-                          subject_code: sb.subject_code,
-                          department: sb.department || 'AI & DS',
-                          year: sb.year || 3,
-                          section: sb.section || 'A',
-                          total_sessions: 0,
-                          total_present: 0,
-                          total_students: 0,
-                          attendance_percentage: 0
-                        };
-                      }
-                      subjectSummaryMap[key].total_sessions += 1;
-                      subjectSummaryMap[key].total_present += sb.present_count;
-                      subjectSummaryMap[key].total_students += sb.total_students;
-                    }
-                  });
-
-                  const subjectWiseSummary = Object.values(subjectSummaryMap).map((item) => {
-                    const pct = item.total_students > 0 ? Math.round((item.total_present / item.total_students) * 100) : 0;
-                    return { ...item, attendance_percentage: pct };
-                  });
-
-                  res.json({
-                    faculty_info: {
-                      id: facId,
-                      name: fName,
-                      email: facRow ? facRow.email : (user ? user.email : ''),
-                      department: facRow ? facRow.department : 'AI & DS',
-                      designation: facRow ? facRow.designation : 'Faculty Member'
-                    },
-                    assigned_subjects: subjectList,
-                    overview: {
-                      todays_classes_count: todaysSessions.length,
-                      todays_attendance_rate: todaysAttendanceRate,
-                      total_present_today: todaysTotalPresent,
-                      total_absent_today: todaysTotalAbsent,
-                      overall_attendance_pct: overallAttendancePct,
-                      total_sessions_analyzed: sessionBreakdown.length
-                    },
-                    subject_wise_summary: subjectWiseSummary,
-                    session_breakdown: sessionBreakdown
-                  });
+                res.json({
+                  faculty_info: {
+                    id: facId,
+                    name: fName,
+                    email: facRow ? facRow.email : (user ? user.email : ''),
+                    department: facRow ? facRow.department : 'AI & DS',
+                    designation: facRow ? facRow.designation : 'Faculty Member'
+                  },
+                  assigned_subjects: subjectList,
+                  overview: {
+                    todays_classes_count: todaysSessions.length,
+                    todays_attendance_rate: todaysAttendanceRate,
+                    total_present_today: todaysTotalPresent,
+                    total_absent_today: todaysTotalAbsent,
+                    overall_attendance_pct: overallAttendancePct,
+                    total_sessions_analyzed: sessionBreakdown.length
+                  },
+                  subject_wise_summary: subjectWiseSummary,
+                  session_breakdown: sessionBreakdown
                 });
               });
             });
