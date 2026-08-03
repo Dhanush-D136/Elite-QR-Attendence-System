@@ -167,7 +167,9 @@ function markAttendance(req, res) {
               distance_meters: 0,
               attendance_code: parsedNonce,
               status: 'present',
-              subject: session.subject
+              subject: session.subject,
+              period_number: session.period_number,
+              date: session.date || attendanceTime.split('T')[0]
             };
 
             // 6. Emit Real-Time WebSockets for Instant Sync Across All Dashboards
@@ -215,7 +217,7 @@ function getStudentHistory(req, res) {
   const studentId = req.user.id;
 
   const query = `
-    SELECT ar.*, s.subject, s.department, s.year, s.section, s.start_time as session_start
+    SELECT ar.*, s.subject, s.department, s.year, s.section, s.period_number, s.date as session_date, s.start_time as session_start
     FROM attendance_records ar
     JOIN attendance_sessions s ON ar.session_id = s.id
     WHERE ar.student_id = ?

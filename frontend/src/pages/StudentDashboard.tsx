@@ -41,9 +41,13 @@ export const StudentDashboard: React.FC = () => {
     fetchData();
 
     const socket = getSocket();
-    const handleAttendanceMarked = (data: { record: AttendanceRecord }) => {
-      if (data.record && data.record.student_id === user?.id) {
-        setHistory((prev) => [data.record, ...prev]);
+    const handleAttendanceMarked = (data: any) => {
+      const rec = data?.record || data;
+      if (rec && (rec.student_id === user?.id || !rec.student_id)) {
+        setHistory((prev) => {
+          if (prev.some((r) => r.id === rec.id)) return prev;
+          return [rec, ...prev];
+        });
         fetchData();
       }
     };
@@ -86,32 +90,79 @@ export const StudentDashboard: React.FC = () => {
   };
   const todayDayOrderLabel = dayOrderMap[todayName] || todayName;
 
-  // Today's classes filtering
+  // Helper to format date string to YYYY-MM-DD
+  const getLocalDateStr = (val?: string | Date) => {
+    if (!val) {
+      const d = new Date();
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const dayNum = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${dayNum}`;
+    }
+    if (typeof val === 'string') {
+      if (val.includes('T')) return val.split('T')[0];
+      if (val.includes(' ')) return val.split(' ')[0];
+      return val;
+    }
+    const y = val.getFullYear();
+    const m = String(val.getMonth() + 1).padStart(2, '0');
+    const dayNum = String(val.getDate()).padStart(2, '0');
+    return `${y}-${m}-${dayNum}`;
+  };
+
+  const todayStr = getLocalDateStr();
+
+  // Today's classes filtering from timetable
   const todaysClasses = timetables.filter((t) => (t.day || '').toLowerCase() === todayName.toLowerCase());
+  const todaysClassesSorted = [...todaysClasses].sort((a, b) => (Number(a.period_number) || 0) - (Number(b.period_number) || 0));
 
+  // 1. Scheduled periods today from timetable
+  const todayScheduledPeriods = todaysClassesSorted.length;
+
+  // 2. Distinct attended periods today (student_id + date + period_number)
+  const todayAttendedPeriodSet = new Set<string>();
+  history.forEach((h: any) => {
+    const isPresent = h.status === 'present' || h.status === 'late';
+    if (!isPresent) return;
+
+    const recDate = getLocalDateStr(h.attendance_time || h.session_date || h.date);
+    if (recDate === todayStr) {
+      let pNum = h.period_number ? String(h.period_number) : null;
+      if (!pNum && h.subject) {
+        const matched = todaysClassesSorted.find(
+          (c) => (c.subject_name || c.subject || '').toLowerCase() === (h.subject || '').toLowerCase()
+        );
+        if (matched && matched.period_number) {
+          pNum = String(matched.period_number);
+        }
+      }
+      const periodKey = pNum || h.session_id || h.id;
+      todayAttendedPeriodSet.add(periodKey);
+    }
+  });
+
+  const todayAttendedPeriods = todayAttendedPeriodSet.size;
+  const todayMissedPeriods = Math.max(0, todayScheduledPeriods - todayAttendedPeriods);
+
+  // Overall & Period-level attendance metrics
   const totalClasses = history.length;
-  const presentClasses = history.filter((h) => h.status === 'present' || h.status === 'late').length;
-  const missedClasses = Math.max(0, totalClasses - presentClasses);
-  
-  // Attendance % formula: Present / Total * 100. If total = 0, display --
-  const attendanceRate = totalClasses > 0 ? Math.round((presentClasses / totalClasses) * 100) : null;
-  const isPresentToday = history.some(
-    (h) => new Date(h.attendance_time).toDateString() === new Date().toDateString()
-  );
+  const presentClasses = todayAttendedPeriods;
+  const missedClasses = todayMissedPeriods;
 
-  const streak = isPresentToday ? Math.max(1, presentClasses) : Math.min(presentClasses, 3);
+  const attendanceRate = spellData ? spellData.spellPercentage : (totalClasses > 0 ? Math.round((presentClasses / Math.max(1, todayScheduledPeriods)) * 100) : null);
+  const isPresentToday = todayAttendedPeriods > 0;
+  const streak = spellData?.activeStreak || (isPresentToday ? 1 : 0);
 
   // Recovery Calculator logic for overall attendance
   const requiredPct = 75;
   let classesNeededForRecovery = 0;
   if (totalClasses > 0 && attendanceRate !== null && attendanceRate < requiredPct) {
-    // (P + x) / (T + x) >= 0.75 => P + x >= 0.75 T + 0.75 x => 0.25 x >= 0.75 T - P => x >= 3 T - 4 P
-    classesNeededForRecovery = Math.max(0, Math.ceil(3 * totalClasses - 4 * presentClasses));
+    classesNeededForRecovery = Math.max(0, Math.ceil(3 * todayScheduledPeriods - 4 * presentClasses));
   }
 
   // Defaulter classification
   let defaulterStatus = '--';
-  let defaulterColor = 'bg-slate-50 text-slate-600 border-slate-200';
+  let defaulterColor = 'bg-slate-50 text-[#12B76A] border-[#12B76A]/20';
   if (attendanceRate !== null) {
     if (attendanceRate >= 75) {
       defaulterStatus = 'Safe (>=75%)';
@@ -142,8 +193,6 @@ export const StudentDashboard: React.FC = () => {
     if (isAM && h === 12) h = 0;
     return h * 60 + m;
   };
-
-  const todaysClassesSorted = [...todaysClasses].sort((a, b) => (Number(a.period_number) || 0) - (Number(b.period_number) || 0));
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -387,13 +436,17 @@ export const StudentDashboard: React.FC = () => {
                 const sMins = parseTime(item.start_time);
                 const eMins = parseTime(item.end_time);
                 const isActive = nowMins >= sMins && nowMins <= eMins;
+                const pNumStr = String(item.period_number || idx + 1);
+                const isAttended = todayAttendedPeriodSet.has(pNumStr) || todayAttendedPeriodSet.has(item.id || '');
 
                 return (
                   <div
                     key={idx}
                     className={`p-4 rounded-2xl border transition-all space-y-2 relative overflow-hidden ${
-                      isActive
-                        ? 'bg-[#ECFDF5]/60 border-[#12B76A]/40 shadow-sm'
+                      isAttended
+                        ? 'bg-[#ECFDF5]/80 border-[#12B76A]/40 shadow-sm'
+                        : isActive
+                        ? 'bg-[#F3F0FF]/60 border-[#6D5DFC]/40 shadow-sm'
                         : 'bg-[#FAFAFA] border-[#E7E7E7] hover:border-[#6D5DFC]/40'
                     }`}
                   >
@@ -402,11 +455,15 @@ export const StudentDashboard: React.FC = () => {
                         <span className="text-[10px] font-mono font-extrabold text-[#6D5DFC] px-2.5 py-0.5 rounded-full bg-[#F3F0FF] border border-[#6D5DFC]/20">
                           P{item.period_number || idx + 1}
                         </span>
-                        {isActive && (
+                        {isAttended ? (
+                          <span className="px-2 py-0.5 rounded-full bg-[#ECFDF5] text-[#12B76A] border border-[#12B76A]/30 font-mono font-extrabold text-[9px] uppercase tracking-wider flex items-center gap-1">
+                            <CheckCircle2 className="w-3 h-3 text-[#12B76A]" /> ATTENDED
+                          </span>
+                        ) : isActive ? (
                           <span className="px-2 py-0.5 rounded-full bg-[#12B76A] text-white font-mono font-extrabold text-[9px] uppercase tracking-wider animate-pulse">
                             ● ACTIVE NOW
                           </span>
-                        )}
+                        ) : null}
                       </div>
 
                       <span className="text-[11px] font-mono text-[#6B7280] font-bold flex items-center gap-1">

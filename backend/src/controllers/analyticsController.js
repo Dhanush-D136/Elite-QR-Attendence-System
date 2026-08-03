@@ -248,21 +248,22 @@ function getReportsData(req, res) {
               };
             });
 
-            // Overall student stats
+            // Overall student stats (Deduplicated by distinct period / session)
             const studentAttendanceMap = {};
             students.forEach((st) => {
-              studentAttendanceMap[st.id] = { attended: 0, total: sessionList.length };
+              studentAttendanceMap[st.id] = new Set();
             });
             records.forEach((rec) => {
               if ((rec.status === 'present' || rec.status === 'late') && studentAttendanceMap[rec.student_id]) {
-                studentAttendanceMap[rec.student_id].attended += 1;
+                const key = rec.session_id || `${(rec.attendance_time || '').split('T')[0]}_${rec.period_number || rec.id}`;
+                studentAttendanceMap[rec.student_id].add(key);
               }
             });
 
             const studentStats = students.map((st) => {
-              const stData = studentAttendanceMap[st.id] || { attended: 0, total: sessionList.length };
+              const attendedCount = (studentAttendanceMap[st.id] || new Set()).size;
               const totalSess = sessionList.length;
-              const pct = totalSess > 0 ? Math.min(100, Math.round((stData.attended / totalSess) * 100)) : null;
+              const pct = totalSess > 0 ? Math.min(100, Math.round((attendedCount / totalSess) * 100)) : null;
 
               let statusStr = '--';
               if (pct !== null) {
@@ -278,8 +279,8 @@ function getReportsData(req, res) {
                 roll_number: st.roll_number || st.email.split('@')[0],
                 email: st.email,
                 overallPercentage: pct,
-                classesAttended: stData.attended,
-                classesMissed: Math.max(0, totalSess - stData.attended),
+                classesAttended: attendedCount,
+                classesMissed: Math.max(0, totalSess - attendedCount),
                 status: statusStr
               };
             });

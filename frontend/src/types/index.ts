@@ -103,6 +103,9 @@ export interface AttendanceRecord {
   roll_number?: string;
   session_id: string;
   subject?: string;
+  period_number?: string | number;
+  session_date?: string;
+  date?: string;
   attendance_code?: string;
   attendance_time: string;
   distance_meters: number;
