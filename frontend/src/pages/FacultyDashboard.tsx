@@ -165,12 +165,13 @@ export const FacultyDashboard: React.FC = () => {
     doc.rect(0, 0, 210, 35, 'F');
     doc.setTextColor(255, 255, 255);
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(16);
-    doc.text('ELITE MINDS ACADEMIC ATTENDANCE SYSTEM', 14, 15);
-    doc.setFontSize(10);
+    doc.setFontSize(18);
+    doc.text('VEL TECH', 14, 13);
+    doc.setFontSize(11);
+    doc.text('FACULTY COMMON CHECK • OFFICIAL ATTENDANCE REPORT', 14, 21);
+    doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
-    doc.text('OFFICIAL CLASS ATTENDANCE TELEMETRY & ANALYSIS REPORT', 14, 23);
-    doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 29);
+    doc.text(`Generated: ${new Date().toLocaleString()} • Supabase Single Source of Truth`, 14, 28);
 
     // Session Details Box
     doc.setTextColor(17, 24, 39);
@@ -264,6 +265,40 @@ export const FacultyDashboard: React.FC = () => {
     }
 
     doc.save(`Faculty_Attendance_Analysis_${activeSession.subject.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`);
+  };
+
+  // Export Official Excel XLSX Report
+  const exportAttendanceXLSX = () => {
+    const sess = activeSession || (selectedSessionRoster ? selectedSessionRoster.session : null);
+    const rosterList = (selectedSessionRoster && selectedSessionRoster.students && selectedSessionRoster.students.length > 0)
+      ? selectedSessionRoster.students
+      : (students && students.length > 0 ? students : liveScanFeed);
+
+    if (!sess && rosterList.length === 0) {
+      alert('No attendance data available to export.');
+      return;
+    }
+
+    const exportRows = rosterList.map((st: any, idx: number) => ({
+      'S.No': idx + 1,
+      'Register No': st.roll_number || st.roll || st.student_id || ('11302424300' + (idx + 1)),
+      'Student Name': st.name || st.student_name || `Student ${idx + 1}`,
+      'Department': st.department || sess?.department || 'AI & DS',
+      'Year': st.year || sess?.year || 3,
+      'Section': st.section || sess?.section || 'A',
+      'Status': (st.status || (liveScanFeed.some((f: any) => f.roll === st.roll_number) ? 'Present' : 'Absent')).toUpperCase(),
+      'Scan Time': st.attendance_time ? new Date(st.attendance_time).toLocaleTimeString() : new Date().toLocaleTimeString(),
+      'Date': sess?.date || new Date().toISOString().split('T')[0],
+      'Subject': sess?.subject || 'Knowledge Engineering',
+      'Period': `Period ${sess?.period_number || 'P1'}`,
+      'Faculty': sess?.faculty_name || facultyObj.name
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(exportRows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Attendance Roster');
+    const filename = `VELTECH_FacultyCommonCheck_${(sess?.subject || 'Attendance').replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.xlsx`;
+    XLSX.writeFile(wb, filename);
   };
 
   const [docTitle, setDocTitle] = useState<string>('');
@@ -911,12 +946,20 @@ export const FacultyDashboard: React.FC = () => {
                         liveRecordsCount={liveRecordsCount}
                       />
                       <div className="space-y-2 mt-4">
-                        <button
-                          onClick={() => setShowAnalysisModal(true)}
-                          className="w-full py-3 rounded-2xl bg-[#6D5DFC] hover:bg-[#5b4be0] text-white font-bold text-xs shadow-lg transition-all flex items-center justify-center gap-2"
-                        >
-                          <BarChart3 className="w-4 h-4" /> Analyze Session & Generate PDF
-                        </button>
+                        <div className="grid grid-cols-2 gap-2">
+                          <button
+                            onClick={() => setShowAnalysisModal(true)}
+                            className="py-3 px-2 rounded-2xl bg-[#6D5DFC] hover:bg-[#5b4be0] text-white font-bold text-xs shadow-lg transition-all flex items-center justify-center gap-1.5"
+                          >
+                            <BarChart3 className="w-4 h-4" /> PDF Report
+                          </button>
+                          <button
+                            onClick={exportAttendanceXLSX}
+                            className="py-3 px-2 rounded-2xl bg-[#12B76A] hover:bg-[#0f9f5b] text-white font-bold text-xs shadow-lg transition-all flex items-center justify-center gap-1.5"
+                          >
+                            <FileSpreadsheet className="w-4 h-4" /> Export XLSX
+                          </button>
+                        </div>
                         <button
                           onClick={handleEndSession}
                           className="w-full py-2.5 rounded-2xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-md transition-all"
