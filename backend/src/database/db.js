@@ -684,6 +684,11 @@ function initDb() {
         });
       });
 
+      // Automatic profile photo migration query (replace legacy unsplash URLs with official CDN photo)
+      const officialPhoto = 'https://universitykart.b-cdn.net/Content/upload/admin/44wzl2yr.t4g.png';
+      db.run(`UPDATE faculty SET profile_photo = ? WHERE profile_photo LIKE '%unsplash.com%' OR profile_photo IS NULL OR profile_photo = ''`, [officialPhoto]);
+      db.run(`UPDATE users SET profile_photo = ? WHERE (role = 'faculty' OR role = 'admin') AND (profile_photo LIKE '%unsplash.com%' OR profile_photo IS NULL OR profile_photo = '')`, [officialPhoto]);
+
       // Create Faculty Subjects Mapping tables
       db.run(`
         CREATE TABLE IF NOT EXISTS faculty_subject_mapping (
