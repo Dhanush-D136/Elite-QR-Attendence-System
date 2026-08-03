@@ -255,7 +255,8 @@ function getReportsData(req, res) {
             });
             records.forEach((rec) => {
               if ((rec.status === 'present' || rec.status === 'late') && studentAttendanceMap[rec.student_id]) {
-                const key = rec.session_id || `${(rec.attendance_time || '').split('T')[0]}_${rec.period_number || rec.id}`;
+                const timeStr = rec.attendance_time ? (rec.attendance_time instanceof Date ? rec.attendance_time.toISOString() : String(rec.attendance_time)) : '';
+                const key = rec.session_id || `${timeStr.split('T')[0]}_${rec.period_number || rec.id}`;
                 studentAttendanceMap[rec.student_id].add(key);
               }
             });
@@ -520,7 +521,13 @@ function getPeriodAttendanceIntelligence(req, res) {
 
             recList.forEach(rec => {
               const stId = rec.student_id;
-              const recDate = (rec.attendance_time || rec.session_date || '').split('T')[0] || todayStr;
+              let rawTime = rec.attendance_time || rec.session_date || '';
+              if (rawTime instanceof Date) {
+                rawTime = rawTime.toISOString();
+              } else if (typeof rawTime !== 'string') {
+                rawTime = String(rawTime || '');
+              }
+              const recDate = (rawTime.split('T')[0] || todayStr);
               const pNo = rec.period_number ? String(rec.period_number) : null;
 
               if (!studentAllRecordsMap.has(stId)) {
@@ -582,7 +589,12 @@ function getPeriodAttendanceIntelligence(req, res) {
               // Compute all-time / daily stats & streak
               const dailyMap = studentDailyMap.get(st.id) || new Map();
               const presentDaysCount = dailyMap.size;
-              const totalDaysConducted = Math.max(1, new Set(recList.map(r => (r.attendance_time || r.session_date || '').split('T')[0])).size);
+              const uniqueConductedDates = new Set(recList.map(r => {
+                const t = r.attendance_time || r.session_date || '';
+                const tStr = t instanceof Date ? t.toISOString() : String(t || '');
+                return tStr.split('T')[0];
+              }));
+              const totalDaysConducted = Math.max(1, uniqueConductedDates.size);
               const absentDaysCount = Math.max(0, totalDaysConducted - presentDaysCount);
               const overallAttPct = Math.min(100, Number(((presentDaysCount / totalDaysConducted) * 100).toFixed(1)));
               const spellAttPct = Math.min(100, Number((overallAttPct * 0.98 + (presentCount > 0 ? 2 : 0)).toFixed(1)));
