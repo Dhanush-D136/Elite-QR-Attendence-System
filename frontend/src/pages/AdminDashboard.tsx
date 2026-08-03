@@ -28,13 +28,22 @@ export const AdminDashboard: React.FC = () => {
     fetchMetrics();
     const socket = getSocket();
 
-    socket.on('attendance_updated', (data: { record: AttendanceRecord }) => {
-      setLiveScans((prev) => [data.record, ...prev.slice(0, 9)]);
+    const handleSync = () => {
       fetchMetrics();
-    });
+    };
+
+    socket.on('attendance_updated', handleSync);
+    socket.on('attendance_marked', handleSync);
+    socket.on('attendanceMarked', handleSync);
+    socket.on('session_created', handleSync);
+    socket.on('session_ended', handleSync);
 
     return () => {
-      socket.off('attendance_updated');
+      socket.off('attendance_updated', handleSync);
+      socket.off('attendance_marked', handleSync);
+      socket.off('attendanceMarked', handleSync);
+      socket.off('session_created', handleSync);
+      socket.off('session_ended', handleSync);
     };
   }, []);
 

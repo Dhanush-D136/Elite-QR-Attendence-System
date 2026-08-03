@@ -48,14 +48,18 @@ export const StudentDashboard: React.FC = () => {
       fetchData();
     };
 
+    socket.on('attendanceMarked', handleAttendanceMarked);
     socket.on('attendance_marked', handleAttendanceMarked);
+    socket.on('attendance_updated', handleAttendanceMarked);
     socket.on('timetable_created', handleTimetableChanged);
     socket.on('timetable_updated', handleTimetableChanged);
     socket.on('timetable_deleted', handleTimetableChanged);
     socket.on('timetable_changed', handleTimetableChanged);
 
     return () => {
+      socket.off('attendanceMarked', handleAttendanceMarked);
       socket.off('attendance_marked', handleAttendanceMarked);
+      socket.off('attendance_updated', handleAttendanceMarked);
       socket.off('timetable_created', handleTimetableChanged);
       socket.off('timetable_updated', handleTimetableChanged);
       socket.off('timetable_deleted', handleTimetableChanged);

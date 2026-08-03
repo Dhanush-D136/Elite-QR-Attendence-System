@@ -102,6 +102,7 @@ router.delete('/timetables/:id', verifyToken, requireRole('admin'), erpControlle
 
 // --- Session Routes (Timetable-Driven Auto-Attendance) ---
 router.get('/sessions/current-slot', verifyToken, sessionController.getCurrentTimetableSlot);
+router.get('/timetable/current-slot', verifyToken, sessionController.getCurrentTimetableSlot);
 router.post('/sessions/auto-launch', verifyToken, requireRole('admin', 'faculty'), sessionController.autoLaunchSession);
 router.post('/sessions', verifyToken, requireRole('admin', 'faculty'), sessionController.createSession);
 router.get('/sessions', verifyToken, sessionController.getSessions);
