@@ -86,9 +86,14 @@ function getSubjects(req, res) {
     params.push(faculty_name.trim());
   }
 
-  if (department) {
-    query += ' AND department = ?';
-    params.push(department);
+  if (department && department !== 'All') {
+    const dClean = department.trim().toLowerCase();
+    if (dClean.includes('ai') || dClean.includes('ds') || dClean.includes('data')) {
+      query += ` AND (department LIKE '%AI%' OR department LIKE '%DS%' OR department LIKE '%Data%')`;
+    } else {
+      query += ` AND department = ?`;
+      params.push(department);
+    }
   }
 
   if (semester) {

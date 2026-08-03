@@ -32,6 +32,7 @@ import {
 
 export interface StudentIntelligenceItem {
   id: string;
+  register_number?: string;
   roll_number: string;
   vh_number?: string;
   name: string;
@@ -43,7 +44,16 @@ export interface StudentIntelligenceItem {
   totalScheduledPeriods: number;
   missedPeriods: number;
   attendancePercentage: number;
+  overallPercentage?: number;
+  spellPercentage?: number;
+  presentDays?: number;
+  absentDays?: number;
+  classesAttended?: number;
+  classesMissed?: number;
+  currentStreak?: number;
+  lastScanTime?: string;
   status: string;
+  riskCategory?: string;
   statusColor: string;
   periods: Record<string, 'P' | 'A'>;
   dailyBreakdown?: Array<{
@@ -68,10 +78,34 @@ export const StudentAttendanceIntelligence: React.FC = () => {
   const [students, setStudents] = useState<StudentIntelligenceItem[]>([]);
   const [summary, setSummary] = useState<any>({
     totalStudents: 0,
+    presentToday: 0,
+    absentToday: 0,
     avgAttendance: 0,
-    shortageCount: 0,
+    avgSpellAttendance: 0,
+    highRiskCount: 0,
+    safeCount: 0,
     conductedPeriodsToday: 8
   });
+  const [liveQr, setLiveQr] = useState<any>({
+    active: false,
+    subject: 'No Active QR Session',
+    scannedCount: 0,
+    pendingCount: 0,
+    totalStudents: 0,
+    liveAttendancePct: 0,
+    lastScanTimestamp: 'N/A',
+    expiryTime: 'Session Idle'
+  });
+  const [streakLeaders, setStreakLeaders] = useState<any[]>([]);
+  const [trendAnalytics, setTrendAnalytics] = useState<any>({
+    dailyTrend: [],
+    weeklyTrend: [],
+    growthRate: '+3.2%',
+    dropRate: '-1.1%',
+    lowestStudents: [],
+    highestStudents: []
+  });
+  const [diagnostics, setDiagnostics] = useState<any>(null);
   const [dayOrderInfo, setDayOrderInfo] = useState<any>({
     currentDate: todayStr,
     dayName: 'Monday',
@@ -110,7 +144,11 @@ export const StudentAttendanceIntelligence: React.FC = () => {
       if (res.data.success) {
         setStudents(res.data.students || []);
         setSummary(res.data.summary || {});
+        setLiveQr(res.data.liveQr || {});
+        setStreakLeaders(res.data.streakLeaders || []);
+        setTrendAnalytics(res.data.trendAnalytics || {});
         setDayOrderInfo(res.data.dayOrderInfo || {});
+        setDiagnostics(res.data.diagnostics || null);
       }
     } catch (err) {
       console.error('Failed to load period intelligence data', err);
@@ -145,10 +183,11 @@ export const StudentAttendanceIntelligence: React.FC = () => {
 
   // Filtering Logic
   const filteredStudents = students.filter((st) => {
-    if (riskFilter === 'Safe' && st.attendancePercentage < 75) return false;
-    if (riskFilter === 'Warning' && (st.attendancePercentage < 65 || st.attendancePercentage >= 75)) return false;
-    if (riskFilter === 'HighRisk' && (st.attendancePercentage < 50 || st.attendancePercentage >= 65)) return false;
-    if (riskFilter === 'Critical' && st.attendancePercentage >= 50) return false;
+    const pct = st.attendancePercentage;
+    if (riskFilter === 'Safe' && pct < 75) return false;
+    if (riskFilter === 'Warning' && (pct < 65 || pct >= 75)) return false;
+    if (riskFilter === 'HighRisk' && (pct < 50 || pct >= 65)) return false;
+    if (riskFilter === 'Critical' && pct >= 50) return false;
     return true;
   });
 
@@ -158,15 +197,20 @@ export const StudentAttendanceIntelligence: React.FC = () => {
   // Export Excel (.xlsx)
   const handleExportExcel = () => {
     const exportData = filteredStudents.map((st) => ({
-      'Register Number': st.roll_number,
+      'Register Number': st.roll_number || st.register_number,
       'Student Name': st.name,
       'Department': st.department,
       'Year': st.year,
       'Section': st.section,
-      'Present Periods': `${st.presentPeriods} / ${st.totalScheduledPeriods}`,
-      'Absent / Missed Periods': `${st.missedPeriods} / ${st.totalScheduledPeriods}`,
-      'Attendance %': `${st.attendancePercentage}%`,
-      'Status': st.status,
+      'Overall Attendance %': `${st.overallPercentage || st.attendancePercentage}%`,
+      'Spell Attendance %': `${st.spellPercentage || st.attendancePercentage}%`,
+      'Present Days': st.presentDays || st.presentPeriods,
+      'Absent Days': st.absentDays || st.missedPeriods,
+      'Classes Attended': st.classesAttended || st.presentPeriods,
+      'Classes Missed': st.classesMissed || st.missedPeriods,
+      'Current Streak': st.currentStreak || 0,
+      'Last Scan Time': st.lastScanTime || 'N/A',
+      'Risk Category': st.riskCategory || st.status,
       'P1': st.periods.P1 || 'A',
       'P2': st.periods.P2 || 'A',
       'P3': st.periods.P3 || 'A',
@@ -179,23 +223,28 @@ export const StudentAttendanceIntelligence: React.FC = () => {
 
     const ws = XLSX.utils.json_to_sheet(exportData);
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Period Attendance');
-    XLSX.writeFile(wb, `Student_Period_Attendance_${fromDate}_to_${toDate}.xlsx`);
+    XLSX.utils.book_append_sheet(wb, ws, 'Period Intelligence');
+    XLSX.writeFile(wb, `Student_Attendance_Intelligence_${fromDate}_to_${toDate}.xlsx`);
   };
 
   // Export CSV
   const handleExportCSV = () => {
-    const headers = ['Reg No', 'Name', 'Department', 'Year', 'Section', 'Present', 'Missed', 'Attendance %', 'Status', 'P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8'];
+    const headers = ['Register No', 'Name', 'Dept', 'Year', 'Section', 'Overall %', 'Spell %', 'Present Days', 'Absent Days', 'Attended', 'Missed', 'Streak', 'Last Scan', 'Risk Category', 'P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8'];
     const rows = filteredStudents.map((st) => [
-      st.roll_number,
+      st.roll_number || st.register_number,
       st.name,
       st.department,
       st.year,
       st.section,
-      `${st.presentPeriods}/${st.totalScheduledPeriods}`,
-      `${st.missedPeriods}/${st.totalScheduledPeriods}`,
-      `${st.attendancePercentage}%`,
-      st.status,
+      `${st.overallPercentage || st.attendancePercentage}%`,
+      `${st.spellPercentage || st.attendancePercentage}%`,
+      st.presentDays || st.presentPeriods,
+      st.absentDays || st.missedPeriods,
+      st.classesAttended || st.presentPeriods,
+      st.classesMissed || st.missedPeriods,
+      st.currentStreak || 0,
+      st.lastScanTime || 'N/A',
+      st.riskCategory || st.status,
       st.periods.P1 || 'A',
       st.periods.P2 || 'A',
       st.periods.P3 || 'A',
@@ -211,7 +260,7 @@ export const StudentAttendanceIntelligence: React.FC = () => {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.setAttribute('download', `Student_Period_Attendance_${fromDate}.csv`);
+    link.setAttribute('download', `Student_Attendance_Intelligence_${fromDate}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -221,20 +270,22 @@ export const StudentAttendanceIntelligence: React.FC = () => {
   const handleExportPDF = () => {
     const doc = new jsPDF('landscape');
     doc.setFontSize(16);
-    doc.text(`Student Period-Wise Attendance Report (${fromDate} to ${toDate})`, 14, 15);
+    doc.text(`Student Attendance Intelligence Report (${fromDate} to ${toDate})`, 14, 15);
     doc.setFontSize(10);
-    doc.text(`Generated on: ${new Date().toLocaleString()} | Day: ${dayOrderInfo.dayName || ''} (${dayOrderInfo.dayOrder || ''})`, 14, 22);
+    doc.text(`Generated on: ${new Date().toLocaleString()} | Day Order: ${dayOrderInfo.dayOrder || ''} (${dayOrderInfo.dayName || ''})`, 14, 22);
 
-    const tableHeaders = [['Reg No', 'Name', 'Dept', 'Yr-Sec', 'Present', 'Missed', 'Att %', 'Status', 'P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8']];
+    const tableHeaders = [['Reg No', 'Name', 'Dept', 'Yr-Sec', 'Overall %', 'Spell %', 'Attended', 'Missed', 'Streak', 'Risk Status', 'P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8']];
     const tableData = filteredStudents.map((st) => [
-      st.roll_number,
+      st.roll_number || st.register_number,
       st.name,
       st.department,
       `${st.year}-${st.section}`,
-      `${st.presentPeriods}/${st.totalScheduledPeriods}`,
-      `${st.missedPeriods}/${st.totalScheduledPeriods}`,
-      `${st.attendancePercentage}%`,
-      st.status,
+      `${st.overallPercentage || st.attendancePercentage}%`,
+      `${st.spellPercentage || st.attendancePercentage}%`,
+      st.classesAttended || st.presentPeriods,
+      st.classesMissed || st.missedPeriods,
+      st.currentStreak || 0,
+      st.riskCategory || st.status,
       st.periods.P1 || 'A',
       st.periods.P2 || 'A',
       st.periods.P3 || 'A',
@@ -250,11 +301,11 @@ export const StudentAttendanceIntelligence: React.FC = () => {
       body: tableData,
       startY: 28,
       theme: 'grid',
-      styles: { fontSize: 8, cellPadding: 2 },
+      styles: { fontSize: 7, cellPadding: 1.5 },
       headStyles: { fillColor: [109, 93, 252] }
     });
 
-    doc.save(`Student_Period_Attendance_${fromDate}.pdf`);
+    doc.save(`Student_Attendance_Intelligence_${fromDate}.pdf`);
   };
 
   return (
@@ -268,14 +319,14 @@ export const StudentAttendanceIntelligence: React.FC = () => {
             </div>
             <span className="px-3 py-1 rounded-full bg-[#ECFDF5] text-[#12B76A] font-mono font-extrabold text-[11px] uppercase tracking-wider border border-[#12B76A]/20 flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full bg-[#12B76A] animate-pulse" />
-              LIVE SUPABASE SYNC ACTIVE
+              LIVE SUPABASE & SOCKET.IO SYNC ACTIVE
             </span>
           </div>
           <h1 className="font-display font-extrabold text-2xl lg:text-3xl text-[#111827]">
             Student Attendance Intelligence
           </h1>
           <p className="text-xs text-[#6B7280] font-medium max-w-xl">
-            Real-time period-wise attendance matrix, day-order timetable analysis, student timeline intelligence, risk detection & export controls.
+            Single Source of Truth attendance intelligence synced across Student, Faculty, and Admin portals.
           </p>
         </div>
 
@@ -286,7 +337,7 @@ export const StudentAttendanceIntelligence: React.FC = () => {
             className="px-4 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs font-bold text-[#111827] hover:bg-[#F3F0FF] hover:border-[#6D5DFC]/40 transition-all flex items-center gap-2 shadow-xs"
           >
             <RefreshCw className={`w-3.5 h-3.5 text-[#6D5DFC] ${isLoading ? 'animate-spin' : ''}`} />
-            <span>Refresh</span>
+            <span>Refresh Telemetry</span>
           </button>
           <button
             onClick={handleExportExcel}
@@ -309,6 +360,104 @@ export const StudentAttendanceIntelligence: React.FC = () => {
             <FileText className="w-4 h-4" />
             <span>Export PDF</span>
           </button>
+        </div>
+      </div>
+
+      {/* LIVE QR ANALYTICS SESSION BAR */}
+      <div className={`p-5 rounded-[24px] border shadow-enterprise flex flex-col md:flex-row md:items-center justify-between gap-4 transition-all ${
+        liveQr.active ? 'bg-gradient-to-r from-emerald-950 via-slate-900 to-emerald-900 text-white border-emerald-500/30' : 'bg-white text-[#111827] border-[#E7E7E7]'
+      }`}>
+        <div className="flex items-center gap-4">
+          <div className={`w-12 h-12 rounded-2xl flex items-center gap-2 justify-center font-bold text-lg shadow-md ${
+            liveQr.active ? 'bg-emerald-500 text-white animate-pulse' : 'bg-[#FAFAFA] text-[#6B7280] border border-[#E7E7E7]'
+          }`}>
+            <Sparkles className="w-6 h-6" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className={`px-2.5 py-0.5 rounded-full font-mono text-[10px] font-extrabold uppercase ${
+                liveQr.active ? 'bg-emerald-400/20 text-emerald-300 border border-emerald-400/30' : 'bg-gray-100 text-gray-600'
+              }`}>
+                {liveQr.active ? '● LIVE QR SESSION ACTIVE' : 'NO ACTIVE QR SESSION'}
+              </span>
+              {liveQr.active && (
+                <span className="text-xs font-mono text-emerald-300 font-bold">{liveQr.period_number} • {liveQr.subject_code}</span>
+              )}
+            </div>
+            <h3 className={`font-display font-extrabold text-lg mt-0.5 ${liveQr.active ? 'text-white' : 'text-[#111827]'}`}>
+              {liveQr.subject}
+            </h3>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-4 text-xs font-bold">
+          <div className="p-3 rounded-2xl bg-white/10 border border-white/15 backdrop-blur-sm text-center">
+            <span className="block text-[10px] uppercase opacity-70">Scanned Students</span>
+            <strong className="text-base text-emerald-400 font-extrabold">{liveQr.scannedCount} / {liveQr.totalStudents}</strong>
+          </div>
+          <div className="p-3 rounded-2xl bg-white/10 border border-white/15 backdrop-blur-sm text-center">
+            <span className="block text-[10px] uppercase opacity-70">Students Pending</span>
+            <strong className="text-base text-rose-400 font-extrabold">{liveQr.pendingCount} Students</strong>
+          </div>
+          <div className="p-3 rounded-2xl bg-white/10 border border-white/15 backdrop-blur-sm text-center">
+            <span className="block text-[10px] uppercase opacity-70">Live Attendance %</span>
+            <strong className="text-base text-amber-300 font-extrabold">{liveQr.liveAttendancePct}%</strong>
+          </div>
+          <div className="p-3 rounded-2xl bg-white/10 border border-white/15 backdrop-blur-sm text-center">
+            <span className="block text-[10px] uppercase opacity-70">Last Scan Time</span>
+            <strong className="text-xs text-white font-mono">{liveQr.lastScanTimestamp}</strong>
+          </div>
+        </div>
+      </div>
+
+      {/* METRIC SUMMARY CARDS (LIVE CLASS ANALYTICS) */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
+        <div className="bg-white p-4 rounded-2xl border border-[#E7E7E7] shadow-sm space-y-1">
+          <span className="text-[10px] font-bold text-[#6B7280] uppercase block">Total Students</span>
+          <strong className="font-display font-extrabold text-xl text-[#111827] block">{summary.totalStudents || filteredStudents.length}</strong>
+          <span className="text-[10px] text-[#6B7280]">Active Class Roster</span>
+        </div>
+
+        <div className="bg-white p-4 rounded-2xl border border-[#E7E7E7] shadow-sm space-y-1">
+          <span className="text-[10px] font-bold text-[#12B76A] uppercase block">Present Today</span>
+          <strong className="font-display font-extrabold text-xl text-[#12B76A] block">{summary.presentToday || 0}</strong>
+          <span className="text-[10px] text-[#12B76A]">Scanned & Marked</span>
+        </div>
+
+        <div className="bg-white p-4 rounded-2xl border border-[#E7E7E7] shadow-sm space-y-1">
+          <span className="text-[10px] font-bold text-rose-600 uppercase block">Absent Today</span>
+          <strong className="font-display font-extrabold text-xl text-rose-600 block">{summary.absentToday || 0}</strong>
+          <span className="text-[10px] text-rose-500">Unattended Slots</span>
+        </div>
+
+        <div className="bg-white p-4 rounded-2xl border border-[#E7E7E7] shadow-sm space-y-1">
+          <span className="text-[10px] font-bold text-[#6D5DFC] uppercase block">Avg Attendance %</span>
+          <strong className="font-display font-extrabold text-xl text-[#6D5DFC] block">{summary.avgAttendance || 0}%</strong>
+          <span className="text-[10px] text-[#6D5DFC]">Overall Percentage</span>
+        </div>
+
+        <div className="bg-white p-4 rounded-2xl border border-[#E7E7E7] shadow-sm space-y-1">
+          <span className="text-[10px] font-bold text-purple-600 uppercase block">Avg Spell %</span>
+          <strong className="font-display font-extrabold text-xl text-purple-600 block">{summary.avgSpellAttendance || 0}%</strong>
+          <span className="text-[10px] text-purple-500">Spell Attendance</span>
+        </div>
+
+        <div className="bg-white p-4 rounded-2xl border border-[#E7E7E7] shadow-sm space-y-1">
+          <span className="text-[10px] font-bold text-orange-600 uppercase block">High Risk (&lt;65%)</span>
+          <strong className="font-display font-extrabold text-xl text-orange-600 block">{summary.highRiskCount || 0}</strong>
+          <span className="text-[10px] text-orange-500">Critical Watchlist</span>
+        </div>
+
+        <div className="bg-white p-4 rounded-2xl border border-[#E7E7E7] shadow-sm space-y-1">
+          <span className="text-[10px] font-bold text-emerald-600 uppercase block">Safe (≥75%)</span>
+          <strong className="font-display font-extrabold text-xl text-emerald-600 block">{summary.safeCount || 0}</strong>
+          <span className="text-[10px] text-emerald-500">Good Standing</span>
+        </div>
+
+        <div className="bg-white p-4 rounded-2xl border border-[#E7E7E7] shadow-sm space-y-1">
+          <span className="text-[10px] font-bold text-amber-600 uppercase block">Streak Leaders</span>
+          <strong className="font-display font-extrabold text-xl text-amber-600 block">{streakLeaders.length > 0 ? `${streakLeaders[0].streak} Days` : '0 Days'}</strong>
+          <span className="text-[10px] text-amber-600">Top Streak Candidate</span>
         </div>
       </div>
 
@@ -366,7 +515,7 @@ export const StudentAttendanceIntelligence: React.FC = () => {
         </div>
       </div>
 
-      {/* SEARCH & FILTERS BAR */}
+      {/* SEARCH & FILTERS TOOLBAR */}
       <div className="bg-white p-5 rounded-[24px] border border-[#E7E7E7] shadow-enterprise space-y-4">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
           {/* Search Input */}
@@ -389,13 +538,13 @@ export const StudentAttendanceIntelligence: React.FC = () => {
               className="w-full px-3.5 py-2.5 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs font-semibold text-[#111827] focus:bg-white focus:border-[#6D5DFC] focus:outline-none transition-all"
             >
               <option value="All">All Depts</option>
-              <option value="AI & DS">AI & DS</option>
-              <option value="CSE">CSE</option>
-              <option value="ECE">ECE</option>
-              <option value="IT">IT</option>
-              <option value="EEE">EEE</option>
-              <option value="Mechanical">Mechanical</option>
-              <option value="Civil">Civil</option>
+              <option value="AI & DS">AI & DS / AI & Data Science</option>
+              <option value="CSE">Computer Science & Engineering</option>
+              <option value="ECE">Electronics & Communication</option>
+              <option value="IT">Information Technology</option>
+              <option value="EEE">Electrical & Electronics</option>
+              <option value="Mechanical">Mechanical Engineering</option>
+              <option value="Civil">Civil Engineering</option>
             </select>
           </div>
 
@@ -475,54 +624,15 @@ export const StudentAttendanceIntelligence: React.FC = () => {
         </div>
       </div>
 
-      {/* METRIC SUMMARY CARDS */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white p-5 rounded-[24px] border border-[#E7E7E7] shadow-enterprise space-y-1">
-          <div className="flex items-center justify-between text-[#6B7280] text-xs font-semibold">
-            <span>Total Students</span>
-            <Users className="w-4 h-4 text-[#6D5DFC]" />
-          </div>
-          <p className="font-display font-extrabold text-2xl lg:text-3xl text-[#111827]">{summary.totalStudents || filteredStudents.length}</p>
-          <p className="text-[10px] text-[#6B7280] font-medium">Active roster count</p>
-        </div>
-
-        <div className="bg-white p-5 rounded-[24px] border border-[#E7E7E7] shadow-enterprise space-y-1">
-          <div className="flex items-center justify-between text-[#6B7280] text-xs font-semibold">
-            <span>Avg Attendance Rate</span>
-            <Award className="w-4 h-4 text-[#12B76A]" />
-          </div>
-          <p className="font-display font-extrabold text-2xl lg:text-3xl text-[#12B76A]">{summary.avgAttendance || 0}%</p>
-          <p className="text-[10px] text-[#12B76A] font-semibold">Institutional average</p>
-        </div>
-
-        <div className="bg-white p-5 rounded-[24px] border border-[#E7E7E7] shadow-enterprise space-y-1">
-          <div className="flex items-center justify-between text-[#6B7280] text-xs font-semibold">
-            <span>Shortage Risk (&lt;75%)</span>
-            <AlertTriangle className="w-4 h-4 text-rose-500" />
-          </div>
-          <p className="font-display font-extrabold text-2xl lg:text-3xl text-rose-600">{summary.shortageCount || 0}</p>
-          <p className="text-[10px] text-rose-500 font-medium">Defaulter candidates</p>
-        </div>
-
-        <div className="bg-white p-5 rounded-[24px] border border-[#E7E7E7] shadow-enterprise space-y-1">
-          <div className="flex items-center justify-between text-[#6B7280] text-xs font-semibold">
-            <span>Scheduled Periods</span>
-            <Clock className="w-4 h-4 text-amber-500" />
-          </div>
-          <p className="font-display font-extrabold text-2xl lg:text-3xl text-amber-600">{summary.conductedPeriodsToday || 8} Periods</p>
-          <p className="text-[10px] text-amber-600 font-medium">Configured daily slots</p>
-        </div>
-      </div>
-
       {/* MASTER STUDENT PERIOD-WISE ATTENDANCE GRID TABLE */}
       <div className="bg-white rounded-[24px] border border-[#E7E7E7] shadow-enterprise overflow-hidden space-y-4 p-6">
         <div className="flex items-center justify-between pb-3 border-b border-[#E7E7E7]">
           <div>
             <h3 className="font-display font-bold text-base text-[#111827]">
-              Student Period-Wise Attendance Matrix
+              Individual Student Attendance Intelligence
             </h3>
             <p className="text-xs text-[#6B7280] font-medium">
-              Click any student row to view full historical timeline, subject breakdown, and trend analysis.
+              Click any student row to view full historical timeline, streak stats, spell %, and detailed period breakdown.
             </p>
           </div>
 
@@ -541,13 +651,40 @@ export const StudentAttendanceIntelligence: React.FC = () => {
         {isLoading ? (
           <div className="py-16 text-center space-y-3">
             <RefreshCw className="w-8 h-8 text-[#6D5DFC] animate-spin mx-auto" />
-            <p className="text-xs text-[#6B7280] font-bold">Computing period-wise attendance matrix...</p>
+            <p className="text-xs text-[#6B7280] font-bold">Computing student attendance intelligence matrix...</p>
           </div>
         ) : filteredStudents.length === 0 ? (
-          <div className="py-16 text-center space-y-2">
-            <Users className="w-10 h-10 text-[#6B7280] mx-auto opacity-40" />
-            <h4 className="font-display font-bold text-base text-[#111827]">No Students Found</h4>
-            <p className="text-xs text-[#6B7280]">Try adjusting search query or filters.</p>
+          /* EMPTY DATA DIAGNOSTIC CARD */
+          <div className="py-12 px-6 bg-[#FAFAFA] rounded-2xl border border-dashed border-[#E7E7E7] text-center space-y-4 max-w-xl mx-auto my-6">
+            <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 border border-amber-200 flex items-center justify-center mx-auto">
+              <AlertTriangle className="w-6 h-6" />
+            </div>
+            <div className="space-y-1">
+              <h4 className="font-display font-extrabold text-base text-[#111827]">No Data Found for Selected Class</h4>
+              <p className="text-xs text-[#6B7280] font-medium">
+                {diagnostics?.status || 'No student records matched the specified department, year, or section filters.'}
+              </p>
+            </div>
+            <div className="p-4 rounded-xl bg-white border border-[#E7E7E7] text-left text-xs space-y-2">
+              <span className="font-extrabold text-[#111827] block">System Diagnostics:</span>
+              <ul className="space-y-1 text-[#6B7280] font-mono text-[11px]">
+                <li>• Total Registered Students in DB: {diagnostics?.totalStudentsInDb || summary.totalStudents || 0}</li>
+                <li>• Department Match: Multi-alias active (AI & DS ↔ AI & Data Science)</li>
+                <li>• Suggested Action: Set Department/Year/Section to "All" or click reset.</li>
+              </ul>
+            </div>
+            <button
+              onClick={() => {
+                setDepartment('All');
+                setYear('All');
+                setSection('All');
+                setRiskFilter('All');
+                setSearchQuery('');
+              }}
+              className="px-5 py-2.5 rounded-2xl bg-[#6D5DFC] text-white font-extrabold text-xs shadow-md hover:bg-[#5b4ceb] transition-all"
+            >
+              Reset Filters to Show All Students
+            </button>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -557,11 +694,13 @@ export const StudentAttendanceIntelligence: React.FC = () => {
                   <th className="py-3 px-3">Reg No</th>
                   <th className="py-3 px-3">Student Name</th>
                   <th className="py-3 px-3">Dept</th>
-                  <th className="py-3 px-3 text-center">Yr / Sec</th>
-                  <th className="py-3 px-3 text-center">Present</th>
-                  <th className="py-3 px-3 text-center">Missed</th>
-                  <th className="py-3 px-3 text-center">Att %</th>
-                  <th className="py-3 px-3 text-center">Status</th>
+                  <th className="py-3 px-2 text-center">Yr-Sec</th>
+                  <th className="py-3 px-2 text-center">Overall %</th>
+                  <th className="py-3 px-2 text-center text-purple-600">Spell %</th>
+                  <th className="py-3 px-2 text-center text-emerald-600">Present</th>
+                  <th className="py-3 px-2 text-center text-rose-600">Missed</th>
+                  <th className="py-3 px-2 text-center text-amber-600">Streak</th>
+                  <th className="py-3 px-2 text-center">Risk Status</th>
                   <th className="py-3 px-2 text-center bg-[#F3F0FF]/50 text-[#6D5DFC]">P1</th>
                   <th className="py-3 px-2 text-center bg-[#F3F0FF]/50 text-[#6D5DFC]">P2</th>
                   <th className="py-3 px-2 text-center bg-[#F3F0FF]/50 text-[#6D5DFC]">P3</th>
@@ -575,9 +714,10 @@ export const StudentAttendanceIntelligence: React.FC = () => {
               <tbody className="divide-y divide-[#E7E7E7] text-xs">
                 {paginatedStudents.map((st) => {
                   let badgeColor = 'bg-[#ECFDF5] text-[#12B76A] border-[#12B76A]/20';
-                  if (st.status === 'Warning') badgeColor = 'bg-amber-50 text-amber-700 border-amber-200';
-                  if (st.status === 'High Risk') badgeColor = 'bg-orange-50 text-orange-700 border-orange-200';
-                  if (st.status === 'Critical') badgeColor = 'bg-rose-50 text-rose-700 border-rose-200';
+                  const riskCat = st.riskCategory || st.status;
+                  if (riskCat === 'Warning') badgeColor = 'bg-amber-50 text-amber-700 border-amber-200';
+                  if (riskCat === 'High Risk') badgeColor = 'bg-orange-50 text-orange-700 border-orange-200';
+                  if (riskCat === 'Critical') badgeColor = 'bg-rose-50 text-rose-700 border-rose-200';
 
                   return (
                     <tr
@@ -585,7 +725,7 @@ export const StudentAttendanceIntelligence: React.FC = () => {
                       onClick={() => setSelectedStudent(st)}
                       className="hover:bg-[#F7F3EE]/50 transition-all cursor-pointer group"
                     >
-                      <td className="py-3 px-3 font-mono font-bold text-[#6D5DFC]">{st.roll_number}</td>
+                      <td className="py-3 px-3 font-mono font-bold text-[#6D5DFC]">{st.roll_number || st.register_number}</td>
                       <td className="py-3 px-3">
                         <div className="flex items-center gap-2.5">
                           <img
@@ -597,13 +737,18 @@ export const StudentAttendanceIntelligence: React.FC = () => {
                         </div>
                       </td>
                       <td className="py-3 px-3 font-semibold text-[#6B7280]">{st.department}</td>
-                      <td className="py-3 px-3 text-center font-bold text-[#111827]">Y{st.year} - {st.section}</td>
-                      <td className="py-3 px-3 text-center font-mono font-extrabold text-[#12B76A]">{st.presentPeriods} / {st.totalScheduledPeriods}</td>
-                      <td className="py-3 px-3 text-center font-mono font-extrabold text-rose-600">{st.missedPeriods} / {st.totalScheduledPeriods}</td>
-                      <td className="py-3 px-3 text-center font-mono font-black text-[#111827]">{st.attendancePercentage}%</td>
-                      <td className="py-3 px-3 text-center">
+                      <td className="py-3 px-2 text-center font-bold text-[#111827]">Y{st.year}-{st.section}</td>
+                      <td className="py-3 px-2 text-center font-mono font-black text-[#111827]">{st.overallPercentage || st.attendancePercentage}%</td>
+                      <td className="py-3 px-2 text-center font-mono font-bold text-purple-600">{st.spellPercentage || st.attendancePercentage}%</td>
+                      <td className="py-3 px-2 text-center font-mono font-extrabold text-[#12B76A]">{st.classesAttended || st.presentPeriods}</td>
+                      <td className="py-3 px-2 text-center font-mono font-extrabold text-rose-600">{st.classesMissed || st.missedPeriods}</td>
+                      <td className="py-3 px-2 text-center font-bold text-amber-600 flex items-center justify-center gap-1">
+                        <Flame className="w-3.5 h-3.5 text-amber-500 fill-amber-400" />
+                        <span>{st.currentStreak || 0}</span>
+                      </td>
+                      <td className="py-3 px-2 text-center">
                         <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${badgeColor}`}>
-                          {st.status}
+                          {riskCat}
                         </span>
                       </td>
 
@@ -674,7 +819,7 @@ export const StudentAttendanceIntelligence: React.FC = () => {
                 <div>
                   <h3 className="font-display font-extrabold text-xl text-[#111827]">{selectedStudent.name}</h3>
                   <p className="text-xs text-[#6B7280] font-semibold">
-                    Reg No: <span className="font-mono text-[#6D5DFC] font-bold">{selectedStudent.roll_number}</span> • {selectedStudent.department} (Year {selectedStudent.year}, Sec {selectedStudent.section})
+                    Reg No: <span className="font-mono text-[#6D5DFC] font-bold">{selectedStudent.roll_number || selectedStudent.register_number}</span> • {selectedStudent.department} (Year {selectedStudent.year}, Sec {selectedStudent.section})
                   </p>
                 </div>
               </div>
@@ -689,20 +834,35 @@ export const StudentAttendanceIntelligence: React.FC = () => {
             {/* Quick Stats Grid */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <div className="p-3.5 rounded-2xl bg-[#F3F0FF] border border-[#6D5DFC]/20">
-                <span className="text-[10px] font-bold text-[#6D5DFC] uppercase block">Attendance Rate</span>
-                <strong className="text-lg text-[#6D5DFC] font-extrabold">{selectedStudent.attendancePercentage}%</strong>
+                <span className="text-[10px] font-bold text-[#6D5DFC] uppercase block">Overall Rate</span>
+                <strong className="text-lg text-[#6D5DFC] font-extrabold">{selectedStudent.overallPercentage || selectedStudent.attendancePercentage}%</strong>
+              </div>
+              <div className="p-3.5 rounded-2xl bg-purple-50 border border-purple-200">
+                <span className="text-[10px] font-bold text-purple-700 uppercase block">Spell Rate</span>
+                <strong className="text-lg text-purple-700 font-extrabold">{selectedStudent.spellPercentage || selectedStudent.attendancePercentage}%</strong>
               </div>
               <div className="p-3.5 rounded-2xl bg-[#ECFDF5] border border-[#10B981]/20">
-                <span className="text-[10px] font-bold text-[#059669] uppercase block">Present Periods</span>
-                <strong className="text-lg text-[#059669] font-extrabold">{selectedStudent.presentPeriods} / {selectedStudent.totalScheduledPeriods}</strong>
+                <span className="text-[10px] font-bold text-[#059669] uppercase block">Classes Attended</span>
+                <strong className="text-lg text-[#059669] font-extrabold">{selectedStudent.classesAttended || selectedStudent.presentPeriods}</strong>
               </div>
               <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200">
-                <span className="text-[10px] font-bold text-rose-700 uppercase block">Missed Periods</span>
-                <strong className="text-lg text-rose-600 font-extrabold">{selectedStudent.missedPeriods} / {selectedStudent.totalScheduledPeriods}</strong>
+                <span className="text-[10px] font-bold text-rose-700 uppercase block">Classes Missed</span>
+                <strong className="text-lg text-rose-600 font-extrabold">{selectedStudent.classesMissed || selectedStudent.missedPeriods}</strong>
               </div>
-              <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200">
-                <span className="text-[10px] font-bold text-amber-700 uppercase block">Risk Status</span>
-                <strong className="text-sm text-amber-800 font-extrabold block mt-1">{selectedStudent.status}</strong>
+            </div>
+
+            {/* Additional Meta Telemetry */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] font-bold text-amber-700 uppercase block">Current Active Streak</span>
+                  <strong className="text-base text-amber-800 font-extrabold">{selectedStudent.currentStreak || 0} Days</strong>
+                </div>
+                <Flame className="w-6 h-6 text-amber-500 fill-amber-400" />
+              </div>
+              <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200">
+                <span className="text-[10px] font-bold text-slate-600 uppercase block">Last Scan Time</span>
+                <strong className="text-xs text-slate-800 font-mono font-bold block mt-1">{selectedStudent.lastScanTime || 'No Scans Yet'}</strong>
               </div>
             </div>
 

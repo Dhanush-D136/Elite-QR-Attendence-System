@@ -26,9 +26,14 @@ function getStudents(req, res) {
     params.push(searchParam, searchParam, searchParam, searchParam, searchParam);
   }
 
-  if (department) {
-    query += ` AND u.department = ?`;
-    params.push(department);
+  if (department && department !== 'All') {
+    const dClean = department.trim().toLowerCase();
+    if (dClean.includes('ai') || dClean.includes('ds') || dClean.includes('data')) {
+      query += ` AND (u.department LIKE '%AI%' OR u.department LIKE '%DS%' OR u.department LIKE '%Data%')`;
+    } else {
+      query += ` AND u.department = ?`;
+      params.push(department);
+    }
   }
 
   if (year) {
