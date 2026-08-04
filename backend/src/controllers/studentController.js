@@ -569,6 +569,209 @@ function getPasswordAuditLogs(req, res) {
   );
 }
 
+// Get Logged-in Student Self Profile directly from Supabase DB
+function getStudentSelfProfile(req, res) {
+  const studentId = req.user && req.user.id;
+  if (!studentId) {
+    return res.status(401).json({ error: 'Unauthorized. Token invalid.' });
+  }
+
+  db.get('SELECT * FROM users WHERE id = ? AND role = "student"', [studentId], (err, user) => {
+    if (err || !user) {
+      return res.status(404).json({ error: 'Student record not found in database' });
+    }
+
+    const date_of_birth = user.date_of_birth || user.dob || '';
+    const parent_contact = user.parent_contact || user.parent_phone || '';
+    const profile_photo_url = user.profile_photo_url || user.profile_photo || '';
+
+    res.json({
+      user: {
+        ...user,
+        date_of_birth,
+        dob: date_of_birth,
+        parent_contact,
+        parent_phone: parent_contact,
+        profile_photo_url,
+        profile_photo: profile_photo_url
+      }
+    });
+  });
+}
+
+// Student Self-Service Profile Update (Supabase DB source of truth + Audit Logs + Realtime Sync)
+async function updateStudentSelfProfile(req, res) {
+  const studentId = req.user && req.user.id;
+  if (!studentId) {
+    return res.status(401).json({ error: 'Unauthorized. Token invalid.' });
+  }
+
+  const {
+    vh_number,
+    email,
+    phone,
+    date_of_birth,
+    dob,
+    blood_group,
+    parent_name,
+    parent_contact,
+    parent_phone,
+    address,
+    bio,
+    profile_photo_url,
+    profile_photo
+  } = req.body;
+
+  try {
+    db.get('SELECT * FROM users WHERE id = ? AND role = "student"', [studentId], async (err, current) => {
+      if (err || !current) {
+        return res.status(404).json({ error: 'Student profile not found' });
+      }
+
+      let newVh = current.vh_number || '';
+      let newEmail = current.email || '';
+
+      if (vh_number !== undefined && String(vh_number).trim() !== '') {
+        const cleanVh = String(vh_number).trim().toUpperCase();
+        if (cleanVh !== (current.vh_number || '').toUpperCase()) {
+          const vhCheck = await new Promise((resolve) => {
+            db.get(
+              'SELECT id FROM users WHERE (LOWER(vh_number) = LOWER(?) OR LOWER(roll_number) = LOWER(?)) AND id != ?',
+              [cleanVh, cleanVh, studentId],
+              (e, row) => resolve(row)
+            );
+          });
+          if (vhCheck) {
+            return res.status(400).json({ error: `VH Number "${cleanVh}" is already assigned to another student.` });
+          }
+          newVh = cleanVh;
+        }
+      }
+
+      if (email !== undefined && String(email).trim() !== '') {
+        const cleanEmail = String(email).trim().toLowerCase();
+        if (cleanEmail !== (current.email || '').toLowerCase()) {
+          const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+          if (!emailRegex.test(cleanEmail)) {
+            return res.status(400).json({ error: 'Invalid email address format.' });
+          }
+          const emailCheck = await new Promise((resolve) => {
+            db.get(
+              'SELECT id FROM users WHERE LOWER(email) = LOWER(?) AND id != ?',
+              [cleanEmail, studentId],
+              (e, row) => resolve(row)
+            );
+          });
+          if (emailCheck) {
+            return res.status(400).json({ error: `Official Email ID "${cleanEmail}" is already registered to another account.` });
+          }
+          newEmail = cleanEmail;
+        }
+      }
+
+      const newPhone = phone !== undefined ? String(phone).trim() : (current.phone || '');
+      const newDob = date_of_birth !== undefined ? String(date_of_birth).trim() : (dob !== undefined ? String(dob).trim() : (current.date_of_birth || current.dob || ''));
+      const newBloodGroup = blood_group !== undefined ? String(blood_group).trim() : (current.blood_group || '');
+      const newParentName = parent_name !== undefined ? String(parent_name).trim() : (current.parent_name || '');
+      const newParentContact = parent_contact !== undefined ? String(parent_contact).trim() : (parent_phone !== undefined ? String(parent_phone).trim() : (current.parent_contact || current.parent_phone || ''));
+      const newAddress = address !== undefined ? String(address).trim() : (current.address || '');
+      const newBio = bio !== undefined ? String(bio).trim() : (current.bio || '');
+      const newPhoto = profile_photo_url !== undefined ? String(profile_photo_url).trim() : (profile_photo !== undefined ? String(profile_photo).trim() : (current.profile_photo_url || current.profile_photo || ''));
+
+      // Audit Logging for Changed Fields
+      const changes = [
+        { field: 'vh_number', oldVal: current.vh_number, newVal: newVh },
+        { field: 'email', oldVal: current.email, newVal: newEmail },
+        { field: 'phone', oldVal: current.phone, newVal: newPhone },
+        { field: 'date_of_birth', oldVal: current.date_of_birth || current.dob, newVal: newDob },
+        { field: 'blood_group', oldVal: current.blood_group, newVal: newBloodGroup },
+        { field: 'parent_name', oldVal: current.parent_name, newVal: newParentName },
+        { field: 'parent_contact', oldVal: current.parent_contact || current.parent_phone, newVal: newParentContact },
+        { field: 'address', oldVal: current.address, newVal: newAddress },
+        { field: 'bio', oldVal: current.bio, newVal: newBio },
+        { field: 'profile_photo_url', oldVal: current.profile_photo_url || current.profile_photo, newVal: newPhoto }
+      ];
+
+      changes.forEach((c) => {
+        const o = c.oldVal ? String(c.oldVal).trim() : '';
+        const n = c.newVal ? String(c.newVal).trim() : '';
+        if (o !== n) {
+          const auditId = uuidv4();
+          db.run(
+            `INSERT INTO student_profile_audit_logs (id, student_id, field_changed, old_value, new_value, timestamp)
+             VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
+            [auditId, studentId, c.field, o || 'N/A', n || 'N/A']
+          );
+        }
+      });
+
+      const updateSql = `
+        UPDATE users SET
+          vh_number = ?,
+          email = ?,
+          phone = ?,
+          date_of_birth = ?,
+          dob = ?,
+          blood_group = ?,
+          parent_name = ?,
+          parent_contact = ?,
+          parent_phone = ?,
+          address = ?,
+          bio = ?,
+          profile_photo_url = ?,
+          profile_photo = ?
+        WHERE id = ? AND role = 'student'
+      `;
+
+      const params = [
+        newVh,
+        newEmail,
+        newPhone,
+        newDob,
+        newDob,
+        newBloodGroup,
+        newParentName,
+        newParentContact,
+        newParentContact,
+        newAddress,
+        newBio,
+        newPhoto,
+        newPhoto,
+        studentId
+      ];
+
+      db.run(updateSql, params, function (errUpdate) {
+        if (errUpdate) {
+          return res.status(500).json({ error: 'Failed to update student profile: ' + errUpdate.message });
+        }
+
+        db.get('SELECT * FROM users WHERE id = ? AND role = "student"', [studentId], (errGet, freshUser) => {
+          if (freshUser) {
+            freshUser.date_of_birth = freshUser.date_of_birth || freshUser.dob || '';
+            freshUser.parent_contact = freshUser.parent_contact || freshUser.parent_phone || '';
+            freshUser.profile_photo_url = freshUser.profile_photo_url || freshUser.profile_photo || '';
+          }
+
+          try {
+            const io = req.app.get('socketio');
+            if (io) {
+              io.emit('student_updated', { studentId, user: freshUser });
+              io.emit('roster_updated', { studentId, user: freshUser });
+            }
+          } catch (sErr) {}
+
+          res.json({
+            message: 'Student profile updated successfully and synced with Admin Records.',
+            user: freshUser
+          });
+        });
+      });
+    });
+  } catch (e) {
+    res.status(500).json({ error: 'Internal server error updating student profile: ' + e.message });
+  }
+}
+
 module.exports = {
   getStudents,
   createStudent,
@@ -583,5 +786,7 @@ module.exports = {
   updateStudentAccountStatus,
   getStudentProfileDetails,
   getLoginActivity,
-  getPasswordAuditLogs
+  getPasswordAuditLogs,
+  getStudentSelfProfile,
+  updateStudentSelfProfile
 };

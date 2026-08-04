@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
 import {
@@ -9,10 +9,6 @@ import {
   User,
   Edit3,
   Save,
-  ShieldCheck,
-  Building,
-  Mail,
-  Hash,
   X
 } from 'lucide-react';
 
@@ -21,30 +17,61 @@ export const ProfilePage: React.FC = () => {
   const isAdmin = user?.role === 'admin';
 
   // Admin Profile Form State
-  const [name, setName] = useState(user?.name || '');
-  const [email, setEmail] = useState(user?.email || '');
-  const [phone, setPhone] = useState(user?.phone || '');
-  const [profilePhoto, setProfilePhoto] = useState(user?.profile_photo || '');
+  const [adminName, setAdminName] = useState(user?.name || '');
+  const [adminEmail, setAdminEmail] = useState(user?.email || '');
+  const [adminPhone, setAdminPhone] = useState(user?.phone || '');
+  const [adminPhoto, setAdminPhoto] = useState(user?.profile_photo || '');
   const [institutionName, setInstitutionName] = useState((user as any)?.institution_name || 'Elite Institute of Technology');
   const [departmentName, setDepartmentName] = useState((user as any)?.department_name || 'Computer Science & Engineering');
   const [newPassword, setNewPassword] = useState('');
 
-  // Student Self-Profile Management State
-  const [vhNumber, setVhNumber] = useState<string>((user as any)?.vh_number || '');
-  const [officialEmail, setOfficialEmail] = useState<string>(user?.email || '');
+  // Student Profile State - Loaded directly from DB
+  const [vhNumber, setVhNumber] = useState<string>('');
+  const [officialEmail, setOfficialEmail] = useState<string>('');
+  const [phone, setPhone] = useState<string>('');
+  const [dateOfBirth, setDateOfBirth] = useState<string>('');
+  const [bloodGroup, setBloodGroup] = useState<string>('');
+  const [parentName, setParentName] = useState<string>('');
+  const [parentContact, setParentContact] = useState<string>('');
+  const [address, setAddress] = useState<string>('');
+  const [bio, setBio] = useState<string>('');
+  const [profilePhotoUrl, setProfilePhotoUrl] = useState<string>('');
+
   const [isEditingProfile, setIsEditingProfile] = useState<boolean>(false);
-
-  // Optional Read-Only Student Details
-  const [dob, setDob] = useState(user?.dob || '');
-  const [gender, setGender] = useState(user?.gender || 'Male');
-  const [bloodGroup, setBloodGroup] = useState(user?.blood_group || 'O+');
-  const [address, setAddress] = useState(user?.address || '');
-  const [parentName, setParentName] = useState(user?.parent_name || '');
-  const [parentPhone, setParentPhone] = useState(user?.parent_phone || '');
-  const [bio, setBio] = useState(user?.bio || '');
-
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoadingProfile, setIsLoadingProfile] = useState<boolean>(false);
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // Fetch Student Profile directly from Supabase DB (No hardcoded values, No default fallbacks)
+  const fetchStudentProfileFromDb = async () => {
+    if (isAdmin) return;
+    try {
+      setIsLoadingProfile(true);
+      const res = await api.get('/student/profile');
+      const profile = res.data.user;
+      if (profile) {
+        setVhNumber(profile.vh_number || '');
+        setOfficialEmail(profile.email || '');
+        setPhone(profile.phone || '');
+        setDateOfBirth(profile.date_of_birth || profile.dob || '');
+        setBloodGroup(profile.blood_group || '');
+        setParentName(profile.parent_name || '');
+        setParentContact(profile.parent_contact || profile.parent_phone || '');
+        setAddress(profile.address || '');
+        setBio(profile.bio || '');
+        setProfilePhotoUrl(profile.profile_photo_url || profile.profile_photo || '');
+        updateUser(profile);
+      }
+    } catch (err: any) {
+      console.error('Failed to load student profile directly from database', err);
+    } finally {
+      setIsLoadingProfile(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchStudentProfileFromDb();
+  }, [user?.role]);
 
   const handleRegisterCurrentDevice = async () => {
     try {
@@ -71,10 +98,10 @@ export const ProfilePage: React.FC = () => {
     try {
       if (isAdmin) {
         const res = await api.put('/auth/admin/profile', {
-          name,
-          email,
-          phone,
-          profile_photo: profilePhoto,
+          name: adminName,
+          email: adminEmail,
+          phone: adminPhone,
+          profile_photo: adminPhoto,
           institution_name: institutionName,
           department_name: departmentName,
           new_password: newPassword
@@ -84,38 +111,52 @@ export const ProfilePage: React.FC = () => {
         }
         setMessage({ type: 'success', text: 'Admin profile updated successfully.' });
       } else {
-        // Student Self-Profile Update Request (VH Number & Official Email)
-        const res = await api.put('/auth/student/profile', {
+        // Save Student Profile Settings directly to Supabase DB
+        const res = await api.put('/student/profile', {
           vh_number: vhNumber,
           email: officialEmail,
           phone,
-          profile_photo: profilePhoto,
-          dob,
-          gender,
+          date_of_birth: dateOfBirth,
+          dob: dateOfBirth,
           blood_group: bloodGroup,
-          address,
           parent_name: parentName,
-          parent_phone: parentPhone,
+          parent_contact: parentContact,
+          parent_phone: parentContact,
+          address,
           bio,
-          new_password: newPassword
+          profile_photo_url: profilePhotoUrl,
+          profile_photo: profilePhotoUrl
         });
 
         if (res.data.user) {
           updateUser(res.data.user);
+          const updated = res.data.user;
+          setVhNumber(updated.vh_number || '');
+          setOfficialEmail(updated.email || '');
+          setPhone(updated.phone || '');
+          setDateOfBirth(updated.date_of_birth || updated.dob || '');
+          setBloodGroup(updated.blood_group || '');
+          setParentName(updated.parent_name || '');
+          setParentContact(updated.parent_contact || updated.parent_phone || '');
+          setAddress(updated.address || '');
+          setBio(updated.bio || '');
+          setProfilePhotoUrl(updated.profile_photo_url || updated.profile_photo || '');
         }
         setMessage({
           type: 'success',
-          text: res.data.message || 'Profile updated successfully and synced with Admin Records.'
+          text: res.data.message || 'Profile settings saved successfully and synced with Supabase Database.'
         });
         setIsEditingProfile(false);
       }
       setNewPassword('');
     } catch (err: any) {
-      setMessage({ type: 'error', text: err.response?.data?.error || 'Failed to update profile' });
+      setMessage({ type: 'error', text: err.response?.data?.error || 'Failed to update profile settings' });
     } finally {
       setIsSubmitting(false);
     }
   };
+
+  const currentPhoto = profilePhotoUrl || user?.profile_photo_url || user?.profile_photo || '';
 
   return (
     <div className="space-y-6 max-w-3xl mx-auto animate-fade-in pb-12">
@@ -124,7 +165,7 @@ export const ProfilePage: React.FC = () => {
         <p className="text-xs text-[#6B7280] font-medium mt-1">
           {isAdmin
             ? 'Manage institution credentials, contact info, and admin configuration'
-            : 'Manage personal details, self-edited VH number & email, and device hardware credentials'}
+            : 'Manage personal profile settings connected directly to Supabase database'}
         </p>
       </div>
 
@@ -141,7 +182,7 @@ export const ProfilePage: React.FC = () => {
         {/* Profile Avatar Header */}
         <div className="bg-white p-6 rounded-[24px] border border-[#E7E7E7] shadow-enterprise flex items-center gap-4">
           <img
-            src={profilePhoto || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150'}
+            src={currentPhoto || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150'}
             alt={user?.name}
             className="w-16 h-16 rounded-full object-cover border-2 border-[#E7E7E7] shadow-sm"
           />
@@ -171,8 +212,8 @@ export const ProfilePage: React.FC = () => {
                 <input
                   type="text"
                   required
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
+                  value={adminName}
+                  onChange={(e) => setAdminName(e.target.value)}
                   className="w-full px-4 py-3 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827]"
                 />
               </div>
@@ -182,8 +223,8 @@ export const ProfilePage: React.FC = () => {
                 <input
                   type="email"
                   required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  value={adminEmail}
+                  onChange={(e) => setAdminEmail(e.target.value)}
                   className="w-full px-4 py-3 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827]"
                 />
               </div>
@@ -220,18 +261,18 @@ export const ProfilePage: React.FC = () => {
             </button>
           </div>
         ) : (
-          /* STUDENT PERSONAL PROFILE MANAGEMENT CARD */
+          /* STUDENT PROFILE SETTINGS CARD */
           <div className="bg-white p-6 sm:p-8 rounded-[24px] border border-[#E7E7E7] shadow-enterprise space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[#E7E7E7]">
               <div>
                 <div className="flex items-center gap-2">
                   <User className="w-5 h-5 text-[#6D5DFC]" />
                   <h3 className="font-display font-extrabold text-lg text-[#111827]">
-                    PERSONAL PROFILE MANAGEMENT
+                    STUDENT PROFILE SETTINGS
                   </h3>
                 </div>
                 <p className="text-xs text-[#6B7280] font-medium mt-0.5">
-                  Institutional credentials remain locked. You can update your self-managed VH Number and Official Email ID.
+                  Institutional fields are locked. All profile details are fetched directly from Supabase.
                 </p>
               </div>
 
@@ -250,8 +291,7 @@ export const ProfilePage: React.FC = () => {
                     type="button"
                     onClick={() => {
                       setIsEditingProfile(false);
-                      setVhNumber((user as any)?.vh_number || '');
-                      setOfficialEmail(user?.email || '');
+                      fetchStudentProfileFromDb();
                     }}
                     className="px-3.5 py-2 rounded-xl bg-[#FAFAFA] border border-[#E7E7E7] text-[#6B7280] font-bold text-xs hover:text-[#111827] flex items-center gap-1"
                   >
@@ -262,11 +302,11 @@ export const ProfilePage: React.FC = () => {
               )}
             </div>
 
-            {/* LOCKED FIELDS GRID (🔒 READ ONLY) */}
+            {/* LOCKED FIELDS (🔒 READ ONLY) */}
             <div className="space-y-3">
               <span className="text-[10px] font-mono font-extrabold uppercase text-[#6B7280] flex items-center gap-1">
                 <Lock className="w-3.5 h-3.5 text-[#6D5DFC]" />
-                LOCKED INSTITUTIONAL FIELDS (ADMIN MANAGED ONLY)
+                LOCKED INSTITUTIONAL FIELDS (READ ONLY)
               </span>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -348,18 +388,15 @@ export const ProfilePage: React.FC = () => {
             </div>
 
             {/* EDITABLE FIELDS GRID */}
-            <div className="space-y-3 pt-3 border-t border-[#E7E7E7]">
+            <div className="space-y-4 pt-3 border-t border-[#E7E7E7]">
               <span className="text-[10px] font-mono font-extrabold uppercase text-[#6D5DFC]">
-                SELF-MANAGED EDITABLE IDENTIFIERS
+                EDITABLE PROFILE FIELDS (SUPABASE SYNCED)
               </span>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {/* 1. VH Number */}
+                {/* VH Number */}
                 <div>
-                  <label className="block text-xs font-bold text-[#111827] mb-1.5 flex items-center justify-between">
-                    <span>VH Number</span>
-                    {isEditingProfile ? <span className="text-[10px] text-[#6D5DFC] font-bold">Editable (Must be unique)</span> : <span className="text-[10px] text-[#9CA3AF]">Click Edit Profile to unlock</span>}
-                  </label>
+                  <label className="block text-xs font-bold text-[#111827] mb-1.5">VH Number</label>
                   <input
                     type="text"
                     disabled={!isEditingProfile}
@@ -369,17 +406,14 @@ export const ProfilePage: React.FC = () => {
                     className={`w-full px-4 py-3 rounded-2xl text-xs font-mono font-bold transition-all ${
                       isEditingProfile
                         ? 'bg-white border-2 border-[#6D5DFC] text-[#111827] shadow-sm'
-                        : 'bg-[#FAFAFA] border border-[#E7E7E7] text-[#6D5DFC] cursor-not-allowed opacity-90'
+                        : 'bg-[#FAFAFA] border border-[#E7E7E7] text-[#6D5DFC] cursor-not-allowed'
                     }`}
                   />
                 </div>
 
-                {/* 2. Official Email ID */}
+                {/* Official Email */}
                 <div>
-                  <label className="block text-xs font-bold text-[#111827] mb-1.5 flex items-center justify-between">
-                    <span>Official Email ID</span>
-                    {isEditingProfile ? <span className="text-[10px] text-[#12B76A] font-bold">Editable (Must be unique)</span> : <span className="text-[10px] text-[#9CA3AF]">Click Edit Profile to unlock</span>}
-                  </label>
+                  <label className="block text-xs font-bold text-[#111827] mb-1.5">Official Email</label>
                   <input
                     type="email"
                     disabled={!isEditingProfile}
@@ -389,31 +423,145 @@ export const ProfilePage: React.FC = () => {
                     className={`w-full px-4 py-3 rounded-2xl text-xs font-mono font-bold transition-all ${
                       isEditingProfile
                         ? 'bg-white border-2 border-[#12B76A] text-[#111827] shadow-sm'
-                        : 'bg-[#FAFAFA] border border-[#E7E7E7] text-[#12B76A] cursor-not-allowed opacity-90'
+                        : 'bg-[#FAFAFA] border border-[#E7E7E7] text-[#12B76A] cursor-not-allowed'
+                    }`}
+                  />
+                </div>
+
+                {/* Phone Number */}
+                <div>
+                  <label className="block text-xs font-bold text-[#111827] mb-1.5">Phone Number</label>
+                  <input
+                    type="text"
+                    disabled={!isEditingProfile}
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    placeholder="e.g. +91 9876543210"
+                    className={`w-full px-4 py-3 rounded-2xl text-xs font-medium transition-all ${
+                      isEditingProfile
+                        ? 'bg-white border-2 border-[#6D5DFC] text-[#111827] shadow-sm'
+                        : 'bg-[#FAFAFA] border border-[#E7E7E7] text-[#111827] cursor-not-allowed'
+                    }`}
+                  />
+                </div>
+
+                {/* Date Of Birth */}
+                <div>
+                  <label className="block text-xs font-bold text-[#111827] mb-1.5">Date Of Birth</label>
+                  <input
+                    type="date"
+                    disabled={!isEditingProfile}
+                    value={dateOfBirth}
+                    onChange={(e) => setDateOfBirth(e.target.value)}
+                    className={`w-full px-4 py-3 rounded-2xl text-xs font-medium transition-all ${
+                      isEditingProfile
+                        ? 'bg-white border-2 border-[#6D5DFC] text-[#111827] shadow-sm'
+                        : 'bg-[#FAFAFA] border border-[#E7E7E7] text-[#111827] cursor-not-allowed'
+                    }`}
+                  />
+                </div>
+
+                {/* Blood Group */}
+                <div>
+                  <label className="block text-xs font-bold text-[#111827] mb-1.5">Blood Group</label>
+                  <input
+                    type="text"
+                    disabled={!isEditingProfile}
+                    value={bloodGroup}
+                    onChange={(e) => setBloodGroup(e.target.value.toUpperCase())}
+                    placeholder="e.g. O+, A+, B+"
+                    className={`w-full px-4 py-3 rounded-2xl text-xs font-medium transition-all ${
+                      isEditingProfile
+                        ? 'bg-white border-2 border-[#6D5DFC] text-[#111827] shadow-sm'
+                        : 'bg-[#FAFAFA] border border-[#E7E7E7] text-[#111827] cursor-not-allowed'
+                    }`}
+                  />
+                </div>
+
+                {/* Parent Name */}
+                <div>
+                  <label className="block text-xs font-bold text-[#111827] mb-1.5">Parent Name</label>
+                  <input
+                    type="text"
+                    disabled={!isEditingProfile}
+                    value={parentName}
+                    onChange={(e) => setParentName(e.target.value)}
+                    placeholder="e.g. RAMESH K"
+                    className={`w-full px-4 py-3 rounded-2xl text-xs font-medium transition-all ${
+                      isEditingProfile
+                        ? 'bg-white border-2 border-[#6D5DFC] text-[#111827] shadow-sm'
+                        : 'bg-[#FAFAFA] border border-[#E7E7E7] text-[#111827] cursor-not-allowed'
+                    }`}
+                  />
+                </div>
+
+                {/* Parent Contact */}
+                <div>
+                  <label className="block text-xs font-bold text-[#111827] mb-1.5">Parent Contact</label>
+                  <input
+                    type="text"
+                    disabled={!isEditingProfile}
+                    value={parentContact}
+                    onChange={(e) => setParentContact(e.target.value)}
+                    placeholder="e.g. +91 9876543211"
+                    className={`w-full px-4 py-3 rounded-2xl text-xs font-medium transition-all ${
+                      isEditingProfile
+                        ? 'bg-white border-2 border-[#6D5DFC] text-[#111827] shadow-sm'
+                        : 'bg-[#FAFAFA] border border-[#E7E7E7] text-[#111827] cursor-not-allowed'
+                    }`}
+                  />
+                </div>
+
+                {/* Profile Photo URL */}
+                <div>
+                  <label className="block text-xs font-bold text-[#111827] mb-1.5">Profile Photo URL</label>
+                  <input
+                    type="text"
+                    disabled={!isEditingProfile}
+                    value={profilePhotoUrl}
+                    onChange={(e) => setProfilePhotoUrl(e.target.value)}
+                    placeholder="https://..."
+                    className={`w-full px-4 py-3 rounded-2xl text-xs font-medium transition-all ${
+                      isEditingProfile
+                        ? 'bg-white border-2 border-[#6D5DFC] text-[#111827] shadow-sm'
+                        : 'bg-[#FAFAFA] border border-[#E7E7E7] text-[#111827] cursor-not-allowed'
                     }`}
                   />
                 </div>
               </div>
-            </div>
 
-            {/* OPTIONAL FUTURE FIELDS (DISABLED FOR NOW) */}
-            <div className="space-y-3 pt-3 border-t border-[#E7E7E7] opacity-60">
-              <span className="text-[10px] font-mono font-extrabold uppercase text-[#9CA3AF]">
-                OPTIONAL PERSONAL DETAILS (READ-ONLY)
-              </span>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-[10px] font-semibold text-[#6B7280] mb-1">Alternate Mobile Number</label>
-                  <input type="text" disabled value={phone || 'N/A'} className="w-full px-3 py-2 rounded-xl bg-gray-100 border text-xs text-gray-500 cursor-not-allowed" />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-semibold text-[#6B7280] mb-1">Parent Contact Number</label>
-                  <input type="text" disabled value={parentPhone || 'N/A'} className="w-full px-3 py-2 rounded-xl bg-gray-100 border text-xs text-gray-500 cursor-not-allowed" />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-semibold text-[#6B7280] mb-1">Profile Photo</label>
-                  <input type="text" disabled value={profilePhoto ? 'Configured' : 'Default'} className="w-full px-3 py-2 rounded-xl bg-gray-100 border text-xs text-gray-500 cursor-not-allowed" />
-                </div>
+              {/* Address */}
+              <div>
+                <label className="block text-xs font-bold text-[#111827] mb-1.5">Address</label>
+                <textarea
+                  rows={2}
+                  disabled={!isEditingProfile}
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
+                  placeholder="Enter full residential address..."
+                  className={`w-full px-4 py-3 rounded-2xl text-xs font-medium transition-all ${
+                    isEditingProfile
+                      ? 'bg-white border-2 border-[#6D5DFC] text-[#111827] shadow-sm'
+                      : 'bg-[#FAFAFA] border border-[#E7E7E7] text-[#111827] cursor-not-allowed'
+                  }`}
+                />
+              </div>
+
+              {/* Bio */}
+              <div>
+                <label className="block text-xs font-bold text-[#111827] mb-1.5">Bio</label>
+                <textarea
+                  rows={2}
+                  disabled={!isEditingProfile}
+                  value={bio}
+                  onChange={(e) => setBio(e.target.value)}
+                  placeholder="Tell us about yourself..."
+                  className={`w-full px-4 py-3 rounded-2xl text-xs font-medium transition-all ${
+                    isEditingProfile
+                      ? 'bg-white border-2 border-[#6D5DFC] text-[#111827] shadow-sm'
+                      : 'bg-[#FAFAFA] border border-[#E7E7E7] text-[#111827] cursor-not-allowed'
+                  }`}
+                />
               </div>
             </div>
 
@@ -436,7 +584,7 @@ export const ProfilePage: React.FC = () => {
               </button>
             </div>
 
-            {/* Save Changes Button */}
+            {/* Save Profile Settings Button */}
             {isEditingProfile && (
               <button
                 type="submit"
@@ -444,7 +592,7 @@ export const ProfilePage: React.FC = () => {
                 className="w-full py-3.5 rounded-2xl bg-[#6D5DFC] font-extrabold text-xs text-white shadow-floating hover:bg-[#5b4be0] disabled:opacity-40 transition-all flex items-center justify-center gap-2"
               >
                 <Save className="w-4 h-4" />
-                <span>{isSubmitting ? 'Validating & Saving Profile...' : 'Save Profile Changes'}</span>
+                <span>{isSubmitting ? 'Updating Supabase Database...' : 'Save Profile Settings'}</span>
               </button>
             )}
           </div>

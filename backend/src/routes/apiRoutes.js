@@ -20,7 +20,9 @@ router.post('/auth/student/first-login-change-password', verifyToken, authContro
 router.post('/auth/change-password', verifyToken, authController.changePassword);
 router.get('/auth/me', verifyToken, authController.getMe);
 router.put('/auth/admin/profile', verifyToken, requireRole('admin'), authController.updateAdminProfile);
-router.put('/auth/student/profile', verifyToken, requireRole('student'), authController.updateStudentProfile);
+router.get('/student/profile', verifyToken, requireRole('student'), studentController.getStudentSelfProfile);
+router.put('/student/profile', verifyToken, requireRole('student'), studentController.updateStudentSelfProfile);
+router.put('/auth/student/profile', verifyToken, requireRole('student'), studentController.updateStudentSelfProfile);
 router.post('/auth/student/register-device', verifyToken, requireRole('student'), authController.registerStudentDevice);
 
 // --- Faculty Ecosystem Routes ---

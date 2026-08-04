@@ -35,8 +35,15 @@ CREATE TABLE IF NOT EXISTS public.users (
   admission_year INTEGER,
   username TEXT,
   vh_number TEXT,
+  date_of_birth TEXT,
+  parent_contact TEXT,
+  profile_photo_url TEXT,
   created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
+
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS date_of_birth TEXT;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS parent_contact TEXT;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS profile_photo_url TEXT;
 
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 
@@ -144,6 +151,18 @@ CREATE TABLE IF NOT EXISTS public.password_audit_logs (
 );
 
 ALTER TABLE public.password_audit_logs ENABLE ROW LEVEL SECURITY;
+
+-- 7b. Student Profile Audit Logs Table
+CREATE TABLE IF NOT EXISTS public.student_profile_audit_logs (
+  id TEXT PRIMARY KEY,
+  student_id TEXT REFERENCES public.users(id) ON DELETE CASCADE,
+  field_changed TEXT NOT NULL,
+  old_value TEXT,
+  new_value TEXT,
+  timestamp TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+ALTER TABLE public.student_profile_audit_logs ENABLE ROW LEVEL SECURITY;
 
 -- 8. Departments Table
 CREATE TABLE IF NOT EXISTS public.departments (

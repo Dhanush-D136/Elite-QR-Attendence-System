@@ -16,12 +16,16 @@ export interface User {
   attendance_percentage?: number;
   status?: string;
   dob?: string;
+  date_of_birth?: string;
   gender?: string;
   blood_group?: string;
   address?: string;
   parent_name?: string;
   parent_phone?: string;
+  parent_contact?: string;
   bio?: string;
+  vh_number?: string;
+  profile_photo_url?: string;
 }
 
 export interface Department {

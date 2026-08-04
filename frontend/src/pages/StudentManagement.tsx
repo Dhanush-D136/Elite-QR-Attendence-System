@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import api from '../services/api';
+import { getSocket } from '../services/socket';
 import { User } from '../types';
 import * as XLSX from 'xlsx';
 import {
@@ -182,6 +183,19 @@ export const StudentManagement: React.FC = () => {
 
   useEffect(() => {
     fetchStudents();
+
+    const socket = getSocket();
+    const handleUpdate = () => {
+      fetchStudents();
+    };
+
+    socket.on('student_updated', handleUpdate);
+    socket.on('roster_updated', handleUpdate);
+
+    return () => {
+      socket.off('student_updated', handleUpdate);
+      socket.off('roster_updated', handleUpdate);
+    };
   }, [search, department, year, section, statusFilter]);
 
   useEffect(() => {
@@ -442,15 +456,19 @@ export const StudentManagement: React.FC = () => {
       ? students.filter((st) => selectedStudentIds.includes(st.id))
       : students
     ).map((st) => {
-      const vh = (st as any).vh_number || (st.roll_number ? 'VH' + st.roll_number.slice(-5) : 'VH13936');
-      const email = `${vh.toLowerCase()}@velhightech.com`;
+      const vh = (st as any).vh_number || '';
+      const email = st.email || '';
       const attPct = typeof st.attendance_percentage === 'number' ? st.attendance_percentage : 100;
       return {
         'Student Name': st.name,
         'Register Number': st.roll_number,
         'VH Number': vh,
         'Official Email ID': email,
-        'Phone Number': st.phone || 'N/A',
+        'Phone Number': st.phone || '',
+        'Parent Name': st.parent_name || '',
+        'Parent Contact': (st as any).parent_contact || st.parent_phone || '',
+        'Address': st.address || '',
+        'Bio': st.bio || '',
         Department: st.department || 'AI & DS',
         Year: st.year || 3,
         Section: st.section || 'A',
@@ -471,12 +489,12 @@ export const StudentManagement: React.FC = () => {
       ? students.filter((st) => selectedStudentIds.includes(st.id))
       : students;
 
-    let csv = 'Student Name,Register Number,VH Number,Official Email ID,Phone Number,Department,Year,Section,Attendance %,Account Status\n';
+    let csv = 'Student Name,Register Number,VH Number,Official Email ID,Phone Number,Parent Name,Parent Contact,Address,Bio,Department,Year,Section,Attendance %,Account Status\n';
     targetList.forEach((st) => {
-      const vh = (st as any).vh_number || (st.roll_number ? 'VH' + st.roll_number.slice(-5) : 'VH13936');
-      const email = `${vh.toLowerCase()}@velhightech.com`;
+      const vh = (st as any).vh_number || '';
+      const email = st.email || '';
       const attPct = typeof st.attendance_percentage === 'number' ? st.attendance_percentage : 100;
-      csv += `"${st.name}","${st.roll_number}","${vh}","${email}","${st.phone || ''}","${st.department || 'AI & DS'}","${st.year || 3}","${st.section || 'A'}","${attPct}%","${st.status || 'Active'}"\n`;
+      csv += `"${st.name}","${st.roll_number}","${vh}","${email}","${st.phone || ''}","${st.parent_name || ''}","${(st as any).parent_contact || st.parent_phone || ''}","${st.address || ''}","${st.bio || ''}","${st.department || 'AI & DS'}","${st.year || 3}","${st.section || 'A'}","${attPct}%","${st.status || 'Active'}"\n`;
     });
 
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -841,8 +859,8 @@ export const StudentManagement: React.FC = () => {
                     students.map((st) => {
                       const isSelected = selectedStudentIds.includes(st.id);
                       const isDefaultPass = Boolean((st as any).password_status === 'Default Password');
-                      const displayVH = (st as any).vh_number || (st.roll_number ? 'VH' + st.roll_number.slice(-5) : 'VH13936');
-                      const displayEmail = st.email || `${displayVH.toLowerCase()}@velhightech.com`;
+                      const displayVH = (st as any).vh_number || '';
+                      const displayEmail = st.email || '';
 
                       return (
                         <tr
@@ -1568,6 +1586,48 @@ export const StudentManagement: React.FC = () => {
               >
                 <X className="w-5 h-5" />
               </button>
+            </div>
+
+            {/* Profile Information Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-4 bg-[#FAFAFA] rounded-2xl border border-[#E7E7E7] text-xs font-medium">
+              <div>
+                <span className="text-[10px] text-[#6B7280] font-bold uppercase block">VH Number</span>
+                <span className="font-mono text-[#6D5DFC] font-extrabold">{viewingStudentProfile.profile.vh_number || 'N/A'}</span>
+              </div>
+              <div>
+                <span className="text-[10px] text-[#6B7280] font-bold uppercase block">Official Email</span>
+                <span className="font-mono text-[#12B76A] font-bold">{viewingStudentProfile.profile.email || 'N/A'}</span>
+              </div>
+              <div>
+                <span className="text-[10px] text-[#6B7280] font-bold uppercase block">Phone Number</span>
+                <span>{viewingStudentProfile.profile.phone || 'N/A'}</span>
+              </div>
+              <div>
+                <span className="text-[10px] text-[#6B7280] font-bold uppercase block">Date Of Birth</span>
+                <span>{viewingStudentProfile.profile.date_of_birth || viewingStudentProfile.profile.dob || 'N/A'}</span>
+              </div>
+              <div>
+                <span className="text-[10px] text-[#6B7280] font-bold uppercase block">Blood Group</span>
+                <span>{viewingStudentProfile.profile.blood_group || 'N/A'}</span>
+              </div>
+              <div>
+                <span className="text-[10px] text-[#6B7280] font-bold uppercase block">Parent Name</span>
+                <span>{viewingStudentProfile.profile.parent_name || 'N/A'}</span>
+              </div>
+              <div>
+                <span className="text-[10px] text-[#6B7280] font-bold uppercase block">Parent Contact</span>
+                <span>{viewingStudentProfile.profile.parent_contact || viewingStudentProfile.profile.parent_phone || 'N/A'}</span>
+              </div>
+              <div className="sm:col-span-2">
+                <span className="text-[10px] text-[#6B7280] font-bold uppercase block">Address</span>
+                <span>{viewingStudentProfile.profile.address || 'N/A'}</span>
+              </div>
+              {viewingStudentProfile.profile.bio && (
+                <div className="sm:col-span-3">
+                  <span className="text-[10px] text-[#6B7280] font-bold uppercase block">Bio</span>
+                  <span className="italic">{viewingStudentProfile.profile.bio}</span>
+                </div>
+              )}
             </div>
 
             {/* Attendance Summary Panel */}

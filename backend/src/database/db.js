@@ -68,7 +68,10 @@ function runMigrations() {
           { col: 'status', type: "TEXT DEFAULT 'Active'" },
           { col: 'admission_year', type: 'INTEGER' },
           { col: 'username', type: 'TEXT' },
-          { col: 'vh_number', type: 'TEXT' }
+          { col: 'vh_number', type: 'TEXT' },
+          { col: 'date_of_birth', type: 'TEXT' },
+          { col: 'parent_contact', type: 'TEXT' },
+          { col: 'profile_photo_url', type: 'TEXT' }
         ];
 
         userMigrations.forEach(({ col, type }) => {
@@ -453,6 +456,19 @@ function initDb() {
           changed_by TEXT NOT NULL,
           action TEXT NOT NULL,
           changed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (student_id) REFERENCES users(id)
+        )
+      `);
+
+      // Create Student Profile Audit Logs table
+      db.run(`
+        CREATE TABLE IF NOT EXISTS student_profile_audit_logs (
+          id TEXT PRIMARY KEY,
+          student_id TEXT NOT NULL,
+          field_changed TEXT NOT NULL,
+          old_value TEXT,
+          new_value TEXT,
+          timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
           FOREIGN KEY (student_id) REFERENCES users(id)
         )
       `);
