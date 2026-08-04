@@ -132,20 +132,46 @@ function getStudents(req, res) {
       };
     });
 
-    // In-memory sorting for computed fields
-    if (sortBy === 'attendance_percentage') {
-      formattedStudents.sort((a, b) =>
-        dir === 'ASC' ? a.attendance_percentage - b.attendance_percentage : b.attendance_percentage - a.attendance_percentage
-      );
-    } else if (sortBy === 'status') {
-      formattedStudents.sort((a, b) =>
-        dir === 'ASC' ? a.status.localeCompare(b.status) : b.status.localeCompare(a.status)
-      );
-    } else if (sortBy === 'password_status') {
-      formattedStudents.sort((a, b) =>
-        dir === 'ASC' ? a.password_status.localeCompare(b.password_status) : b.password_status.localeCompare(a.password_status)
-      );
-    }
+    // Robust in-memory sorting for all columns
+    const sortMultiplier = dir === 'DESC' ? -1 : 1;
+    formattedStudents.sort((a, b) => {
+      let valA = a[sortBy];
+      let valB = b[sortBy];
+
+      if (sortBy === 'vh_number') {
+        valA = a.vh_number || '';
+        valB = b.vh_number || '';
+      } else if (sortBy === 'email') {
+        valA = a.email || '';
+        valB = b.email || '';
+      } else if (sortBy === 'phone') {
+        valA = a.phone || '';
+        valB = b.phone || '';
+      } else if (sortBy === 'attendance_percentage') {
+        valA = typeof a.attendance_percentage === 'number' ? a.attendance_percentage : 0;
+        valB = typeof b.attendance_percentage === 'number' ? b.attendance_percentage : 0;
+        return (valA - valB) * sortMultiplier;
+      } else if (sortBy === 'status') {
+        valA = a.status || 'Active';
+        valB = b.status || 'Active';
+      } else if (sortBy === 'password_status') {
+        valA = a.password_status || '';
+        valB = b.password_status || '';
+      } else if (sortBy === 'name') {
+        valA = String(a.name || '');
+        valB = String(b.name || '');
+      } else if (sortBy === 'roll_number') {
+        valA = String(a.roll_number || '');
+        valB = String(b.roll_number || '');
+        return valA.localeCompare(valB, undefined, { numeric: true, sensitivity: 'base' }) * sortMultiplier;
+      }
+
+      if (typeof valA === 'number' && typeof valB === 'number') {
+        return (valA - valB) * sortMultiplier;
+      }
+
+      return String(valA || '').localeCompare(String(valB || ''), undefined, { numeric: true, sensitivity: 'base' }) * sortMultiplier;
+    });
 
     // Telemetry Debug Log as requested by prompt specifications
     console.log('[STUDENT FILTER DEBUG]', {

@@ -937,7 +937,45 @@ export const StudentManagement: React.FC = () => {
                       </td>
                     </tr>
                   ) : (
-                    students.map((st) => {
+                    [...students].sort((a, b) => {
+                      const sortMultiplier = sortOrder === 'desc' ? -1 : 1;
+                      let valA: any = (a as any)[sortBy];
+                      let valB: any = (b as any)[sortBy];
+
+                      if (sortBy === 'vh_number') {
+                        valA = (a as any).vh_number || '';
+                        valB = (b as any).vh_number || '';
+                      } else if (sortBy === 'email') {
+                        valA = a.email || '';
+                        valB = b.email || '';
+                      } else if (sortBy === 'phone') {
+                        valA = a.phone || '';
+                        valB = b.phone || '';
+                      } else if (sortBy === 'attendance_percentage') {
+                        valA = typeof a.attendance_percentage === 'number' ? a.attendance_percentage : 0;
+                        valB = typeof b.attendance_percentage === 'number' ? b.attendance_percentage : 0;
+                        return (valA - valB) * sortMultiplier;
+                      } else if (sortBy === 'status') {
+                        valA = a.status || 'Active';
+                        valB = b.status || 'Active';
+                      } else if (sortBy === 'password_status') {
+                        valA = (a as any).password_status || '';
+                        valB = (b as any).password_status || '';
+                      } else if (sortBy === 'name') {
+                        valA = String(a.name || '');
+                        valB = String(b.name || '');
+                      } else if (sortBy === 'roll_number') {
+                        valA = String(a.roll_number || '');
+                        valB = String(b.roll_number || '');
+                        return valA.localeCompare(valB, undefined, { numeric: true, sensitivity: 'base' }) * sortMultiplier;
+                      }
+
+                      if (typeof valA === 'number' && typeof valB === 'number') {
+                        return (valA - valB) * sortMultiplier;
+                      }
+
+                      return String(valA || '').localeCompare(String(valB || ''), undefined, { numeric: true, sensitivity: 'base' }) * sortMultiplier;
+                    }).map((st) => {
                       const isSelected = selectedStudentIds.includes(st.id);
                       const isDefaultPass = Boolean((st as any).password_status === 'Default Password');
                       const displayVH = (st as any).vh_number || '';
