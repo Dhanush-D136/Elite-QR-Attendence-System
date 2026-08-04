@@ -89,15 +89,39 @@ function studentLogin(req, res) {
   `;
 
   db.get(query, [cleanInput, cleanInput, cleanInput, `${cleanInput}%`], async (err, user) => {
-    if (err) return res.status(500).json({ error: 'Database error' });
-    if (!user) return res.status(401).json({ error: 'Invalid Password' });
+    if (err) return res.status(500).json({ error: 'Database error: ' + err.message });
+    if (!user) return res.status(404).json({ error: 'Student account not found. Please check Register Number or Official Email.' });
 
     let isValid = false;
     try {
-      isValid = await bcrypt.compare(password, user.password_hash);
-    } catch (e) {}
+      if (user.password_hash) {
+        isValid = await bcrypt.compare(password, user.password_hash);
+      }
 
-    if (!isValid) return res.status(401).json({ error: 'Invalid Password' });
+      // Flexible fallback for default password logins ('1234' or Register Number) for new/imported students
+      if (!isValid) {
+        const isFirst = Boolean(user.first_login === 1 || user.is_first_login === 1 || user.must_change_password === 1 || user.password_changed === 0);
+        if (isFirst || !user.password_changed) {
+          const passClean = String(password).trim();
+          const rollClean = String(user.roll_number || '').trim();
+          const vhClean = String(user.vh_number || '').trim().toUpperCase();
+
+          if (passClean === '1234' || passClean === rollClean || passClean.toUpperCase() === vhClean) {
+            isValid = true;
+          } else if (user.password_hash) {
+            const is1234 = await bcrypt.compare('1234', user.password_hash).catch(() => false);
+            const isRoll = rollClean ? await bcrypt.compare(rollClean, user.password_hash).catch(() => false) : false;
+            if (is1234 || isRoll) {
+              isValid = true;
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.error('[STUDENT LOGIN AUTH ERROR]', e);
+    }
+
+    if (!isValid) return res.status(401).json({ error: 'Invalid Password. Default password is your Register Number or "1234".' });
 
     const isFirstLogin = Boolean(user.first_login === 1 || user.is_first_login === 1 || user.must_change_password === 1 || user.password_changed === 0);
 
