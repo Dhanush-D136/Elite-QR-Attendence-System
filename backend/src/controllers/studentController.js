@@ -8,9 +8,9 @@ function getStudents(req, res) {
   const { search, department, year, section, status, page = 1, limit = 50 } = req.query;
 
   let query = `
-    SELECT u.id, u.name, u.roll_number, u.vh_number, u.email, u.department, u.year, u.section, u.phone, u.profile_photo, 
+    SELECT u.id, u.name, u.roll_number, u.vh_number, u.email, u.department, u.year, u.section, u.phone, u.profile_photo, u.profile_photo_url, 
            u.device_fingerprint, u.must_change_password, u.first_login, u.password_changed, u.password_changed_at,
-           u.dob, u.gender, u.blood_group, u.address, u.parent_name, u.parent_phone, u.bio, u.status, u.admission_year, u.username, u.created_at,
+           u.dob, u.date_of_birth, u.gender, u.blood_group, u.address, u.parent_name, u.parent_phone, u.parent_contact, u.bio, u.status, u.admission_year, u.username, u.created_at,
            COUNT(DISTINCT ar.id) as attended_count,
            (SELECT COUNT(*) FROM attendance_sessions s WHERE s.department = u.department AND s.year = u.year AND s.section = u.section) as total_sessions
     FROM users u
@@ -66,8 +66,17 @@ function getStudents(req, res) {
         rate = 0;
       }
       const isDefault = Boolean(st.must_change_password === 1 || st.first_login === 1 || st.password_changed === 0);
+      const date_of_birth = st.date_of_birth || st.dob || '';
+      const parent_contact = st.parent_contact || st.parent_phone || '';
+      const profile_photo_url = st.profile_photo_url || st.profile_photo || '';
       return {
         ...st,
+        date_of_birth,
+        dob: date_of_birth,
+        parent_contact,
+        parent_phone: parent_contact,
+        profile_photo_url,
+        profile_photo: profile_photo_url,
         status: st.status || 'Active',
         attendance_percentage: rate,
         password_status: isDefault ? 'Default Password' : 'Custom Password'

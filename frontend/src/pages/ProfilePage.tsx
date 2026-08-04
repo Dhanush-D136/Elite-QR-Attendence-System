@@ -7,9 +7,8 @@ import {
   AlertCircle,
   Smartphone,
   User,
-  Edit3,
   Save,
-  X
+  RefreshCw
 } from 'lucide-react';
 
 export const ProfilePage: React.FC = () => {
@@ -25,22 +24,37 @@ export const ProfilePage: React.FC = () => {
   const [departmentName, setDepartmentName] = useState((user as any)?.department_name || 'Computer Science & Engineering');
   const [newPassword, setNewPassword] = useState('');
 
-  // Student Profile State - Loaded directly from DB
-  const [vhNumber, setVhNumber] = useState<string>('');
-  const [officialEmail, setOfficialEmail] = useState<string>('');
-  const [phone, setPhone] = useState<string>('');
-  const [dateOfBirth, setDateOfBirth] = useState<string>('');
-  const [bloodGroup, setBloodGroup] = useState<string>('');
-  const [parentName, setParentName] = useState<string>('');
-  const [parentContact, setParentContact] = useState<string>('');
-  const [address, setAddress] = useState<string>('');
-  const [bio, setBio] = useState<string>('');
-  const [profilePhotoUrl, setProfilePhotoUrl] = useState<string>('');
+  // Student Profile State - Populated from user & fetched directly from DB
+  const [vhNumber, setVhNumber] = useState<string>((user as any)?.vh_number || '');
+  const [officialEmail, setOfficialEmail] = useState<string>(user?.email || '');
+  const [phone, setPhone] = useState<string>(user?.phone || '');
+  const [dateOfBirth, setDateOfBirth] = useState<string>((user as any)?.date_of_birth || user?.dob || '');
+  const [bloodGroup, setBloodGroup] = useState<string>(user?.blood_group || '');
+  const [parentName, setParentName] = useState<string>(user?.parent_name || '');
+  const [parentContact, setParentContact] = useState<string>((user as any)?.parent_contact || user?.parent_phone || '');
+  const [address, setAddress] = useState<string>(user?.address || '');
+  const [bio, setBio] = useState<string>(user?.bio || '');
+  const [profilePhotoUrl, setProfilePhotoUrl] = useState<string>((user as any)?.profile_photo_url || user?.profile_photo || '');
 
-  const [isEditingProfile, setIsEditingProfile] = useState<boolean>(false);
   const [isLoadingProfile, setIsLoadingProfile] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // Sync state whenever user in AuthContext changes
+  useEffect(() => {
+    if (user && user.role === 'student') {
+      setVhNumber((user as any).vh_number || '');
+      setOfficialEmail(user.email || '');
+      setPhone(user.phone || '');
+      setDateOfBirth((user as any).date_of_birth || user.dob || '');
+      setBloodGroup(user.blood_group || '');
+      setParentName(user.parent_name || '');
+      setParentContact((user as any).parent_contact || user.parent_phone || '');
+      setAddress(user.address || '');
+      setBio(user.bio || '');
+      setProfilePhotoUrl((user as any).profile_photo_url || user.profile_photo || '');
+    }
+  }, [user]);
 
   // Fetch Student Profile directly from Supabase DB (No hardcoded values, No default fallbacks)
   const fetchStudentProfileFromDb = async () => {
@@ -146,7 +160,6 @@ export const ProfilePage: React.FC = () => {
           type: 'success',
           text: res.data.message || 'Profile settings saved successfully and synced with Supabase Database.'
         });
-        setIsEditingProfile(false);
       }
       setNewPassword('');
     } catch (err: any) {
@@ -160,13 +173,27 @@ export const ProfilePage: React.FC = () => {
 
   return (
     <div className="space-y-6 max-w-3xl mx-auto animate-fade-in pb-12">
-      <div>
-        <h1 className="font-display font-extrabold text-2xl text-[#111827]">Account Profile & Settings</h1>
-        <p className="text-xs text-[#6B7280] font-medium mt-1">
-          {isAdmin
-            ? 'Manage institution credentials, contact info, and admin configuration'
-            : 'Manage personal profile settings connected directly to Supabase database'}
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="font-display font-extrabold text-2xl text-[#111827]">Account Profile & Settings</h1>
+          <p className="text-xs text-[#6B7280] font-medium mt-1">
+            {isAdmin
+              ? 'Manage institution credentials, contact info, and admin configuration'
+              : 'Manage personal profile settings connected directly to Supabase database'}
+          </p>
+        </div>
+
+        {!isAdmin && (
+          <button
+            type="button"
+            onClick={fetchStudentProfileFromDb}
+            disabled={isLoadingProfile}
+            className="px-3.5 py-2 rounded-xl bg-white border border-[#E7E7E7] text-xs font-bold text-[#6D5DFC] hover:bg-[#F3F0FF] transition-all flex items-center gap-1.5 shadow-sm"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isLoadingProfile ? 'animate-spin' : ''}`} />
+            <span>{isLoadingProfile ? 'Reloading...' : 'Reload DB Values'}</span>
+          </button>
+        )}
       </div>
 
       {message && (
@@ -275,31 +302,6 @@ export const ProfilePage: React.FC = () => {
                   Institutional fields are locked. All profile details are fetched directly from Supabase.
                 </p>
               </div>
-
-              {!isEditingProfile ? (
-                <button
-                  type="button"
-                  onClick={() => setIsEditingProfile(true)}
-                  className="px-4 py-2.5 rounded-2xl bg-[#F3F0FF] text-[#6D5DFC] font-extrabold text-xs border border-[#6D5DFC]/20 hover:bg-[#6D5DFC] hover:text-white transition-all flex items-center gap-2 self-start sm:self-auto shadow-xs"
-                >
-                  <Edit3 className="w-4 h-4" />
-                  <span>Edit Profile</span>
-                </button>
-              ) : (
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsEditingProfile(false);
-                      fetchStudentProfileFromDb();
-                    }}
-                    className="px-3.5 py-2 rounded-xl bg-[#FAFAFA] border border-[#E7E7E7] text-[#6B7280] font-bold text-xs hover:text-[#111827] flex items-center gap-1"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                    <span>Cancel</span>
-                  </button>
-                </div>
-              )}
             </div>
 
             {/* LOCKED FIELDS (🔒 READ ONLY) */}
@@ -399,15 +401,10 @@ export const ProfilePage: React.FC = () => {
                   <label className="block text-xs font-bold text-[#111827] mb-1.5">VH Number</label>
                   <input
                     type="text"
-                    disabled={!isEditingProfile}
                     value={vhNumber}
                     onChange={(e) => setVhNumber(e.target.value.toUpperCase())}
                     placeholder="e.g. VH13936"
-                    className={`w-full px-4 py-3 rounded-2xl text-xs font-mono font-bold transition-all ${
-                      isEditingProfile
-                        ? 'bg-white border-2 border-[#6D5DFC] text-[#111827] shadow-sm'
-                        : 'bg-[#FAFAFA] border border-[#E7E7E7] text-[#6D5DFC] cursor-not-allowed'
-                    }`}
+                    className="w-full px-4 py-3 rounded-2xl text-xs font-mono font-bold bg-white border-2 border-[#6D5DFC] text-[#111827] shadow-sm focus:outline-none focus:ring-2 focus:ring-[#6D5DFC]/30"
                   />
                 </div>
 
@@ -416,15 +413,10 @@ export const ProfilePage: React.FC = () => {
                   <label className="block text-xs font-bold text-[#111827] mb-1.5">Official Email</label>
                   <input
                     type="email"
-                    disabled={!isEditingProfile}
                     value={officialEmail}
                     onChange={(e) => setOfficialEmail(e.target.value.toLowerCase())}
                     placeholder="vh13936@velhightech.com"
-                    className={`w-full px-4 py-3 rounded-2xl text-xs font-mono font-bold transition-all ${
-                      isEditingProfile
-                        ? 'bg-white border-2 border-[#12B76A] text-[#111827] shadow-sm'
-                        : 'bg-[#FAFAFA] border border-[#E7E7E7] text-[#12B76A] cursor-not-allowed'
-                    }`}
+                    className="w-full px-4 py-3 rounded-2xl text-xs font-mono font-bold bg-white border-2 border-[#12B76A] text-[#111827] shadow-sm focus:outline-none focus:ring-2 focus:ring-[#12B76A]/30"
                   />
                 </div>
 
@@ -433,15 +425,10 @@ export const ProfilePage: React.FC = () => {
                   <label className="block text-xs font-bold text-[#111827] mb-1.5">Phone Number</label>
                   <input
                     type="text"
-                    disabled={!isEditingProfile}
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
                     placeholder="e.g. +91 9876543210"
-                    className={`w-full px-4 py-3 rounded-2xl text-xs font-medium transition-all ${
-                      isEditingProfile
-                        ? 'bg-white border-2 border-[#6D5DFC] text-[#111827] shadow-sm'
-                        : 'bg-[#FAFAFA] border border-[#E7E7E7] text-[#111827] cursor-not-allowed'
-                    }`}
+                    className="w-full px-4 py-3 rounded-2xl text-xs font-medium bg-white border-2 border-[#6D5DFC] text-[#111827] shadow-sm focus:outline-none"
                   />
                 </div>
 
@@ -450,14 +437,9 @@ export const ProfilePage: React.FC = () => {
                   <label className="block text-xs font-bold text-[#111827] mb-1.5">Date Of Birth</label>
                   <input
                     type="date"
-                    disabled={!isEditingProfile}
                     value={dateOfBirth}
                     onChange={(e) => setDateOfBirth(e.target.value)}
-                    className={`w-full px-4 py-3 rounded-2xl text-xs font-medium transition-all ${
-                      isEditingProfile
-                        ? 'bg-white border-2 border-[#6D5DFC] text-[#111827] shadow-sm'
-                        : 'bg-[#FAFAFA] border border-[#E7E7E7] text-[#111827] cursor-not-allowed'
-                    }`}
+                    className="w-full px-4 py-3 rounded-2xl text-xs font-medium bg-white border-2 border-[#6D5DFC] text-[#111827] shadow-sm focus:outline-none"
                   />
                 </div>
 
@@ -466,15 +448,10 @@ export const ProfilePage: React.FC = () => {
                   <label className="block text-xs font-bold text-[#111827] mb-1.5">Blood Group</label>
                   <input
                     type="text"
-                    disabled={!isEditingProfile}
                     value={bloodGroup}
                     onChange={(e) => setBloodGroup(e.target.value.toUpperCase())}
                     placeholder="e.g. O+, A+, B+"
-                    className={`w-full px-4 py-3 rounded-2xl text-xs font-medium transition-all ${
-                      isEditingProfile
-                        ? 'bg-white border-2 border-[#6D5DFC] text-[#111827] shadow-sm'
-                        : 'bg-[#FAFAFA] border border-[#E7E7E7] text-[#111827] cursor-not-allowed'
-                    }`}
+                    className="w-full px-4 py-3 rounded-2xl text-xs font-medium bg-white border-2 border-[#6D5DFC] text-[#111827] shadow-sm focus:outline-none"
                   />
                 </div>
 
@@ -483,15 +460,10 @@ export const ProfilePage: React.FC = () => {
                   <label className="block text-xs font-bold text-[#111827] mb-1.5">Parent Name</label>
                   <input
                     type="text"
-                    disabled={!isEditingProfile}
                     value={parentName}
                     onChange={(e) => setParentName(e.target.value)}
                     placeholder="e.g. RAMESH K"
-                    className={`w-full px-4 py-3 rounded-2xl text-xs font-medium transition-all ${
-                      isEditingProfile
-                        ? 'bg-white border-2 border-[#6D5DFC] text-[#111827] shadow-sm'
-                        : 'bg-[#FAFAFA] border border-[#E7E7E7] text-[#111827] cursor-not-allowed'
-                    }`}
+                    className="w-full px-4 py-3 rounded-2xl text-xs font-medium bg-white border-2 border-[#6D5DFC] text-[#111827] shadow-sm focus:outline-none"
                   />
                 </div>
 
@@ -500,15 +472,10 @@ export const ProfilePage: React.FC = () => {
                   <label className="block text-xs font-bold text-[#111827] mb-1.5">Parent Contact</label>
                   <input
                     type="text"
-                    disabled={!isEditingProfile}
                     value={parentContact}
                     onChange={(e) => setParentContact(e.target.value)}
                     placeholder="e.g. +91 9876543211"
-                    className={`w-full px-4 py-3 rounded-2xl text-xs font-medium transition-all ${
-                      isEditingProfile
-                        ? 'bg-white border-2 border-[#6D5DFC] text-[#111827] shadow-sm'
-                        : 'bg-[#FAFAFA] border border-[#E7E7E7] text-[#111827] cursor-not-allowed'
-                    }`}
+                    className="w-full px-4 py-3 rounded-2xl text-xs font-medium bg-white border-2 border-[#6D5DFC] text-[#111827] shadow-sm focus:outline-none"
                   />
                 </div>
 
@@ -517,15 +484,10 @@ export const ProfilePage: React.FC = () => {
                   <label className="block text-xs font-bold text-[#111827] mb-1.5">Profile Photo URL</label>
                   <input
                     type="text"
-                    disabled={!isEditingProfile}
                     value={profilePhotoUrl}
                     onChange={(e) => setProfilePhotoUrl(e.target.value)}
                     placeholder="https://..."
-                    className={`w-full px-4 py-3 rounded-2xl text-xs font-medium transition-all ${
-                      isEditingProfile
-                        ? 'bg-white border-2 border-[#6D5DFC] text-[#111827] shadow-sm'
-                        : 'bg-[#FAFAFA] border border-[#E7E7E7] text-[#111827] cursor-not-allowed'
-                    }`}
+                    className="w-full px-4 py-3 rounded-2xl text-xs font-medium bg-white border-2 border-[#6D5DFC] text-[#111827] shadow-sm focus:outline-none"
                   />
                 </div>
               </div>
@@ -535,15 +497,10 @@ export const ProfilePage: React.FC = () => {
                 <label className="block text-xs font-bold text-[#111827] mb-1.5">Address</label>
                 <textarea
                   rows={2}
-                  disabled={!isEditingProfile}
                   value={address}
                   onChange={(e) => setAddress(e.target.value)}
                   placeholder="Enter full residential address..."
-                  className={`w-full px-4 py-3 rounded-2xl text-xs font-medium transition-all ${
-                    isEditingProfile
-                      ? 'bg-white border-2 border-[#6D5DFC] text-[#111827] shadow-sm'
-                      : 'bg-[#FAFAFA] border border-[#E7E7E7] text-[#111827] cursor-not-allowed'
-                  }`}
+                  className="w-full px-4 py-3 rounded-2xl text-xs font-medium bg-white border-2 border-[#6D5DFC] text-[#111827] shadow-sm focus:outline-none"
                 />
               </div>
 
@@ -552,15 +509,10 @@ export const ProfilePage: React.FC = () => {
                 <label className="block text-xs font-bold text-[#111827] mb-1.5">Bio</label>
                 <textarea
                   rows={2}
-                  disabled={!isEditingProfile}
                   value={bio}
                   onChange={(e) => setBio(e.target.value)}
                   placeholder="Tell us about yourself..."
-                  className={`w-full px-4 py-3 rounded-2xl text-xs font-medium transition-all ${
-                    isEditingProfile
-                      ? 'bg-white border-2 border-[#6D5DFC] text-[#111827] shadow-sm'
-                      : 'bg-[#FAFAFA] border border-[#E7E7E7] text-[#111827] cursor-not-allowed'
-                  }`}
+                  className="w-full px-4 py-3 rounded-2xl text-xs font-medium bg-white border-2 border-[#6D5DFC] text-[#111827] shadow-sm focus:outline-none"
                 />
               </div>
             </div>
@@ -585,16 +537,14 @@ export const ProfilePage: React.FC = () => {
             </div>
 
             {/* Save Profile Settings Button */}
-            {isEditingProfile && (
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="w-full py-3.5 rounded-2xl bg-[#6D5DFC] font-extrabold text-xs text-white shadow-floating hover:bg-[#5b4be0] disabled:opacity-40 transition-all flex items-center justify-center gap-2"
-              >
-                <Save className="w-4 h-4" />
-                <span>{isSubmitting ? 'Updating Supabase Database...' : 'Save Profile Settings'}</span>
-              </button>
-            )}
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="w-full py-3.5 rounded-2xl bg-[#6D5DFC] font-extrabold text-xs text-white shadow-floating hover:bg-[#5b4be0] disabled:opacity-40 transition-all flex items-center justify-center gap-2"
+            >
+              <Save className="w-4 h-4" />
+              <span>{isSubmitting ? 'Updating Supabase Database...' : 'Save Profile Settings'}</span>
+            </button>
           </div>
         )}
       </form>

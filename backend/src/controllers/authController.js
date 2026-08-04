@@ -134,12 +134,23 @@ function studentLogin(req, res) {
         id: user.id,
         name: user.name,
         roll_number: user.roll_number,
+        vh_number: user.vh_number || '',
         email: user.email,
         department: user.department,
         year: user.year,
         section: user.section,
         role: 'student',
-        profile_photo: user.profile_photo,
+        phone: user.phone || '',
+        dob: user.dob || user.date_of_birth || '',
+        date_of_birth: user.date_of_birth || user.dob || '',
+        blood_group: user.blood_group || '',
+        address: user.address || '',
+        parent_name: user.parent_name || '',
+        parent_phone: user.parent_phone || user.parent_contact || '',
+        parent_contact: user.parent_contact || user.parent_phone || '',
+        bio: user.bio || '',
+        profile_photo: user.profile_photo || user.profile_photo_url || '',
+        profile_photo_url: user.profile_photo_url || user.profile_photo || '',
         device_fingerprint: registeredDevice,
         first_login: isFirstLogin,
         is_first_login: isFirstLogin,
@@ -379,7 +390,7 @@ function getMe(req, res) {
     );
   } else {
     db.get(
-      'SELECT id, name, roll_number, email, role, department, year, section, phone, profile_photo, institution_name, department_name, device_fingerprint, is_first_login, first_login, must_change_password, password_changed, password_changed_at, dob, gender, blood_group, address, parent_name, parent_phone, bio FROM users WHERE id = ?',
+      'SELECT * FROM users WHERE id = ?',
       [userId],
       (err, user) => {
         if (err || !user) {
@@ -403,9 +414,19 @@ function getMe(req, res) {
           );
         }
         const isFirstLogin = Boolean(user.first_login === 1 || user.is_first_login === 1 || user.must_change_password === 1 || user.password_changed === 0);
+        const date_of_birth = user.date_of_birth || user.dob || '';
+        const parent_contact = user.parent_contact || user.parent_phone || '';
+        const profile_photo_url = user.profile_photo_url || user.profile_photo || '';
+
         res.json({
           user: {
             ...user,
+            date_of_birth,
+            dob: date_of_birth,
+            parent_contact,
+            parent_phone: parent_contact,
+            profile_photo_url,
+            profile_photo: profile_photo_url,
             first_login: isFirstLogin,
             is_first_login: isFirstLogin,
             password_changed: !isFirstLogin,
