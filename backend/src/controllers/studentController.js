@@ -762,12 +762,19 @@ function getPasswordAuditLogs(req, res) {
 
 // Get Logged-in Student Self Profile directly from Supabase DB
 function getStudentSelfProfile(req, res) {
-  const studentId = req.user && req.user.id;
+  const studentId = req.user && (req.user.id || req.user.roll_number || req.user.email);
   if (!studentId) {
     return res.status(401).json({ error: 'Unauthorized. Token invalid.' });
   }
 
-  db.get('SELECT * FROM users WHERE id = ? AND role = "student"', [studentId], (err, user) => {
+  const sStr = String(studentId).trim();
+  const query = `
+    SELECT * FROM users 
+    WHERE id = ? OR roll_number = ? OR email = ? OR LOWER(roll_number) = LOWER(?) OR LOWER(email) = LOWER(?)
+    LIMIT 1
+  `;
+
+  db.get(query, [sStr, sStr, sStr, sStr, sStr], (err, user) => {
     if (err || !user) {
       return res.status(404).json({ error: 'Student record not found in database' });
     }
@@ -792,11 +799,12 @@ function getStudentSelfProfile(req, res) {
 
 // Student Self-Service Profile Update (Supabase DB source of truth + Audit Logs + Realtime Sync)
 async function updateStudentSelfProfile(req, res) {
-  const studentId = req.user && req.user.id;
+  const studentId = req.user && (req.user.id || req.user.roll_number || req.user.email);
   if (!studentId) {
     return res.status(401).json({ error: 'Unauthorized. Token invalid.' });
   }
 
+  const sStr = String(studentId).trim();
   const {
     vh_number,
     email,
@@ -814,11 +822,18 @@ async function updateStudentSelfProfile(req, res) {
   } = req.body;
 
   try {
-    db.get('SELECT * FROM users WHERE id = ? AND role = "student"', [studentId], async (err, current) => {
+    const findQuery = `
+      SELECT * FROM users 
+      WHERE id = ? OR roll_number = ? OR email = ? OR LOWER(roll_number) = LOWER(?) OR LOWER(email) = LOWER(?)
+      LIMIT 1
+    `;
+
+    db.get(findQuery, [sStr, sStr, sStr, sStr, sStr], async (err, current) => {
       if (err || !current) {
-        return res.status(404).json({ error: 'Student profile not found' });
+        return res.status(404).json({ error: 'Student profile not found in database' });
       }
 
+      const targetId = current.id;
       let newVh = current.vh_number || '';
       let newEmail = current.email || '';
 
@@ -828,7 +843,7 @@ async function updateStudentSelfProfile(req, res) {
           const vhCheck = await new Promise((resolve) => {
             db.get(
               'SELECT id FROM users WHERE (LOWER(vh_number) = LOWER(?) OR LOWER(roll_number) = LOWER(?)) AND id != ?',
-              [cleanVh, cleanVh, studentId],
+              [cleanVh, cleanVh, targetId],
               (e, row) => resolve(row)
             );
           });
@@ -849,7 +864,7 @@ async function updateStudentSelfProfile(req, res) {
           const emailCheck = await new Promise((resolve) => {
             db.get(
               'SELECT id FROM users WHERE LOWER(email) = LOWER(?) AND id != ?',
-              [cleanEmail, studentId],
+              [cleanEmail, targetId],
               (e, row) => resolve(row)
             );
           });
@@ -891,7 +906,7 @@ async function updateStudentSelfProfile(req, res) {
           db.run(
             `INSERT INTO student_profile_audit_logs (id, student_id, field_changed, old_value, new_value, timestamp)
              VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
-            [auditId, studentId, c.field, o || 'N/A', n || 'N/A']
+            [auditId, targetId, c.field, o || 'N/A', n || 'N/A']
           );
         }
       });
@@ -911,7 +926,7 @@ async function updateStudentSelfProfile(req, res) {
           bio = ?,
           profile_photo_url = ?,
           profile_photo = ?
-        WHERE id = ? AND role = 'student'
+        WHERE id = ?
       `;
 
       const params = [
@@ -928,7 +943,7 @@ async function updateStudentSelfProfile(req, res) {
         newBio,
         newPhoto,
         newPhoto,
-        studentId
+        targetId
       ];
 
       db.run(updateSql, params, function (errUpdate) {
@@ -936,7 +951,7 @@ async function updateStudentSelfProfile(req, res) {
           return res.status(500).json({ error: 'Failed to update student profile: ' + errUpdate.message });
         }
 
-        db.get('SELECT * FROM users WHERE id = ? AND role = "student"', [studentId], (errGet, freshUser) => {
+        db.get('SELECT * FROM users WHERE id = ?', [targetId], (errGet, freshUser) => {
           if (freshUser) {
             freshUser.date_of_birth = freshUser.date_of_birth || freshUser.dob || '';
             freshUser.parent_contact = freshUser.parent_contact || freshUser.parent_phone || '';
@@ -946,13 +961,13 @@ async function updateStudentSelfProfile(req, res) {
           try {
             const io = req.app.get('socketio');
             if (io) {
-              io.emit('student_updated', { studentId, user: freshUser });
-              io.emit('roster_updated', { studentId, user: freshUser });
+              io.emit('student_updated', { studentId: targetId, user: freshUser });
+              io.emit('roster_updated', { studentId: targetId, user: freshUser });
             }
           } catch (sErr) {}
 
           res.json({
-            message: 'Student profile updated successfully and synced with Admin Records.',
+            message: 'Student profile updated successfully and synced with Supabase Database.',
             user: freshUser
           });
         });
