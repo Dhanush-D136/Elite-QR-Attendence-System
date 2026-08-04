@@ -413,7 +413,7 @@ function repairDataIntegrity(req, res) {
 
 // Student Period-Wise Attendance Intelligence API
 function getPeriodAttendanceIntelligence(req, res) {
-  const { from_date, to_date, department, year, section, subject, search } = req.query;
+  const { from_date, to_date, department, year, section, subject, search, day_order, faculty, academic_year, class_id } = req.query;
 
   const todayStr = new Date().toISOString().split('T')[0];
   const fromDate = from_date || todayStr;
@@ -423,17 +423,29 @@ function getPeriodAttendanceIntelligence(req, res) {
   let studentQuery = `SELECT id, name, roll_number, vh_number, email, department, year, section, profile_photo FROM users WHERE role = 'student'`;
   const studentParams = [];
 
-  if (department && department !== 'All') {
-    const dClean = department.trim().toLowerCase();
-    if (dClean.includes('ai') || dClean.includes('ds') || dClean.includes('data')) {
+  if (department && department !== 'All' && department !== '') {
+    const dClean = department.trim();
+    if (dClean === 'AI & DS' || dClean === 'AIDS' || dClean.includes('AI') || dClean.includes('Data')) {
       studentQuery += ` AND (department LIKE '%AI%' OR department LIKE '%DS%' OR department LIKE '%Data%')`;
+    } else if (dClean === 'CSE' || dClean.includes('Computer')) {
+      studentQuery += ` AND (department = 'CSE' OR department LIKE '%Computer%')`;
+    } else if (dClean === 'ECE' || dClean.includes('Electronics')) {
+      studentQuery += ` AND (department = 'ECE' OR department LIKE '%Electronics%')`;
+    } else if (dClean === 'IT' || dClean.includes('Information')) {
+      studentQuery += ` AND (department = 'IT' OR department LIKE '%Information%')`;
+    } else if (dClean === 'EEE' || dClean.includes('Electrical')) {
+      studentQuery += ` AND (department = 'EEE' OR department LIKE '%Electrical%')`;
+    } else if (dClean === 'Mechanical' || dClean.includes('Mech')) {
+      studentQuery += ` AND (department LIKE '%Mech%')`;
+    } else if (dClean === 'Civil') {
+      studentQuery += ` AND (department LIKE '%Civil%')`;
     } else {
       studentQuery += ` AND department = ?`;
       studentParams.push(department);
     }
   }
 
-  if (year && year !== 'All') {
+  if (year && year !== 'All' && year !== '') {
     let yearNum = parseInt(year, 10);
     if (isNaN(yearNum)) {
       const yStr = String(year).toUpperCase();
@@ -448,7 +460,7 @@ function getPeriodAttendanceIntelligence(req, res) {
     }
   }
 
-  if (section && section !== 'All') {
+  if (section && section !== 'All' && section !== '') {
     const cleanSec = String(section).trim().replace(/^Section\s+/i, '');
     studentQuery += ` AND (section = ? OR section = ?)`;
     studentParams.push(cleanSec, `Section ${cleanSec}`);
@@ -469,8 +481,11 @@ function getPeriodAttendanceIntelligence(req, res) {
       db.get("SELECT COUNT(*) as total_students, COUNT(DISTINCT department) as depts FROM users WHERE role = 'student'", [], (errDiag, diagRow) => {
         const totalStudentsInDb = diagRow ? diagRow.total_students : 0;
 
-      // 2. Fetch Timetables
-      db.all(`SELECT * FROM timetables WHERE (status = 'ACTIVE' OR status IS NULL OR status = '') ORDER BY CAST(period_number AS INTEGER) ASC`, [], (errTt, timetables) => {
+      // 2. Fetch Timetables tailored to selected department, year, section
+      let ttQuery = `SELECT * FROM timetables WHERE (status = 'ACTIVE' OR status IS NULL OR status = '')`;
+      const ttParams = [];
+
+      db.all(ttQuery, ttParams, (errTt, timetables) => {
         const ttList = timetables || [];
 
         // Determine today's day order and period subjects
@@ -486,15 +501,103 @@ function getPeriodAttendanceIntelligence(req, res) {
           'Saturday': 'Off Day',
           'Sunday': 'Off Day'
         };
-        const dayOrderLabel = dayOrderMap[targetDay] || targetDay;
+        const dayOrderLabel = day_order && day_order !== 'Auto' ? day_order : (dayOrderMap[targetDay] || targetDay);
 
-        // Filter active timetable slots for target day
-        const dayTimetable = ttList.filter(t => (t.day || '').toLowerCase() === targetDay.toLowerCase());
+        // Department-tailored Timetable matching
+        let filteredTt = ttList.filter(t => (t.day || '').toLowerCase() === targetDay.toLowerCase());
+        if (department && department !== 'All' && department !== '') {
+          const deptMatch = filteredTt.filter(t => (t.department || '').toLowerCase().includes(department.toLowerCase()) || department.toLowerCase().includes((t.department || '').toLowerCase()));
+          if (deptMatch.length > 0) filteredTt = deptMatch;
+        }
 
+        // Dynamic Department-Specific Subjects Fallbacks
+        const getDeptSubjects = (deptName) => {
+          const d = (deptName || '').toUpperCase();
+          if (d.includes('CSE')) {
+            return {
+              P1: 'Compiler Design',
+              P2: 'Computer Networks',
+              P3: 'Database Systems',
+              P4: 'Break / Seminar',
+              P5: 'Software Engineering',
+              P6: 'Web Technology',
+              P7: 'CSE Systems Lab',
+              P8: 'Aptitude & Soft Skills'
+            };
+          } else if (d.includes('ECE')) {
+            return {
+              P1: 'Digital Signal Processing',
+              P2: 'Microcontrollers & Embedded',
+              P3: 'Wireless Communication',
+              P4: 'Break / Seminar',
+              P5: 'Analog Circuits',
+              P6: 'VLSI Design',
+              P7: 'ECE Electronics Lab',
+              P8: 'Technical Writing'
+            };
+          } else if (d.includes('IT')) {
+            return {
+              P1: 'Cloud Computing Architecture',
+              P2: 'Cyber Security & Forensics',
+              P3: 'Full Stack Web Development',
+              P4: 'Break / Seminar',
+              P5: 'Mobile Application Dev',
+              P6: 'IT Software Lab',
+              P7: 'IT Software Lab',
+              P8: 'Career Development'
+            };
+          } else if (d.includes('EEE')) {
+            return {
+              P1: 'Power Electronics',
+              P2: 'Control Systems Engineering',
+              P3: 'Electrical Machines II',
+              P4: 'Break / Seminar',
+              P5: 'Renewable Energy Systems',
+              P6: 'Power Systems Lab',
+              P7: 'Power Systems Lab',
+              P8: 'Soft Skills'
+            };
+          } else if (d.includes('MECH')) {
+            return {
+              P1: 'Thermodynamics & Heat Transfer',
+              P2: 'Fluid Mechanics & Machinery',
+              P3: 'Manufacturing Technology',
+              P4: 'Break / Seminar',
+              P5: 'CAD / CAM Engineering',
+              P6: 'Thermal Engineering Lab',
+              P7: 'Thermal Engineering Lab',
+              P8: 'Industrial Orientation'
+            };
+          } else if (d.includes('CIVIL')) {
+            return {
+              P1: 'Structural Analysis & Design',
+              P2: 'Environmental Engineering',
+              P3: 'Geotechnical Engineering',
+              P4: 'Break / Seminar',
+              P5: 'Transportation Engineering',
+              P6: 'Surveying & CAD Lab',
+              P7: 'Surveying & CAD Lab',
+              P8: 'Technical Seminar'
+            };
+          }
+          // Default AI & DS
+          return {
+            P1: 'Knowledge Engineering',
+            P2: 'Machine Learning',
+            P3: 'Data Mining & Analytics',
+            P4: 'Break / Seminar',
+            P5: 'Computer Vision & AI',
+            P6: 'AI & Data Science Lab',
+            P7: 'AI & Data Science Lab',
+            P8: 'Placement Training'
+          };
+        };
+
+        const deptFallbacks = getDeptSubjects(department);
         const periodSubjectsMap = {};
         for (let p = 1; p <= 8; p++) {
-          const slot = dayTimetable.find(t => Number(t.period_number) === p);
-          periodSubjectsMap[`P${p}`] = slot ? slot.subject_name : (p === 4 ? 'Break / Seminar' : `Period ${p}`);
+          const slot = filteredTt.find(t => Number(t.period_number) === p);
+          periodSubjectsMap[`P${p}`] = slot ? slot.subject_name : (deptFallbacks[`P${p}`] || `Period ${p}`);
         }
 
         // 3. Fetch Active Live QR Session Telemetry
@@ -550,7 +653,7 @@ function getPeriodAttendanceIntelligence(req, res) {
 
                 let cleanP = pNo ? String(pNo).replace(/^P/i, '') : null;
                 if (!cleanP && rec.subject) {
-                  const matchSlot = dayTimetable.find(t => (t.subject_name || '').toLowerCase() === rec.subject.toLowerCase());
+                  const matchSlot = filteredTt.find(t => (t.subject_name || '').toLowerCase() === rec.subject.toLowerCase());
                   cleanP = matchSlot ? String(matchSlot.period_number).replace(/^P/i, '') : '1';
                 }
                 if (!cleanP) cleanP = '1';
@@ -569,7 +672,7 @@ function getPeriodAttendanceIntelligence(req, res) {
             });
 
             // 5. Compute Student Master Matrix
-            const totalScheduledPerDay = Math.max(1, dayTimetable.length > 0 ? dayTimetable.length : 8);
+            const totalScheduledPerDay = Math.max(1, filteredTt.length > 0 ? filteredTt.length : 8);
 
             const studentsMatrix = studentList.map(st => {
               const stSet = studentPeriodSetMap.get(st.id) || new Set();
@@ -640,9 +743,9 @@ function getPeriodAttendanceIntelligence(req, res) {
                 roll_number: st.roll_number || st.vh_number || 'N/A',
                 vh_number: st.vh_number || '',
                 name: st.name,
-                department: st.department || 'AI & DS',
-                year: st.year || 3,
-                section: st.section || 'A',
+                department: st.department || department || 'AI & DS',
+                year: st.year || (year ? parseInt(year, 10) : 3),
+                section: st.section || section || 'A',
                 profile_photo: st.profile_photo,
                 presentPeriods: presentCount,
                 totalScheduledPeriods: totalScheduled,
@@ -774,7 +877,7 @@ function getPeriodAttendanceIntelligence(req, res) {
   };
 
   const initialList = students || [];
-  if (initialList.length === 0) {
+  if (initialList.length === 0 && (!department || department === 'All') && (!year || year === 'All') && (!section || section === 'All')) {
     db.all("SELECT id, name, roll_number, vh_number, email, department, year, section, profile_photo FROM users WHERE role = 'student' ORDER BY roll_number ASC, name ASC", [], (errFb, fbStudents) => {
       processWithStudentList(fbStudents || []);
     });
