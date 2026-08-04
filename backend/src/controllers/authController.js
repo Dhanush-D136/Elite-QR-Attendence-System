@@ -476,7 +476,6 @@ async function updateAdminProfile(req, res) {
 }
 
 // Update Student Profile
-async // Student Self-Service Profile Update (Secure Limited Fields: VH Number & Email)
 async function updateStudentProfile(req, res) {
   const { vh_number, email, phone, profile_photo, dob, gender, blood_group, address, parent_name, parent_phone, bio, new_password } = req.body;
   const studentId = req.user.id;
