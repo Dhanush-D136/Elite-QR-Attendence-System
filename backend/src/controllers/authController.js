@@ -455,36 +455,147 @@ async function updateAdminProfile(req, res) {
 }
 
 // Update Student Profile
+async // Student Self-Service Profile Update (Secure Limited Fields: VH Number & Email)
 async function updateStudentProfile(req, res) {
-  const { phone, profile_photo, dob, gender, blood_group, address, parent_name, parent_phone, bio, new_password } = req.body;
+  const { vh_number, email, phone, profile_photo, dob, gender, blood_group, address, parent_name, parent_phone, bio, new_password } = req.body;
   const studentId = req.user.id;
 
   try {
-    let passwordHash = null;
-    if (new_password && new_password.trim().length >= 4) {
-      passwordHash = await bcrypt.hash(new_password, 10);
-    }
+    // 1. Fetch current student record
+    db.get('SELECT * FROM users WHERE id = ? AND role = \'student\'', [studentId], async (err, currentStudent) => {
+      if (err || !currentStudent) {
+        return res.status(404).json({ error: 'Student record not found' });
+      }
 
-    let query = `UPDATE users SET phone = ?, profile_photo = ?, dob = ?, gender = ?, blood_group = ?, address = ?, parent_name = ?, parent_phone = ?, bio = ?`;
-    const params = [phone || '', profile_photo, dob || null, gender || null, blood_group || null, address || null, parent_name || null, parent_phone || null, bio || null];
+      let newVh = currentStudent.vh_number;
+      let newEmail = currentStudent.email;
 
-    if (passwordHash) {
-      query += `, password_hash = ?, must_change_password = 0, is_first_login = 0, first_login = 0, password_changed = 1`;
-      params.push(passwordHash);
-    }
+      // 2. Validate VH Number if changing
+      if (vh_number && String(vh_number).trim() !== '') {
+        const cleanVh = String(vh_number).trim().toUpperCase();
+        
+        // Check uniqueness across users table
+        const vhCheck = await new Promise((resolve) => {
+          db.get(
+            `SELECT id FROM users WHERE (LOWER(vh_number) = LOWER(?) OR LOWER(roll_number) = LOWER(?)) AND id != ?`,
+            [cleanVh, cleanVh, studentId],
+            (e, row) => resolve(row)
+          );
+        });
 
-    query += ` WHERE id = ? AND role = 'student'`;
-    params.push(studentId);
+        if (vhCheck) {
+          return res.status(400).json({ error: `VH Number "${cleanVh}" is already assigned to another student. Please enter a unique VH Number.` });
+        }
+        newVh = cleanVh;
+      }
 
-    db.run(query, params, function (err) {
-      if (err) return res.status(500).json({ error: 'Failed to update student profile: ' + err.message });
+      // 3. Validate Official Email ID if changing
+      if (email && String(email).trim() !== '') {
+        const cleanEmail = String(email).trim().toLowerCase();
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(cleanEmail)) {
+          return res.status(400).json({ error: 'Invalid email address format.' });
+        }
 
-      db.get('SELECT id, name, roll_number, email, role, department, year, section, phone, profile_photo, device_fingerprint, dob, gender, blood_group, address, parent_name, parent_phone, bio FROM users WHERE id = ?', [studentId], (err, user) => {
-        res.json({ message: 'Student profile updated successfully', user });
+        // Check uniqueness across users table
+        const emailCheck = await new Promise((resolve) => {
+          db.get(
+            `SELECT id FROM users WHERE LOWER(email) = LOWER(?) AND id != ?`,
+            [cleanEmail, studentId],
+            (e, row) => resolve(row)
+          );
+        });
+
+        if (emailCheck) {
+          return res.status(400).json({ error: `Official Email ID "${cleanEmail}" is already registered to another account.` });
+        }
+        newEmail = cleanEmail;
+      }
+
+      // Password Hash if updating password
+      let passwordHash = null;
+      if (new_password && new_password.trim().length >= 4) {
+        passwordHash = await bcrypt.hash(new_password, 10);
+      }
+
+      // 4. Update Database (ONLY vh_number, email, phone, profile_photo, etc. Name, roll_number, department, year, section remain LOCKED)
+      let updateSql = `
+        UPDATE users 
+        SET vh_number = ?, email = ?, phone = ?, profile_photo = ?, dob = ?, gender = ?, blood_group = ?, address = ?, parent_name = ?, parent_phone = ?, bio = ?
+      `;
+      const updateParams = [
+        newVh,
+        newEmail,
+        phone || currentStudent.phone || '',
+        profile_photo || currentStudent.profile_photo || '',
+        dob || currentStudent.dob || null,
+        gender || currentStudent.gender || null,
+        blood_group || currentStudent.blood_group || null,
+        address || currentStudent.address || null,
+        parent_name || currentStudent.parent_name || null,
+        parent_phone || currentStudent.parent_phone || null,
+        bio || currentStudent.bio || null
+      ];
+
+      if (passwordHash) {
+        updateSql += `, password_hash = ?, must_change_password = 0, is_first_login = 0, first_login = 0, password_changed = 1`;
+        updateParams.push(passwordHash);
+      }
+
+      updateSql += ` WHERE id = ? AND role = 'student'`;
+      updateParams.push(studentId);
+
+      db.run(updateSql, updateParams, function (errUpdate) {
+        if (errUpdate) {
+          return res.status(500).json({ error: 'Failed to update student profile: ' + errUpdate.message });
+        }
+
+        // 5. Create Audit Log Entry
+        const vhChanged = currentStudent.vh_number !== newVh;
+        const emailChanged = currentStudent.email !== newEmail;
+
+        if (vhChanged || emailChanged) {
+          const auditDetails = [
+            vhChanged ? `VH Number: "${currentStudent.vh_number || 'N/A'}" → "${newVh}"` : null,
+            emailChanged ? `Email: "${currentStudent.email || 'N/A'}" → "${newEmail}"` : null
+          ].filter(Boolean).join(', ');
+
+          db.run(
+            `INSERT INTO password_audit_logs (id, user_id, action_type, old_value, new_value, ip_address)
+             VALUES (?, ?, ?, ?, ?, ?)`,
+            [
+              uuidv4(),
+              studentId,
+              'STUDENT_SELF_PROFILE_UPDATE',
+              `Name: ${currentStudent.name}, Reg No: ${currentStudent.roll_number}`,
+              auditDetails,
+              req.headers['x-forwarded-for'] || req.socket.remoteAddress || '127.0.0.1'
+            ]
+          );
+        }
+
+        // 6. Broadcast Realtime Socket.IO Event for instant sync across Admin & Faculty portals
+        try {
+          const io = req.app.get('socketio');
+          if (io) {
+            io.emit('roster_updated', { studentId, vh_number: newVh, email: newEmail });
+            io.emit('student_updated', { studentId, vh_number: newVh, email: newEmail });
+          }
+        } catch (sErr) {
+          console.warn('Socket broadcast warning:', sErr.message);
+        }
+
+        // 7. Return refreshed student profile
+        db.get('SELECT id, name, roll_number, vh_number, email, role, department, year, section, phone, profile_photo, device_fingerprint, dob, gender, blood_group, address, parent_name, parent_phone, bio FROM users WHERE id = ?', [studentId], (errGet, freshUser) => {
+          res.json({
+            message: 'Profile updated successfully and synced with Admin Records.',
+            user: freshUser
+          });
+        });
       });
     });
   } catch (e) {
-    res.status(500).json({ error: 'Server error updating student profile' });
+    res.status(500).json({ error: 'Server error updating student profile: ' + e.message });
   }
 }
 
