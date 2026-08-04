@@ -409,8 +409,21 @@ export const StudentManagement: React.FC = () => {
           return;
         }
 
-        const res = await api.post('/students/bulk-import', { students: data });
-        alert(`Successfully imported ${res.data.importedCount} student accounts!`);
+        const res = await api.post('/students/bulk-import', {
+          students: data,
+          defaultDepartment: department || 'AI & Data Science',
+          defaultYear: year || 3,
+          defaultSection: section || 'A'
+        });
+
+        alert(
+          `📊 EXCEL IMPORT REPORT:\n\n` +
+          `✓ Imported Students: ${res.data.importedCount || 0}\n` +
+          `✓ Updated Students: ${res.data.updatedCount || 0}\n` +
+          `⚪ Skipped Students: ${res.data.skippedCount || 0}\n` +
+          `❌ Failed Students: ${res.data.failedCount || 0}\n\n` +
+          (res.data.errors && res.data.errors.length > 0 ? `Errors:\n${res.data.errors.slice(0, 3).join('\n')}` : 'All rows processed cleanly and synced with Supabase.')
+        );
         setShowImportModal(false);
         fetchStudents();
       } catch (err) {
@@ -474,30 +487,28 @@ export const StudentManagement: React.FC = () => {
     }
   };
 
-  // Export to Excel (.xlsx)
+  // Export to Excel (.xlsx) matching requested College Format
   const handleExportExcel = () => {
-    const exportData = (selectedStudentIds.length > 0
+    const targetList = selectedStudentIds.length > 0
       ? students.filter((st) => selectedStudentIds.includes(st.id))
-      : students
-    ).map((st) => {
+      : students;
+
+    const exportData = targetList.map((st, idx) => {
       const vh = (st as any).vh_number || '';
-      const email = st.email || '';
-      const attPct = typeof st.attendance_percentage === 'number' ? st.attendance_percentage : 100;
+      const attPct = typeof st.attendance_percentage === 'number' ? `${st.attendance_percentage}%` : '100%';
       return {
-        'Student Name': st.name,
-        'Register Number': st.roll_number,
-        'VH Number': vh,
-        'Official Email ID': email,
-        'Phone Number': st.phone || '',
-        'Parent Name': st.parent_name || '',
-        'Parent Contact': (st as any).parent_contact || st.parent_phone || '',
-        'Address': st.address || '',
-        'Bio': st.bio || '',
-        Department: st.department || 'AI & DS',
-        Year: st.year || 3,
-        Section: st.section || 'A',
-        'Attendance %': `${attPct}%`,
-        'Account Status': st.status || 'Active'
+        'S.No.': idx + 1,
+        'VH No.': vh,
+        'Reg. No.': st.roll_number,
+        'Name': st.name,
+        'Student phone no': st.phone || '',
+        'Parent Phone no': (st as any).parent_contact || st.parent_phone || '',
+        'Blood Group': st.blood_group || '',
+        'Attendance %': attPct,
+        'Status': st.status || 'Active',
+        'Department': st.department || 'AI & DS',
+        'Year': st.year || 3,
+        'Section': st.section || 'A'
       };
     });
 

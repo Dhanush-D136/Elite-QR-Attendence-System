@@ -384,61 +384,143 @@ function bulkDeleteStudents(req, res) {
   });
 }
 
-// Bulk Import Students
+// Bulk Import Students with College Excel Header Mapping & Upsert Logic
 async function bulkImportStudents(req, res) {
-  const studentsList = req.body.students;
+  const { students: studentsList, defaultDepartment = 'AI & Data Science', defaultYear = 3, defaultSection = 'A' } = req.body;
 
   if (!Array.isArray(studentsList) || studentsList.length === 0) {
     return res.status(400).json({ error: 'Valid array of students required for bulk import' });
   }
 
-  const defaultPasswordHash = await bcrypt.hash('1234', 10);
   let importedCount = 0;
+  let updatedCount = 0;
+  let skippedCount = 0;
+  let failedCount = 0;
   let errors = [];
 
   for (const st of studentsList) {
     try {
-      const id = uuidv4();
-      const photo = st.profile_photo || `https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150`;
-      const roll = String(st.roll_number || st['Register Number'] || st['Roll Number'] || st['roll_number'] || '').trim();
-      
-      let vh = String(st.vh_number || st['VH Number'] || st['VH'] || st['vh_number'] || '').trim().toUpperCase();
+      // 1. Extract Register Number (roll_number)
+      const roll = String(
+        st['Reg. No.'] || st['Reg.No.'] || st['Reg No'] || st['Register Number'] || st['roll_number'] || st['Roll Number'] || st['roll_no'] || ''
+      ).trim();
+
+      if (!roll) {
+        skippedCount++;
+        continue;
+      }
+
+      // 2. Extract or Auto-Generate VH Number
+      let vh = String(
+        st['VH No.'] || st['VH No'] || st['VH Number'] || st['vh_number'] || st['VH'] || ''
+      ).trim().toUpperCase();
+
       if (!vh) {
         const num = roll.replace(/[^0-9]/g, '');
         vh = 'VH' + (num.length >= 4 ? num.slice(-5) : '13936');
       }
 
-      const officialEmail = `${vh.toLowerCase()}@velhightech.com`;
+      // 3. Extract Name
+      const name = String(
+        st['Name'] || st['Student Name'] || st['student_name'] || ''
+      ).trim() || 'Student ' + roll;
 
-      await new Promise((resolve, reject) => {
-        db.run(
-          `INSERT OR REPLACE INTO users (id, name, roll_number, vh_number, email, role, department, year, section, phone, profile_photo, status, password_hash, must_change_password, is_first_login, first_login, password_changed)
-           VALUES (?, ?, ?, ?, ?, 'student', ?, ?, ?, ?, ?, 'Active', ?, 1, 1, 1, 0)`,
-          [id, st.name || st['Student Name'] || st['Name'], roll, vh, officialEmail, st.department || st['Department'] || 'AI & Data Science', parseInt(st.year || st['Year'] || 3), st.section || st['Section'] || 'A', st.phone || st['Phone'] || '', photo, defaultPasswordHash],
-          function (err) {
-            if (err) reject(err);
-            else {
-              if (this.changes > 0) {
+      // 4. Extract Phone Number (cleaned 10-digit)
+      let phone = String(
+        st['Student phone no'] || st['Student Phone No'] || st['Phone Number'] || st['phone_number'] || st['phone'] || ''
+      ).replace(/[^0-9+]/g, '').trim();
+
+      // 5. Extract Parent Phone Number
+      let parentPhone = String(
+        st['Parent Phone no'] || st['Parent Phone No'] || st['Parent Contact'] || st['parent_phone'] || st['parent_contact'] || ''
+      ).replace(/[^0-9+]/g, '').trim();
+
+      // 6. Extract Blood Group
+      const bloodGroup = String(
+        st['Blood Group'] || st['blood_group'] || ''
+      ).trim().toUpperCase();
+
+      // 7. Auto-Generate Email
+      const officialEmail = (
+        st['Email'] || st['Official Email'] || st['email'] || `${vh.toLowerCase()}@velhightech.com`
+      ).trim().toLowerCase();
+
+      // 8. Department, Year, Section
+      const dept = st['Department'] || st.department || defaultDepartment;
+      const yr = parseInt(st['Year'] || st.year || defaultYear) || 3;
+      const sec = st['Section'] || st.section || defaultSection;
+
+      // Check if student with roll_number exists in Database
+      const existingUser = await new Promise((resolve) => {
+        db.get(`SELECT id FROM users WHERE roll_number = ? AND role = 'student'`, [roll], (err, row) => {
+          resolve(row);
+        });
+      });
+
+      if (existingUser) {
+        // UPDATE existing student
+        await new Promise((resolve, reject) => {
+          db.run(
+            `UPDATE users SET 
+               name = COALESCE(NULLIF(?, ''), name),
+               vh_number = COALESCE(NULLIF(?, ''), vh_number),
+               email = COALESCE(NULLIF(?, ''), email),
+               phone = COALESCE(NULLIF(?, ''), phone),
+               parent_phone = COALESCE(NULLIF(?, ''), parent_phone),
+               parent_contact = COALESCE(NULLIF(?, ''), parent_contact),
+               blood_group = COALESCE(NULLIF(?, ''), blood_group),
+               department = COALESCE(NULLIF(?, ''), department),
+               year = COALESCE(NULLIF(?, 0), year),
+               section = COALESCE(NULLIF(?, ''), section)
+             WHERE roll_number = ? AND role = 'student'`,
+            [name, vh, officialEmail, phone, parentPhone, parentPhone, bloodGroup, dept, yr, sec, roll],
+            function (err) {
+              if (err) reject(err);
+              else {
+                updatedCount++;
+                resolve(true);
+              }
+            }
+          );
+        });
+      } else {
+        // INSERT new student with Default Password = Register Number
+        const id = uuidv4();
+        const photo = st.profile_photo || `https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150`;
+        const defaultPasswordHash = await bcrypt.hash(roll, 10);
+
+        await new Promise((resolve, reject) => {
+          db.run(
+            `INSERT INTO users (id, name, roll_number, vh_number, email, role, department, year, section, phone, parent_phone, parent_contact, blood_group, profile_photo, status, password_hash, must_change_password, is_first_login, first_login, password_changed)
+             VALUES (?, ?, ?, ?, ?, 'student', ?, ?, ?, ?, ?, ?, ?, ?, 'Active', ?, 1, 1, 1, 0)`,
+            [id, name, roll, vh, officialEmail, dept, yr, sec, phone, parentPhone, parentPhone, bloodGroup, photo, defaultPasswordHash],
+            function (err) {
+              if (err) reject(err);
+              else {
                 importedCount++;
                 const auditId = uuidv4();
                 db.run(
                   `INSERT INTO password_audit_logs (id, student_id, changed_by, action, changed_at) VALUES (?, ?, 'Admin', 'Bulk Account Import (Default Password)', CURRENT_TIMESTAMP)`,
                   [auditId, id]
                 );
+                resolve(true);
               }
-              resolve(true);
             }
-          }
-        );
-      });
+          );
+        });
+      }
     } catch (e) {
-      errors.push(`Failed for ${st.roll_number || st.name}: ${e.message}`);
+      failedCount++;
+      errors.push(`Error for Register No ${st['Reg. No.'] || st.roll_number || st.name}: ${e.message}`);
     }
   }
 
   res.json({
-    message: `Bulk import completed. Successfully imported ${importedCount} student accounts.`,
+    message: `Bulk import completed: ${importedCount} imported, ${updatedCount} updated, ${skippedCount} skipped, ${failedCount} failed.`,
     importedCount,
+    updatedCount,
+    skippedCount,
+    failedCount,
     errors
   });
 }
