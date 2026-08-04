@@ -354,8 +354,8 @@ export const FacultyDashboard: React.FC = () => {
     };
 
     const handleSyncAll = () => {
-      console.log('⚡ [FACULTY DASHBOARD] Real-time change detected. Syncing telemetry...');
-      fetchFacultyData();
+      console.log('⚡ [FACULTY DASHBOARD] Real-time change detected. Syncing telemetry silently...');
+      fetchFacultyData(true);
       fetchAnalyticsData();
     };
 
@@ -410,8 +410,8 @@ export const FacultyDashboard: React.FC = () => {
       if (filterFromDate) params.append('from_date', filterFromDate);
       if (filterToDate) params.append('to_date', filterToDate);
 
-      const res = await api.get(`/faculty/attendance-analytics?${params.toString()}`);
-      setAnalyticsData(res.data);
+      const res = await api.get(`/faculty/attendance-analytics?${params.toString()}`).catch(() => ({ data: null }));
+      if (res.data) setAnalyticsData(res.data);
     } catch (err) {
       console.error('Failed to fetch attendance analytics', err);
     } finally {
@@ -449,12 +449,12 @@ export const FacultyDashboard: React.FC = () => {
         status: editStatusValue,
         notes: editNotesValue
       });
-      alert(`✅ Attendance status for ${editingStudentRecord.name} updated to ${editStatusValue.toUpperCase()} in Supabase PostgreSQL!`);
+      alert(`✅ Attendance record updated for ${editingStudentRecord.name}`);
       setShowRecordEditModal(false);
       openSessionRoster(selectedSessionRoster.session.id);
       fetchAnalyticsData();
     } catch (err: any) {
-      alert(`❌ Failed to update attendance: ${err.response?.data?.error || err.message}`);
+      alert(`❌ Failed to update attendance record: ${err.response?.data?.error || err.message}`);
     }
   };
 
@@ -470,30 +470,38 @@ export const FacultyDashboard: React.FC = () => {
     }
   };
 
-  const fetchFacultyData = async () => {
+  const fetchFacultyData = async (isSilent = false) => {
     try {
-      setIsLoading(true);
+      if (!isSilent && !dashboardData) {
+        setIsLoading(true);
+      }
+
       const [dashRes, ttRes, stRes, riskRes, docRes, leaveRes] = await Promise.all([
-        api.get(`/faculty/dashboard?faculty_id=${user?.id || 'FAC-001-ID'}`),
-        api.get(`/timetable/faculty?faculty_id=${user?.id || 'FAC-001-ID'}&faculty_name=${encodeURIComponent(user?.name || '')}`),
-        api.get('/faculty/students'),
-        api.get('/faculty/risk-detection'),
-        api.get('/faculty/documents'),
-        api.get('/faculty/leave-requests')
+        api.get(`/faculty/dashboard?faculty_id=${user?.id || 'FAC-001-ID'}`).catch(() => ({ data: {} })),
+        api.get(`/timetable/faculty?faculty_id=${user?.id || 'FAC-001-ID'}&faculty_name=${encodeURIComponent(user?.name || '')}`).catch(() => ({ data: {} })),
+        api.get('/faculty/students').catch(() => ({ data: { students: [] } })),
+        api.get('/faculty/risk-detection').catch(() => ({ data: { safe: [], warning: [], risk: [], critical: [] } })),
+        api.get('/faculty/documents').catch(() => ({ data: { documents: [] } })),
+        api.get('/faculty/leave-requests').catch(() => ({ data: { leaveRequests: [] } }))
       ]);
 
-      setDashboardData(dashRes.data);
-      if (dashRes.data.activeSession) {
-        setActiveSession(dashRes.data.activeSession);
+      if (dashRes.data && Object.keys(dashRes.data).length > 0) {
+        setDashboardData(dashRes.data);
+        if (dashRes.data.activeSession) {
+          setActiveSession(dashRes.data.activeSession);
+        }
       }
-      setFacultyTimetable(ttRes.data.weeklyTimetable || ttRes.data.timetables || dashRes.data.todayClasses || []);
-      setCurrentActivePeriod(ttRes.data.currentActivePeriod || null);
-      setNextPeriod(ttRes.data.nextPeriod || null);
 
-      setStudents(stRes.data.students || []);
-      setRiskData(riskRes.data || { safe: [], warning: [], risk: [], critical: [] });
-      setDocuments(docRes.data.documents || []);
-      setLeaveRequests(leaveRes.data.leaveRequests || []);
+      if (ttRes.data) {
+        setFacultyTimetable(ttRes.data.weeklyTimetable || ttRes.data.timetables || dashRes.data?.todayClasses || []);
+        if (ttRes.data.currentActivePeriod) setCurrentActivePeriod(ttRes.data.currentActivePeriod);
+        if (ttRes.data.nextPeriod) setNextPeriod(ttRes.data.nextPeriod);
+      }
+
+      if (stRes.data?.students) setStudents(stRes.data.students);
+      if (riskRes.data) setRiskData(riskRes.data);
+      if (docRes.data?.documents) setDocuments(docRes.data.documents);
+      if (leaveRes.data?.leaveRequests) setLeaveRequests(leaveRes.data.leaveRequests);
     } catch (err) {
       console.error('Failed to fetch faculty data', err);
     } finally {
@@ -872,15 +880,9 @@ export const FacultyDashboard: React.FC = () => {
 
       {/* MAIN CONTENT AREA */}
       <main className="max-w-7xl mx-auto px-4 sm:px-8 pt-8">
-        {isLoading ? (
-          <div className="p-12 text-center text-[#6B7280]">
-            <RefreshCw className="w-8 h-8 animate-spin mx-auto text-[#6D5DFC] mb-3" />
-            <p className="font-bold text-sm">Loading Faculty Workspace & Live Telemetry...</p>
-          </div>
-        ) : (
-          <>
-            {activeTab === 'spell_analytics' && <SpellAttendanceReportPage />}
-            {activeTab === 'intelligence' && <StudentAttendanceIntelligence />}
+        <>
+          {activeTab === 'spell_analytics' && <SpellAttendanceReportPage />}
+          {activeTab === 'intelligence' && <StudentAttendanceIntelligence />}
             {activeTab === 'timetable' && (
               <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-xl space-y-4 animate-fade-in">
                 <TimetablePage />
@@ -1891,7 +1893,6 @@ export const FacultyDashboard: React.FC = () => {
               </div>
             )}
           </>
-        )}
 
         {/* MODAL: ADD STUDENT REMARK */}
         {showRemarkModal && remarkStudent && (
