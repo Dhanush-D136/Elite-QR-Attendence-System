@@ -5,6 +5,7 @@ import { getSocket } from '../services/socket';
 import { DynamicQRDisplay } from '../components/DynamicQRDisplay';
 import { SpellAttendanceReportPage } from './SpellAttendanceReportPage';
 import { StudentAttendanceIntelligence } from '../components/StudentAttendanceIntelligence';
+import { TimetablePage } from './TimetablePage';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -851,6 +852,14 @@ export const FacultyDashboard: React.FC = () => {
             <MessageSquare className="w-4 h-4" /> Remarks & Leaves
           </button>
           <button
+            onClick={() => setActiveTab('timetable')}
+            className={`px-4 py-2.5 rounded-xl transition-all flex items-center gap-2 shrink-0 ${
+              activeTab === 'timetable' ? 'bg-white text-[#4A00E0] shadow-md font-extrabold' : 'text-purple-100 hover:bg-white/10'
+            }`}
+          >
+            <Calendar className="w-4 h-4 text-amber-300" /> Timetable Manager
+          </button>
+          <button
             onClick={() => setActiveTab('profile')}
             className={`px-4 py-2.5 rounded-xl transition-all flex items-center gap-2 shrink-0 ${
               activeTab === 'profile' ? 'bg-white text-[#4A00E0] shadow-md font-extrabold' : 'text-purple-100 hover:bg-white/10'
@@ -872,6 +881,11 @@ export const FacultyDashboard: React.FC = () => {
           <>
             {activeTab === 'spell_analytics' && <SpellAttendanceReportPage />}
             {activeTab === 'intelligence' && <StudentAttendanceIntelligence />}
+            {activeTab === 'timetable' && (
+              <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-xl space-y-4 animate-fade-in">
+                <TimetablePage />
+              </div>
+            )}
 
             {/* ================================================== */}
             {/* TAB 1: OVERVIEW & TIMETABLE HUB */}

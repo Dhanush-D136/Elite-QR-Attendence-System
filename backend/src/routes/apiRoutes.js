@@ -92,15 +92,15 @@ router.delete('/subjects/:id', verifyToken, requireRole('admin'), erpController.
 router.get('/timetable/student', verifyToken, erpController.getStudentTimetable);
 router.get('/timetable/faculty', verifyToken, erpController.getFacultyTimetable);
 router.get('/timetable', verifyToken, erpController.getTimetables);
-router.post('/timetable', verifyToken, requireRole('admin'), erpController.createTimetable);
-router.put('/timetable/:id', verifyToken, requireRole('admin'), erpController.updateTimetable);
-router.delete('/timetable/:id', verifyToken, requireRole('admin'), erpController.deleteTimetable);
+router.post('/timetable', verifyToken, requireRole('admin', 'faculty'), erpController.createTimetable);
+router.put('/timetable/:id', verifyToken, requireRole('admin', 'faculty'), erpController.updateTimetable);
+router.delete('/timetable/:id', verifyToken, requireRole('admin', 'faculty'), erpController.deleteTimetable);
 
 // Plural Aliases for Timetable Routes
 router.get('/timetables', verifyToken, erpController.getTimetables);
-router.post('/timetables', verifyToken, requireRole('admin'), erpController.createTimetable);
-router.put('/timetables/:id', verifyToken, requireRole('admin'), erpController.updateTimetable);
-router.delete('/timetables/:id', verifyToken, requireRole('admin'), erpController.deleteTimetable);
+router.post('/timetables', verifyToken, requireRole('admin', 'faculty'), erpController.createTimetable);
+router.put('/timetables/:id', verifyToken, requireRole('admin', 'faculty'), erpController.updateTimetable);
+router.delete('/timetables/:id', verifyToken, requireRole('admin', 'faculty'), erpController.deleteTimetable);
 
 // --- Session Routes (Timetable-Driven Auto-Attendance) ---
 router.get('/sessions/current-slot', verifyToken, sessionController.getCurrentTimetableSlot);
