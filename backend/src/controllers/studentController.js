@@ -5,7 +5,7 @@ const { db } = require('../database/db');
 
 // List Students with search, filtering, attendance rates, and dashboard summary counts
 function getStudents(req, res) {
-  const { search, department, year, section, status, page = 1, limit = 50 } = req.query;
+  const { search, department, year, section, status, sortBy = 'roll_number', sortOrder = 'asc', page = 1, limit = 50 } = req.query;
 
   let query = `
     SELECT u.id, u.name, u.roll_number, u.vh_number, u.email, u.department, u.year, u.section, u.phone, u.profile_photo, u.profile_photo_url, 
@@ -20,38 +20,87 @@ function getStudents(req, res) {
 
   const params = [];
 
+  // Search filter
   if (search && search.trim() !== '') {
     query += ` AND (u.name LIKE ? OR u.roll_number LIKE ? OR u.vh_number LIKE ? OR u.email LIKE ? OR u.phone LIKE ?)`;
     const searchParam = `%${search.trim()}%`;
     params.push(searchParam, searchParam, searchParam, searchParam, searchParam);
   }
 
-  if (department && department !== 'All') {
+  // Department normalization filter
+  if (department && department !== 'All' && department.trim() !== '') {
     const dClean = department.trim().toLowerCase();
     if (dClean.includes('ai') || dClean.includes('ds') || dClean.includes('data')) {
-      query += ` AND (u.department LIKE '%AI%' OR u.department LIKE '%DS%' OR u.department LIKE '%Data%')`;
+      query += ` AND (LOWER(u.department) LIKE '%ai%' OR LOWER(u.department) LIKE '%ds%' OR LOWER(u.department) LIKE '%data%')`;
+    } else if (dClean.includes('comp') || dClean.includes('cs')) {
+      query += ` AND (LOWER(u.department) LIKE '%computer%' OR LOWER(u.department) LIKE '%cs%')`;
+    } else if (dClean.includes('electr') || dClean.includes('ece') || dClean.includes('eee')) {
+      query += ` AND (LOWER(u.department) LIKE '%electr%' OR LOWER(u.department) LIKE '%ece%' OR LOWER(u.department) LIKE '%eee%')`;
+    } else if (dClean.includes('mech')) {
+      query += ` AND LOWER(u.department) LIKE '%mech%'`;
     } else {
-      query += ` AND u.department = ?`;
-      params.push(department);
+      query += ` AND (u.department = ? OR LOWER(u.department) LIKE ?)`;
+      params.push(department, `%${dClean}%`);
     }
   }
 
-  if (year) {
-    query += ` AND u.year = ?`;
-    params.push(parseInt(year));
+  // Year normalization filter
+  if (year && year !== 'All' && String(year).trim() !== '') {
+    const yStr = String(year).trim().toLowerCase();
+    let yNum = 0;
+    if (yStr === '1' || yStr === 'i' || yStr.includes('1st') || yStr.includes('year 1')) yNum = 1;
+    else if (yStr === '2' || yStr === 'ii' || yStr.includes('2nd') || yStr.includes('year 2')) yNum = 2;
+    else if (yStr === '3' || yStr === 'iii' || yStr.includes('3rd') || yStr.includes('year 3')) yNum = 3;
+    else if (yStr === '4' || yStr === 'iv' || yStr.includes('4th') || yStr.includes('year 4')) yNum = 4;
+    else yNum = parseInt(yStr) || 0;
+
+    if (yNum > 0) {
+      query += ` AND (u.year = ? OR u.year = ? OR CAST(u.year AS TEXT) LIKE ?)`;
+      params.push(yNum, String(yNum), `%${yNum}%`);
+    } else {
+      query += ` AND u.year = ?`;
+      params.push(year);
+    }
   }
 
-  if (section) {
-    query += ` AND u.section = ?`;
-    params.push(section);
+  // Section normalization filter
+  if (section && section !== 'All' && String(section).trim() !== '') {
+    let secClean = String(section).trim().toUpperCase();
+    secClean = secClean.replace(/^SECTION\s*/i, '');
+    query += ` AND (UPPER(u.section) = ? OR UPPER(u.section) = ? OR UPPER(u.section) LIKE ?)`;
+    params.push(secClean, `SECTION ${secClean}`, `%${secClean}%`);
   }
 
-  if (status) {
-    query += ` AND COALESCE(u.status, 'Active') = ?`;
-    params.push(status);
+  // Account Status / Password Status Filter
+  if (status && status !== 'All' && String(status).trim() !== '') {
+    const statusStr = String(status).trim();
+    if (statusStr === 'Active') {
+      query += ` AND COALESCE(u.status, 'Active') = 'Active'`;
+    } else if (statusStr === 'Inactive' || statusStr === 'Suspended') {
+      query += ` AND COALESCE(u.status, 'Active') IN ('Inactive', 'Suspended')`;
+    } else if (statusStr === 'Default Password') {
+      query += ` AND (u.must_change_password = 1 OR u.first_login = 1 OR u.password_changed = 0)`;
+    } else if (statusStr === 'Custom Password') {
+      query += ` AND (COALESCE(u.must_change_password, 0) = 0 AND COALESCE(u.first_login, 0) = 0 AND u.password_changed = 1)`;
+    } else {
+      query += ` AND COALESCE(u.status, 'Active') = ?`;
+      params.push(statusStr);
+    }
   }
 
-  query += ` GROUP BY u.id ORDER BY u.roll_number ASC`;
+  // SQL Order By
+  const dir = String(sortOrder).toLowerCase() === 'desc' ? 'DESC' : 'ASC';
+  if (sortBy === 'name') {
+    query += ` GROUP BY u.id ORDER BY u.name ${dir}`;
+  } else if (sortBy === 'vh_number') {
+    query += ` GROUP BY u.id ORDER BY u.vh_number ${dir}`;
+  } else if (sortBy === 'email') {
+    query += ` GROUP BY u.id ORDER BY u.email ${dir}`;
+  } else if (sortBy === 'phone') {
+    query += ` GROUP BY u.id ORDER BY u.phone ${dir}`;
+  } else {
+    query += ` GROUP BY u.id ORDER BY u.roll_number ${dir}`;
+  }
 
   db.all(query, params, (err, rows) => {
     if (err) return res.status(500).json({ error: 'Database query error: ' + err.message });
@@ -81,6 +130,31 @@ function getStudents(req, res) {
         attendance_percentage: rate,
         password_status: isDefault ? 'Default Password' : 'Custom Password'
       };
+    });
+
+    // In-memory sorting for computed fields
+    if (sortBy === 'attendance_percentage') {
+      formattedStudents.sort((a, b) =>
+        dir === 'ASC' ? a.attendance_percentage - b.attendance_percentage : b.attendance_percentage - a.attendance_percentage
+      );
+    } else if (sortBy === 'status') {
+      formattedStudents.sort((a, b) =>
+        dir === 'ASC' ? a.status.localeCompare(b.status) : b.status.localeCompare(a.status)
+      );
+    } else if (sortBy === 'password_status') {
+      formattedStudents.sort((a, b) =>
+        dir === 'ASC' ? a.password_status.localeCompare(b.password_status) : b.password_status.localeCompare(a.password_status)
+      );
+    }
+
+    // Telemetry Debug Log as requested by prompt specifications
+    console.log('[STUDENT FILTER DEBUG]', {
+      department: department || 'ALL',
+      year: year || 'ALL',
+      section: section || 'ALL',
+      status: status || 'ALL',
+      search: search || 'NONE',
+      returnedCount: formattedStudents.length
     });
 
     // Compute Summary Stats for Top Cards

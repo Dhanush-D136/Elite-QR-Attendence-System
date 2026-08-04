@@ -54,12 +54,23 @@ export const StudentManagement: React.FC = () => {
     activeSessions: 0
   });
 
-  // Filter & Search States
+  // Filter, Search, & Sorting States
   const [search, setSearch] = useState('');
   const [department, setDepartment] = useState('');
   const [year, setYear] = useState('');
   const [section, setSection] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [sortBy, setSortBy] = useState<string>('roll_number');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+
+  const handleSort = (col: string) => {
+    if (sortBy === col) {
+      setSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortBy(col);
+      setSortOrder('asc');
+    }
+  };
 
   // Bulk Selection State
   const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
@@ -149,12 +160,25 @@ export const StudentManagement: React.FC = () => {
       if (year) params.append('year', year);
       if (section) params.append('section', section);
       if (statusFilter) params.append('status', statusFilter);
+      if (sortBy) params.append('sortBy', sortBy);
+      if (sortOrder) params.append('sortOrder', sortOrder);
 
       const res = await api.get(`/students?${params.toString()}`);
-      setStudents(res.data.students || []);
+      const fetched = res.data.students || [];
+      setStudents(fetched);
       if (res.data.summaryStats) {
         setSummaryStats(res.data.summaryStats);
       }
+
+      // Telemetry debug logging as specified
+      console.log('[STUDENT FILTER DEBUG]', {
+        department: department || 'ALL',
+        year: year || 'ALL',
+        section: section || 'ALL',
+        status: statusFilter || 'ALL',
+        search: search || 'NONE',
+        returnedCount: fetched.length
+      });
     } catch (err) {
       console.error('Failed to load students', err);
     }
@@ -196,7 +220,7 @@ export const StudentManagement: React.FC = () => {
       socket.off('student_updated', handleUpdate);
       socket.off('roster_updated', handleUpdate);
     };
-  }, [search, department, year, section, statusFilter]);
+  }, [search, department, year, section, statusFilter, sortBy, sortOrder]);
 
   useEffect(() => {
     if (activeTab === 'login_activity') fetchLoginActivity();
@@ -779,12 +803,13 @@ export const StudentManagement: React.FC = () => {
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="px-3 py-2 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827] focus:outline-none font-medium"
+                className="px-3 py-2 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] text-xs text-[#111827] focus:outline-none font-medium cursor-pointer"
               >
                 <option value="">All Account Status</option>
                 <option value="Active">Active</option>
                 <option value="Inactive">Inactive</option>
-                <option value="Suspended">Suspended</option>
+                <option value="Default Password">Default Password</option>
+                <option value="Custom Password">Custom Password</option>
               </select>
 
               {/* Export Buttons */}
@@ -838,13 +863,69 @@ export const StudentManagement: React.FC = () => {
                         className="rounded border-[#E7E7E7] text-[#6D5DFC]"
                       />
                     </th>
-                    <th className="p-4">Student Name</th>
-                    <th className="p-4">Register Number</th>
-                    <th className="p-4">VH Number</th>
-                    <th className="p-4">Official Email ID</th>
-                    <th className="p-4">Phone Number</th>
-                    <th className="p-4">Attendance %</th>
-                    <th className="p-4">Account Status</th>
+                    <th
+                      onClick={() => handleSort('name')}
+                      className="p-4 cursor-pointer hover:text-[#6D5DFC] transition-colors select-none"
+                    >
+                      <div className="flex items-center gap-1">
+                        <span>Student Name</span>
+                        {sortBy === 'name' && (<span>{sortOrder === 'asc' ? '↑' : '↓'}</span>)}
+                      </div>
+                    </th>
+                    <th
+                      onClick={() => handleSort('roll_number')}
+                      className="p-4 cursor-pointer hover:text-[#6D5DFC] transition-colors select-none"
+                    >
+                      <div className="flex items-center gap-1">
+                        <span>Register Number</span>
+                        {sortBy === 'roll_number' && (<span>{sortOrder === 'asc' ? '↑' : '↓'}</span>)}
+                      </div>
+                    </th>
+                    <th
+                      onClick={() => handleSort('vh_number')}
+                      className="p-4 cursor-pointer hover:text-[#6D5DFC] transition-colors select-none"
+                    >
+                      <div className="flex items-center gap-1">
+                        <span>VH Number</span>
+                        {sortBy === 'vh_number' && (<span>{sortOrder === 'asc' ? '↑' : '↓'}</span>)}
+                      </div>
+                    </th>
+                    <th
+                      onClick={() => handleSort('email')}
+                      className="p-4 cursor-pointer hover:text-[#6D5DFC] transition-colors select-none"
+                    >
+                      <div className="flex items-center gap-1">
+                        <span>Official Email ID</span>
+                        {sortBy === 'email' && (<span>{sortOrder === 'asc' ? '↑' : '↓'}</span>)}
+                      </div>
+                    </th>
+                    <th
+                      onClick={() => handleSort('phone')}
+                      className="p-4 cursor-pointer hover:text-[#6D5DFC] transition-colors select-none"
+                    >
+                      <div className="flex items-center gap-1">
+                        <span>Phone Number</span>
+                        {sortBy === 'phone' && (<span>{sortOrder === 'asc' ? '↑' : '↓'}</span>)}
+                      </div>
+                    </th>
+                    <th
+                      onClick={() => handleSort('attendance_percentage')}
+                      className="p-4 cursor-pointer hover:text-[#6D5DFC] transition-colors select-none"
+                    >
+                      <div className="flex items-center gap-1">
+                        <span>Attendance %</span>
+                        {sortBy === 'attendance_percentage' && (<span>{sortOrder === 'asc' ? '↑' : '↓'}</span>)}
+                      </div>
+                    </th>
+                    <th
+                      onClick={() => handleSort('status')}
+                      className="p-4 cursor-pointer hover:text-[#6D5DFC] transition-colors select-none"
+                    >
+                      <div className="flex items-center gap-1">
+                        <span>Account Status</span>
+                        {sortBy === 'status' && (<span>{sortOrder === 'asc' ? '↑' : '↓'}</span>)}
+                      </div>
+                    </th>
                     <th className="p-4 text-right">Actions</th>
                   </tr>
                 </thead>
