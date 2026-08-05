@@ -527,121 +527,19 @@ function getSessionById(req, res) {
   });
 }
 
-function getClassRosterPreview(req, res) {
-  const { department, year, section } = req.query;
-
-  let query = `
-    SELECT id, name, roll_number, email, department, year, section, profile_photo 
-    FROM users 
-    WHERE role = 'student'
-  `;
-  const params = [];
-
-  if (department && department !== 'All') {
-    const deptClean = department.toLowerCase();
-    if (deptClean.includes('ai') || deptClean.includes('ds') || deptClean.includes('data')) {
-      query += ` AND (LOWER(department) LIKE '%ai%' OR LOWER(department) LIKE '%ds%' OR LOWER(department) LIKE '%data%')`;
-    } else {
-      query += ` AND LOWER(department) = LOWER(?)`;
-      params.push(department);
-    }
-  }
-
-  if (year && year !== 'All') {
-    const yrNum = parseInt(year, 10);
-    if (!isNaN(yrNum)) {
-      query += ` AND (year = ? OR year IS NULL)`;
-      params.push(yrNum);
-    }
-  }
-
-  if (section && section !== 'All') {
-    query += ` AND (section = ? OR section IS NULL)`;
-    params.push(section);
-  }
-
-  query += ` ORDER BY roll_number ASC`;
-
-  db.all(query, params, (err, students) => {
-    if (err) return res.status(500).json({ error: 'Database error fetching roster preview' });
-
-    const totalStudents = students ? students.length : 0;
-    
-    // Fetch faculty advisor if available
-    db.get(
-      `SELECT name, faculty_code FROM faculty WHERE department = ? OR assigned_class LIKE ? LIMIT 1`,
-      [department || 'AI & DS', `%${department}%`],
-      (errFac, facRow) => {
-        res.json({
-          department: department || 'AI & DS',
-          year: year || 3,
-          section: section || 'A',
-          totalStudents,
-          facultyAdvisor: facRow ? facRow.name : 'Class Incharge',
-          students: students || []
-        });
-      }
-    );
-  });
-}
-
 function endSession(req, res) {
   const { id } = req.params;
+  db.run('UPDATE attendance_sessions SET status = ? WHERE id = ?', ['completed', id], function (err) {
+    if (err) return res.status(500).json({ error: 'Failed to terminate session' });
 
-  db.get('SELECT * FROM attendance_sessions WHERE id = ?', [id], (err, session) => {
-    if (err || !session) return res.status(404).json({ error: 'Session not found' });
+    const io = req.app.get('socketio');
+    if (io) {
+      io.emit('session_ended', { sessionId: id });
+    }
 
-    db.run('UPDATE attendance_sessions SET status = ? WHERE id = ?', ['completed', id], function (updateErr) {
-      if (updateErr) return res.status(500).json({ error: 'Failed to terminate session' });
-
-      // Auto-Absent logic: Insert absent records for non-scanned students in this session's class cohort
-      db.all(
-        `SELECT id FROM users WHERE role = 'student'`,
-        [],
-        (errStu, allStudents) => {
-          const studentList = allStudents || [];
-
-          const filteredCohort = studentList.filter((st) => {
-            if (!session.department || session.department === 'AI & DS') return true;
-            return !st.department || st.department.toLowerCase().includes(session.department.toLowerCase());
-          });
-
-          const targetCohort = filteredCohort.length > 0 ? filteredCohort : studentList;
-
-          db.all('SELECT student_id FROM attendance_records WHERE session_id = ?', [id], (errRec, scannedRecords) => {
-            const scannedStudentIds = new Set((scannedRecords || []).map((r) => r.student_id));
-
-            targetCohort.forEach((st) => {
-              if (!scannedStudentIds.has(st.id)) {
-                const absentRecordId = uuidv4();
-                db.run(
-                  `INSERT INTO attendance_records (
-                    id, student_id, session_id, attendance_code, 
-                    attendance_time, student_lat, student_lng, 
-                    distance_meters, status, device_fingerprint, notes
-                  )
-                  VALUES (?, ?, ?, 'AUTO_ABSENT', CURRENT_TIMESTAMP, 0.0, 0.0, 0.0, 'absent', 'system_auto_absent', 'Session Expired - Auto Absent')`,
-                  [absentRecordId, st.id, id]
-                );
-              }
-            });
-
-            console.log(`✅ [AUTO ABSENT COMPLETE] Session ${id} closed. Marked non-scanned students as ABSENT.`);
-
-            const io = req.app.get('socketio');
-            if (io) {
-              io.emit('session_ended', { sessionId: id });
-              io.emit('attendance_updated', { sessionId: id });
-            }
-
-            res.json({ message: 'Session closed successfully and auto-absent process executed.' });
-          });
-        }
-      );
-    });
+    res.json({ message: 'Session closed successfully' });
   });
 }
-
 
 // Auto-Launch Attendance Session from Current Timetable Slot (1-Click Launch)
 function autoLaunchSession(req, res) {
@@ -781,7 +679,6 @@ module.exports = {
   activeSessionQRCodes,
   generateAndCacheLatestQR,
   getCurrentTimetableSlot,
-  getClassRosterPreview,
   autoLaunchSession,
   createSession,
   rotateSessionQR,
@@ -790,4 +687,3 @@ module.exports = {
   getSessionById,
   endSession
 };
-

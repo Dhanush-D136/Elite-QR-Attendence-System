@@ -11,15 +11,12 @@ import { DataIntegrityAuditPanel } from '../components/DataIntegrityAuditPanel';
 export const AdminDashboard: React.FC = () => {
   const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
   const [liveScans, setLiveScans] = useState<AttendanceRecord[]>([]);
-  const [sessionsList, setSessionsList] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   const fetchMetrics = async () => {
     try {
       const res = await api.get('/analytics/dashboard');
       setMetrics(res.data);
-      const sessRes = await api.get('/sessions').catch(() => ({ data: { sessions: [] } }));
-      setSessionsList(sessRes.data?.sessions || []);
     } catch (err) {
       console.error('Failed to load dashboard metrics', err);
     } finally {
@@ -49,7 +46,6 @@ export const AdminDashboard: React.FC = () => {
       socket.off('session_ended', handleSync);
     };
   }, []);
-
 
   if (isLoading || !metrics) {
     return (
@@ -257,52 +253,6 @@ export const AdminDashboard: React.FC = () => {
           </ResponsiveContainer>
         </div>
       </div>
-
-      {/* Live QR Sessions Summary Widget */}
-      <div className="bg-white p-6 rounded-[24px] border border-[#E7E7E7] shadow-enterprise space-y-4">
-        <div className="flex items-center justify-between border-b border-[#E7E7E7] pb-3">
-          <div>
-            <h3 className="font-display font-bold text-base text-[#111827] flex items-center gap-2">
-              <QrCode className="w-4 h-4 text-[#6D5DFC]" /> Live QR Sessions Telemetry Summary
-            </h3>
-            <p className="text-xs text-[#6B7280]">Institution-wide attendance session metrics directly from database</p>
-          </div>
-          <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-[#F3F0FF] text-[#6D5DFC]">
-            Total {sessionsList.length} Sessions
-          </span>
-        </div>
-
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
-          <div className="p-4 rounded-2xl bg-[#ECFDF5] border border-[#12B76A]/30 space-y-1">
-            <span className="text-[10px] text-[#12B76A] font-extrabold uppercase">Current Active Sessions</span>
-            <p className="font-display font-extrabold text-xl text-[#12B76A]">
-              {sessionsList.filter((s) => s.status === 'active').length}
-            </p>
-          </div>
-
-          <div className="p-4 rounded-2xl bg-[#EFF6FF] border border-[#4F7CFF]/30 space-y-1">
-            <span className="text-[10px] text-[#4F7CFF] font-extrabold uppercase">Completed Sessions</span>
-            <p className="font-display font-extrabold text-xl text-[#4F7CFF]">
-              {sessionsList.filter((s) => s.status === 'completed').length}
-            </p>
-          </div>
-
-          <div className="p-4 rounded-2xl bg-[#F3F0FF] border border-[#6D5DFC]/30 space-y-1">
-            <span className="text-[10px] text-[#6D5DFC] font-extrabold uppercase">Departments Active</span>
-            <p className="font-display font-extrabold text-xl text-[#6D5DFC]">
-              {new Set(sessionsList.map((s) => s.department)).size}
-            </p>
-          </div>
-
-          <div className="p-4 rounded-2xl bg-[#FAFAFA] border border-[#E7E7E7] space-y-1">
-            <span className="text-[10px] text-[#6B7280] font-extrabold uppercase">Faculties Active</span>
-            <p className="font-display font-extrabold text-xl text-[#111827]">
-              {new Set(sessionsList.map((s) => s.faculty_name || s.faculty)).size}
-            </p>
-          </div>
-        </div>
-      </div>
     </div>
   );
 };
-

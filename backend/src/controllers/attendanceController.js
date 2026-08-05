@@ -128,33 +128,9 @@ function markAttendance(req, res) {
           return res.status(404).json({ success: false, message: 'Student account not found' });
         }
 
-        // 4b. Cohort Validation: Ensure student belongs to session's department, year, and section
-        if (session.department && session.department !== 'All') {
-          const sDept = (student.department || '').trim().toLowerCase();
-          const sessDept = (session.department || '').trim().toLowerCase();
-          const sYear = String(student.year || '').trim();
-          const sessYear = String(session.year || '').trim();
-          const sSec = (student.section || '').trim().toUpperCase();
-          const sessSec = (session.section || '').trim().toUpperCase();
-
-          const deptMatch = sDept.includes(sessDept) || sessDept.includes(sDept) || (sessDept.includes('ai') && sDept.includes('ai'));
-          const yearMatch = !sessYear || sYear === sessYear;
-          const secMatch = !sessSec || sSec === sessSec;
-
-          if (!deptMatch || !yearMatch || !secMatch) {
-            console.warn(`❌ [INVALID SCAN REJECTED] ${studentName} (${student.department} ${student.year}-${student.section}) tried scanning ${session.department} ${session.year}-${session.section}`);
-            return res.status(403).json({
-              success: false,
-              reason: 'INVALID_CLASS_STUDENT',
-              message: 'Access Denied: Student not assigned to this class.'
-            });
-          }
-        }
-
         // 5. Insert Verified Attendance Record into Database
         const recordId = uuidv4();
         const attendanceTime = new Date().toISOString();
-
 
         db.run(
           `INSERT INTO attendance_records (

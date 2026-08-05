@@ -105,10 +105,8 @@ router.delete('/timetables/:id', verifyToken, requireRole('admin', 'faculty'), e
 // --- Session Routes (Timetable-Driven Auto-Attendance) ---
 router.get('/sessions/current-slot', verifyToken, sessionController.getCurrentTimetableSlot);
 router.get('/timetable/current-slot', verifyToken, sessionController.getCurrentTimetableSlot);
-router.get('/sessions/roster-preview', verifyToken, sessionController.getClassRosterPreview);
 router.post('/sessions/auto-launch', verifyToken, requireRole('admin', 'faculty'), sessionController.autoLaunchSession);
 router.post('/sessions', verifyToken, requireRole('admin', 'faculty'), sessionController.createSession);
-
 router.get('/sessions', verifyToken, sessionController.getSessions);
 router.get('/sessions/:id', verifyToken, sessionController.getSessionById);
 router.get('/sessions/:id/qr', verifyToken, sessionController.getSessionQR);
