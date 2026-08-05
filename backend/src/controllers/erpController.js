@@ -772,21 +772,153 @@ function deleteTimetable(req, res) {
   });
 }
 
-// --- Legacy Multi-Dept Fallbacks ---
-function getDepartments(req, res) { res.json({ departments: [{ id: 'dept-1', name: 'AI & DS', code: 'AIDS', hod_name: 'Mrs Vasanthapriya M J T', description: 'Artificial Intelligence & Data Science' }] }); }
-function createDepartment(req, res) { res.json({ message: 'Success' }); }
-function updateDepartment(req, res) { res.json({ message: 'Success' }); }
-function deleteDepartment(req, res) { res.json({ message: 'Success' }); }
+// --- Dynamic Multi-Department ERP Controllers ---
+function getDepartments(req, res) {
+  db.all('SELECT * FROM departments ORDER BY name ASC', [], (err, departments) => {
+    if (err || !departments || departments.length === 0) {
+      // Fallback if table is empty or error
+      return res.json({
+        departments: [
+          { id: 'dept-aids', name: 'AI & Data Science', code: 'AIDS', description: 'Artificial Intelligence & Data Science' },
+          { id: 'dept-ai', name: 'Artificial Intelligence', code: 'AI', description: 'Artificial Intelligence' },
+          { id: 'dept-cse', name: 'Computer Science', code: 'CSE', description: 'Computer Science & Engineering' },
+          { id: 'dept-it', name: 'Information Technology', code: 'IT', description: 'Information Technology' },
+          { id: 'dept-ece', name: 'ECE', code: 'ECE', description: 'Electronics & Communication Engineering' },
+          { id: 'dept-eee', name: 'EEE', code: 'EEE', description: 'Electrical & Electronics Engineering' },
+          { id: 'dept-mech', name: 'Mechanical', code: 'MECH', description: 'Mechanical Engineering' },
+          { id: 'dept-civil', name: 'Civil', code: 'CIVIL', description: 'Civil Engineering' },
+          { id: 'dept-mba', name: 'MBA', code: 'MBA', description: 'Master of Business Administration' },
+          { id: 'dept-mca', name: 'MCA', code: 'MCA', description: 'Master of Computer Applications' }
+        ]
+      });
+    }
+    res.json({ departments });
+  });
+}
 
-function getClasses(req, res) { res.json({ classes: [{ id: 'cls-3', name: 'III Year', level_year: 3 }] }); }
-function createClass(req, res) { res.json({ message: 'Success' }); }
-function updateClass(req, res) { res.json({ message: 'Success' }); }
-function deleteClass(req, res) { res.json({ message: 'Success' }); }
+function createDepartment(req, res) {
+  const { name, code, hod_name, description } = req.body;
+  if (!name || !code) return res.status(400).json({ error: 'Department Name and Code are required.' });
+  const id = 'dept-' + uuidv4();
+  db.run(
+    'INSERT INTO departments (id, name, code, hod_name, description) VALUES (?, ?, ?, ?, ?)',
+    [id, name.trim(), code.trim().toUpperCase(), hod_name || '', description || ''],
+    function (err) {
+      if (err) return res.status(500).json({ error: 'Failed to create department: ' + err.message });
+      res.status(201).json({ message: 'Department created successfully', id });
+    }
+  );
+}
 
-function getSections(req, res) { res.json({ sections: [{ id: 'sec-a', name: 'A' }] }); }
-function createSection(req, res) { res.json({ message: 'Success' }); }
-function updateSection(req, res) { res.json({ message: 'Success' }); }
-function deleteSection(req, res) { res.json({ message: 'Success' }); }
+function updateDepartment(req, res) {
+  const { id } = req.params;
+  const { name, code, hod_name, description } = req.body;
+  db.run(
+    'UPDATE departments SET name = ?, code = ?, hod_name = ?, description = ? WHERE id = ?',
+    [name, code, hod_name, description, id],
+    function (err) {
+      if (err) return res.status(500).json({ error: 'Failed to update department' });
+      res.json({ message: 'Department updated successfully' });
+    }
+  );
+}
+
+function deleteDepartment(req, res) {
+  const { id } = req.params;
+  db.run('DELETE FROM departments WHERE id = ?', [id], function (err) {
+    if (err) return res.status(500).json({ error: 'Failed to delete department' });
+    res.json({ message: 'Department deleted successfully' });
+  });
+}
+
+function getClasses(req, res) {
+  db.all('SELECT * FROM classes ORDER BY level_year ASC', [], (err, classes) => {
+    if (err || !classes || classes.length === 0) {
+      return res.json({
+        classes: [
+          { id: 'cls-1', name: '1st Year', level_year: 1 },
+          { id: 'cls-2', name: '2nd Year', level_year: 2 },
+          { id: 'cls-3', name: '3rd Year', level_year: 3 },
+          { id: 'cls-4', name: '4th Year', level_year: 4 }
+        ]
+      });
+    }
+    res.json({ classes });
+  });
+}
+
+function createClass(req, res) {
+  const { name, level_year } = req.body;
+  const id = 'cls-' + uuidv4();
+  db.run(
+    'INSERT INTO classes (id, name, level_year) VALUES (?, ?, ?)',
+    [id, name || `${level_year}th Year`, parseInt(level_year || 1)],
+    function (err) {
+      if (err) return res.status(500).json({ error: 'Failed to create class' });
+      res.status(201).json({ message: 'Class created successfully', id });
+    }
+  );
+}
+
+function updateClass(req, res) {
+  const { id } = req.params;
+  const { name, level_year } = req.body;
+  db.run('UPDATE classes SET name = ?, level_year = ? WHERE id = ?', [name, level_year, id], function (err) {
+    if (err) return res.status(500).json({ error: 'Failed to update class' });
+    res.json({ message: 'Class updated successfully' });
+  });
+}
+
+function deleteClass(req, res) {
+  const { id } = req.params;
+  db.run('DELETE FROM classes WHERE id = ?', [id], function (err) {
+    if (err) return res.status(500).json({ error: 'Failed to delete class' });
+    res.json({ message: 'Class deleted successfully' });
+  });
+}
+
+function getSections(req, res) {
+  db.all('SELECT * FROM sections ORDER BY name ASC', [], (err, sections) => {
+    if (err || !sections || sections.length === 0) {
+      return res.json({
+        sections: [
+          { id: 'sec-a', name: 'A' },
+          { id: 'sec-b', name: 'B' },
+          { id: 'sec-c', name: 'C' },
+          { id: 'sec-d', name: 'D' }
+        ]
+      });
+    }
+    res.json({ sections });
+  });
+}
+
+function createSection(req, res) {
+  const { name } = req.body;
+  const id = 'sec-' + uuidv4();
+  db.run('INSERT INTO sections (id, name) VALUES (?, ?)', [id, name || 'A'], function (err) {
+    if (err) return res.status(500).json({ error: 'Failed to create section' });
+    res.status(201).json({ message: 'Section created successfully', id });
+  });
+}
+
+function updateSection(req, res) {
+  const { id } = req.params;
+  const { name } = req.body;
+  db.run('UPDATE sections SET name = ? WHERE id = ?', [name, id], function (err) {
+    if (err) return res.status(500).json({ error: 'Failed to update section' });
+    res.json({ message: 'Section updated successfully' });
+  });
+}
+
+function deleteSection(req, res) {
+  const { id } = req.params;
+  db.run('DELETE FROM sections WHERE id = ?', [id], function (err) {
+    if (err) return res.status(500).json({ error: 'Failed to delete section' });
+    res.json({ message: 'Section deleted successfully' });
+  });
+}
+
 
 module.exports = {
   getClassDetails,

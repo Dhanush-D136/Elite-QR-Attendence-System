@@ -504,6 +504,55 @@ function initDb() {
         )
       `);
 
+      // Seed Default Departments
+      const defaultDepts = [
+        { id: 'dept-aids', name: 'AI & Data Science', code: 'AIDS', description: 'Artificial Intelligence & Data Science' },
+        { id: 'dept-ai', name: 'Artificial Intelligence', code: 'AI', description: 'Artificial Intelligence' },
+        { id: 'dept-cse', name: 'Computer Science', code: 'CSE', description: 'Computer Science & Engineering' },
+        { id: 'dept-it', name: 'Information Technology', code: 'IT', description: 'Information Technology' },
+        { id: 'dept-ece', name: 'ECE', code: 'ECE', description: 'Electronics & Communication Engineering' },
+        { id: 'dept-eee', name: 'EEE', code: 'EEE', description: 'Electrical & Electronics Engineering' },
+        { id: 'dept-mech', name: 'Mechanical', code: 'MECH', description: 'Mechanical Engineering' },
+        { id: 'dept-civil', name: 'Civil', code: 'CIVIL', description: 'Civil Engineering' },
+        { id: 'dept-mba', name: 'MBA', code: 'MBA', description: 'Master of Business Administration' },
+        { id: 'dept-mca', name: 'MCA', code: 'MCA', description: 'Master of Computer Applications' }
+      ];
+      defaultDepts.forEach((d) => {
+        db.run(
+          `INSERT OR IGNORE INTO departments (id, name, code, description) VALUES (?, ?, ?, ?)`,
+          [d.id, d.name, d.code, d.description]
+        );
+      });
+
+      // Seed Default Years / Classes
+      const defaultClasses = [
+        { id: 'cls-1', name: '1st Year', level_year: 1 },
+        { id: 'cls-2', name: '2nd Year', level_year: 2 },
+        { id: 'cls-3', name: '3rd Year', level_year: 3 },
+        { id: 'cls-4', name: '4th Year', level_year: 4 }
+      ];
+      defaultClasses.forEach((c) => {
+        db.run(
+          `INSERT OR IGNORE INTO classes (id, name, level_year) VALUES (?, ?, ?)`,
+          [c.id, c.name, c.level_year]
+        );
+      });
+
+      // Seed Default Sections
+      const defaultSections = [
+        { id: 'sec-a', name: 'A' },
+        { id: 'sec-b', name: 'B' },
+        { id: 'sec-c', name: 'C' },
+        { id: 'sec-d', name: 'D' }
+      ];
+      defaultSections.forEach((s) => {
+        db.run(
+          `INSERT OR IGNORE INTO sections (id, name) VALUES (?, ?)`,
+          [s.id, s.name]
+        );
+      });
+
+
       // Create Subjects table
       db.run(`
         CREATE TABLE IF NOT EXISTS subjects (
