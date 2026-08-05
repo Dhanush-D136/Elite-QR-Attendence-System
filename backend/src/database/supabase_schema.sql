@@ -44,32 +44,12 @@ CREATE TABLE IF NOT EXISTS public.users (
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS date_of_birth TEXT;
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS parent_contact TEXT;
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS profile_photo_url TEXT;
-ALTER TABLE public.users ADD COLUMN IF NOT EXISTS class_portal_id TEXT;
 
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 
 CREATE INDEX IF NOT EXISTS idx_users_email ON public.users(email);
 CREATE INDEX IF NOT EXISTS idx_users_roll ON public.users(roll_number);
 CREATE INDEX IF NOT EXISTS idx_users_role ON public.users(role);
-
--- Class Portals Table
-CREATE TABLE IF NOT EXISTS public.class_portals (
-  id TEXT PRIMARY KEY,
-  portal_name TEXT NOT NULL,
-  username TEXT UNIQUE NOT NULL,
-  password TEXT NOT NULL,
-  password_hash TEXT,
-  department_id TEXT,
-  department_name TEXT NOT NULL,
-  year TEXT NOT NULL,
-  section TEXT NOT NULL,
-  advisor_id TEXT,
-  advisor_name TEXT,
-  status TEXT DEFAULT 'active',
-  created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
-);
-
-ALTER TABLE public.class_portals ENABLE ROW LEVEL SECURITY;
 
 -- 2. Attendance Tokens Table (100 Predefined Tokens Pool)
 CREATE TABLE IF NOT EXISTS public.attendance_tokens (
@@ -112,7 +92,6 @@ ALTER TABLE public.attendance_sessions ADD COLUMN IF NOT EXISTS faculty_id TEXT;
 ALTER TABLE public.attendance_sessions ADD COLUMN IF NOT EXISTS subject_code TEXT;
 ALTER TABLE public.attendance_sessions ADD COLUMN IF NOT EXISTS subject_id TEXT;
 ALTER TABLE public.attendance_sessions ADD COLUMN IF NOT EXISTS date TEXT;
-ALTER TABLE public.attendance_sessions ADD COLUMN IF NOT EXISTS class_portal_id TEXT;
 ALTER TABLE public.attendance_sessions ENABLE ROW LEVEL SECURITY;
 CREATE INDEX IF NOT EXISTS idx_sessions_dept_sec ON public.attendance_sessions(department, year, section);
 CREATE INDEX IF NOT EXISTS idx_sessions_code ON public.attendance_sessions(attendance_code);

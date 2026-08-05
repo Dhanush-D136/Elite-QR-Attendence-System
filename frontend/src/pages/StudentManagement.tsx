@@ -59,15 +59,6 @@ export const StudentManagement: React.FC = () => {
   const [department, setDepartment] = useState('');
   const [year, setYear] = useState('');
   const [section, setSection] = useState('');
-
-  useEffect(() => {
-    if (user?.role === 'class_portal' || user?.class_portal_id) {
-      setDepartment(user.department_name || 'Artificial Intelligence & Data Science');
-      setYear(String(user.year || '3'));
-      setSection(user.section || 'A');
-    }
-  }, [user]);
-
   const [statusFilter, setStatusFilter] = useState('');
   const [sortBy, setSortBy] = useState<string>('roll_number');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');

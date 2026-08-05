@@ -536,7 +536,7 @@ export const AttendanceReportsPage: React.FC<AttendanceReportsPageProps> = ({ on
               Attendance & Reports Hub
             </h1>
             <span className="px-2.5 py-0.5 rounded-full bg-[#F3F0FF] text-[#6D5DFC] font-bold text-xs border border-[#6D5DFC]/20">
-              {user?.portal_name ? `${user.portal_name} (${user.department_name})` : user?.department_name || 'Class Reports'}
+              AI&DS III-A
             </span>
           </div>
           <p className="text-xs text-[#6B7280] font-medium mt-1">
@@ -1183,7 +1183,7 @@ export const AttendanceReportsPage: React.FC<AttendanceReportsPageProps> = ({ on
                   </h2>
                 </div>
                 <p className="text-xs text-[#6B7280] font-medium mt-1">
-                  Faculty: <strong className="text-[#4F7CFF]">{selectedSubject.faculty_name}</strong> • {user?.portal_name || user?.department_name || 'Class Workspace'}
+                  Faculty: <strong className="text-[#4F7CFF]">{selectedSubject.faculty_name}</strong> • AI&DS III-A
                 </p>
               </div>
 
