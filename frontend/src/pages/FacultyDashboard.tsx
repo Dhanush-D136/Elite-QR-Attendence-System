@@ -749,14 +749,14 @@ export const FacultyDashboard: React.FC = () => {
                   Faculty Common Check
                 </span>
                 <span className="px-2.5 py-0.5 rounded-full bg-[#12B76A] text-white font-mono text-[10px] font-extrabold uppercase">
-                  VEL TECH
+                  CLASS PORTAL
                 </span>
               </div>
               <h1 className="font-display font-extrabold text-2xl sm:text-3xl text-white tracking-tight mt-1">
-                Faculty Common Check Portal
+                {user?.portal_name ? `${user.portal_name} Class Portal` : 'Class Portal Workspace'}
               </h1>
-              <p className="text-xs text-purple-100 font-medium">
-                Centralized Institution Faculty Dashboard • Live Supabase Telemetry Sync
+              <p className="text-xs text-purple-100 font-bold tracking-wide mt-1">
+                {user?.department_name || 'Artificial Intelligence & Data Science'} • {user?.year || '3'} Year • Section {user?.section || 'A'} {user?.advisor_name ? `(Advisor: ${user.advisor_name})` : ''}
               </p>
             </div>
           </div>
@@ -899,7 +899,7 @@ export const FacultyDashboard: React.FC = () => {
                   <div className="p-5 rounded-2xl bg-white border border-[#E7E7E7] shadow-sm">
                     <span className="text-[10px] font-bold text-[#6D5DFC] block uppercase tracking-wider">Today's Classes</span>
                     <strong className="text-2xl font-extrabold text-[#111827] mt-1 block">{todayClasses.length} Scheduled</strong>
-                    <span className="text-[11px] text-[#6B7280] mt-1 block">AI & DS III-A</span>
+                    <span className="text-[11px] text-[#6B7280] mt-1 block">{user?.department_name || 'Artificial Intelligence'} • Yr {user?.year || '3'}-{user?.section || 'A'}</span>
                   </div>
 
                   <div className="p-5 rounded-2xl bg-white border border-[#E7E7E7] shadow-sm">

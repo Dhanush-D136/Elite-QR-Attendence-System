@@ -37,7 +37,11 @@ function runMigrations() {
       "ALTER TABLE public.attendance_sessions ADD COLUMN IF NOT EXISTS subject_id TEXT;",
       "ALTER TABLE public.attendance_sessions ADD COLUMN IF NOT EXISTS faculty_name TEXT;",
       "ALTER TABLE public.attendance_sessions ADD COLUMN IF NOT EXISTS period_number TEXT;",
-      "ALTER TABLE public.attendance_sessions ADD COLUMN IF NOT EXISTS date TEXT;"
+      "ALTER TABLE public.attendance_sessions ADD COLUMN IF NOT EXISTS date TEXT;",
+      "ALTER TABLE public.attendance_sessions ADD COLUMN IF NOT EXISTS class_portal_id TEXT;",
+      "ALTER TABLE public.users ADD COLUMN IF NOT EXISTS class_portal_id TEXT;",
+      "ALTER TABLE public.faculty ADD COLUMN IF NOT EXISTS class_portal_id TEXT;",
+      "ALTER TABLE public.timetables ADD COLUMN IF NOT EXISTS class_portal_id TEXT;"
     ];
     pgAlterStatements.forEach((stmt) => {
       try {
@@ -71,7 +75,8 @@ function runMigrations() {
           { col: 'vh_number', type: 'TEXT' },
           { col: 'date_of_birth', type: 'TEXT' },
           { col: 'parent_contact', type: 'TEXT' },
-          { col: 'profile_photo_url', type: 'TEXT' }
+          { col: 'profile_photo_url', type: 'TEXT' },
+          { col: 'class_portal_id', type: 'TEXT' }
         ];
 
         userMigrations.forEach(({ col, type }) => {
@@ -97,7 +102,8 @@ function runMigrations() {
               { col: 'last_login', type: 'DATETIME' },
               { col: 'login_count', type: 'INTEGER DEFAULT 0' },
               { col: 'failed_login_attempts', type: 'INTEGER DEFAULT 0' },
-              { col: 'updated_at', type: 'DATETIME' }
+              { col: 'updated_at', type: 'DATETIME' },
+              { col: 'class_portal_id', type: 'TEXT' }
             ];
             facMigrations.forEach(({ col, type }) => {
               if (!facColNames.includes(col.toLowerCase())) {
@@ -133,7 +139,8 @@ function runMigrations() {
           { col: 'faculty_id', type: 'TEXT' },
           { col: 'subject_code', type: 'TEXT' },
           { col: 'subject_id', type: 'TEXT' },
-          { col: 'date', type: 'TEXT' }
+          { col: 'date', type: 'TEXT' },
+          { col: 'class_portal_id', type: 'TEXT' }
         ];
 
         let completedCount = 0;
@@ -196,7 +203,8 @@ function runMigrations() {
                     { col: 'subject_id', type: 'TEXT' },
                     { col: 'faculty_id', type: 'TEXT' },
                     { col: 'academic_year', type: "TEXT DEFAULT '2026-2027 (ODD)'" },
-                    { col: 'status', type: "TEXT DEFAULT 'ACTIVE'" }
+                    { col: 'status', type: "TEXT DEFAULT 'ACTIVE'" },
+                    { col: 'class_portal_id', type: 'TEXT' }
                   ];
                   ttMigrations.forEach(({ col, type }) => {
                     if (!ttColNames.includes(col.toLowerCase())) {
@@ -352,6 +360,25 @@ function initDb() {
           parent_name TEXT,
           parent_phone TEXT,
           bio TEXT,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+
+      // Create Class Portals table
+      db.run(`
+        CREATE TABLE IF NOT EXISTS class_portals (
+          id TEXT PRIMARY KEY,
+          portal_name TEXT NOT NULL,
+          username TEXT UNIQUE NOT NULL,
+          password TEXT NOT NULL,
+          password_hash TEXT,
+          department_id TEXT,
+          department_name TEXT NOT NULL,
+          year TEXT NOT NULL,
+          section TEXT NOT NULL,
+          advisor_id TEXT,
+          advisor_name TEXT,
+          status TEXT DEFAULT 'active',
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )
       `);

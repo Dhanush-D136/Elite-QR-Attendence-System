@@ -104,6 +104,15 @@ export const StudentAttendanceIntelligence: React.FC = () => {
   const [section, setSection] = useState<string>('');
   const [selectedClass, setSelectedClass] = useState<string>('');
 
+  useEffect(() => {
+    if (user?.role === 'class_portal' || user?.class_portal_id) {
+      setDepartment(user.department_name || 'Artificial Intelligence & Data Science');
+      setYear(String(user.year || '3'));
+      setSection(user.section || 'A');
+      setSelectedClass('portal-assigned');
+    }
+  }, [user]);
+
   const [academicYear, setAcademicYear] = useState<string>('2026-2027 (ODD)');
   const [dayOrder, setDayOrder] = useState<string>('Auto');
   const [subjectFilter, setSubjectFilter] = useState<string>('All');

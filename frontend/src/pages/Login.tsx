@@ -199,7 +199,7 @@ export const Login: React.FC = () => {
               }`}
             >
               <BookOpen className={`w-3.5 h-3.5 ${role === 'faculty' ? 'text-purple-600' : 'text-[#94A3B8]'}`} />
-              <span>Faculty</span>
+              <span>Class Portal</span>
             </button>
 
             <button
@@ -212,7 +212,7 @@ export const Login: React.FC = () => {
               }`}
             >
               <Shield className={`w-3.5 h-3.5 ${role === 'admin' ? 'text-[#4F7CFF]' : 'text-[#94A3B8]'}`} />
-              <span>Admin</span>
+              <span>Super Admin</span>
             </button>
           </div>
 
@@ -228,7 +228,7 @@ export const Login: React.FC = () => {
           <form onSubmit={handleSubmit} className="space-y-4" autoComplete="off">
             <div>
               <label className="block text-xs font-bold text-[#111827] uppercase tracking-wider mb-1.5">
-                {role === 'student' ? 'Register Number / Official VH Email' : role === 'faculty' ? 'Faculty ID / Official Email' : 'Admin Email / Username'}
+                {role === 'student' ? 'Register Number / Official Email' : role === 'faculty' ? 'Class Portal Username (e.g. AI3A, CSE2A)' : 'Super Admin Username / Email'}
               </label>
               <div className="relative group">
                 <input
@@ -239,10 +239,10 @@ export const Login: React.FC = () => {
                   onChange={(e) => setIdentifier(e.target.value)}
                   placeholder={
                     role === 'student'
-                      ? 'e.g. 113024243032 or vh13936@velhightech.com'
+                      ? 'e.g. 113024243032 or student@college.edu'
                       : role === 'faculty'
-                      ? 'e.g. VEL TECH or FAC001'
-                      : 'Enter Admin Email'
+                      ? 'e.g. AI3A or CSE2A'
+                      : 'Enter Admin Username'
                   }
                   className="w-full px-4 py-3.5 rounded-2xl bg-[#F8FAFC] border border-[#E2E8F0] text-[#111827] placeholder-[#94A3B8] focus:outline-none focus:border-[#6D5DFC] focus:bg-white focus:ring-4 focus:ring-[#6D5DFC]/10 text-xs pl-11 font-medium transition-all"
                 />
@@ -276,7 +276,7 @@ export const Login: React.FC = () => {
                   autoComplete="new-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Enter your password"
+                  placeholder="Enter portal password"
                   className="w-full px-4 py-3.5 rounded-2xl bg-[#F8FAFC] border border-[#E2E8F0] text-[#111827] placeholder-[#94A3B8] focus:outline-none focus:border-[#6D5DFC] focus:bg-white focus:ring-4 focus:ring-[#6D5DFC]/10 text-xs pl-11 font-medium transition-all"
                 />
                 <Lock className="w-4 h-4 text-[#94A3B8] group-focus-within:text-[#6D5DFC] absolute left-4 top-4 transition-colors" />
@@ -293,7 +293,7 @@ export const Login: React.FC = () => {
                 <span>Authenticating Workspace...</span>
               ) : (
                 <>
-                  <span>Sign In to {role === 'student' ? 'Student Portal' : 'Admin Console'}</span>
+                  <span>Sign In to {role === 'student' ? 'Student Portal' : role === 'faculty' ? 'Class Portal' : 'Super Admin ERP'}</span>
                   <ArrowRight className="w-4 h-4" />
                 </>
               )}

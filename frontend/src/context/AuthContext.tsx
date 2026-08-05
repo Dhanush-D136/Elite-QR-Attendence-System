@@ -11,6 +11,7 @@ interface AuthContextType {
   loginAdmin: (email: string, pass: string) => Promise<any>;
   loginStudent: (rollNumber: string, pass: string) => Promise<any>;
   loginFaculty: (identifier: string, pass: string) => Promise<any>;
+  loginClassPortal: (username: string, pass: string) => Promise<any>;
   submitFirstPasswordChange: (newPassword: string, confirmPassword?: string) => Promise<any>;
   updateUser: (newUser: User) => void;
   logout: () => void;
@@ -128,7 +129,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const loginFaculty = async (identifier: string, pass: string) => {
     console.log('[LOGIN FACULTY REQUEST] Sending credentials to /api/auth/faculty/login...', { identifier });
-    const res = await api.post('/auth/faculty/login', { identifier, password: pass });
+    try {
+      const res = await api.post('/auth/class-portal/login', { username: identifier, password: pass });
+      const { token, user } = res.data;
+
+      localStorage.setItem('smartattend_token', token);
+      localStorage.setItem('smartattend_user', JSON.stringify(user));
+
+      setToken(token);
+      setUser(user);
+      setIsLoading(false);
+      return res.data;
+    } catch (e) {
+      const res = await api.post('/auth/faculty/login', { identifier, password: pass });
+      const { token, user } = res.data;
+
+      localStorage.setItem('smartattend_token', token);
+      localStorage.setItem('smartattend_user', JSON.stringify(user));
+
+      setToken(token);
+      setUser(user);
+      setIsLoading(false);
+      return res.data;
+    }
+  };
+
+  const loginClassPortal = async (username: string, pass: string) => {
+    console.log('[LOGIN CLASS PORTAL REQUEST] Sending credentials to /api/auth/class-portal/login...', { username });
+    const res = await api.post('/auth/class-portal/login', { username, password: pass });
     const { token, user } = res.data;
 
     localStorage.setItem('smartattend_token', token);
@@ -196,6 +224,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         loginAdmin,
         loginStudent,
         loginFaculty,
+        loginClassPortal,
         submitFirstPasswordChange,
         updateUser,
         logout,

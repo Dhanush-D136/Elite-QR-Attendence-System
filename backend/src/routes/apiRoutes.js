@@ -10,11 +10,15 @@ const analyticsController = require('../controllers/analyticsController');
 const violationController = require('../controllers/violationController');
 const erpController = require('../controllers/erpController');
 const facultyController = require('../controllers/facultyController');
+const portalController = require('../controllers/portalController');
 
 // --- Auth Routes ---
 router.post('/auth/admin/login', authController.adminLogin);
 router.post('/auth/student/login', authController.studentLogin);
 router.post('/auth/faculty/login', facultyController.facultyLogin);
+router.post('/auth/class-portal/login', portalController.classPortalLogin);
+router.post('/auth/portal/login', portalController.classPortalLogin);
+router.get('/class-portal/info', verifyToken, portalController.getPortalInfo);
 router.post('/auth/faculty/change-password', facultyController.facultyChangePassword);
 router.post('/auth/student/first-login-change-password', verifyToken, authController.firstTimePasswordChange);
 router.post('/auth/change-password', verifyToken, authController.changePassword);
@@ -24,6 +28,12 @@ router.get('/student/profile', verifyToken, requireRole('student'), studentContr
 router.put('/student/profile', verifyToken, requireRole('student'), studentController.updateStudentSelfProfile);
 router.put('/auth/student/profile', verifyToken, requireRole('student'), studentController.updateStudentSelfProfile);
 router.post('/auth/student/register-device', verifyToken, requireRole('student'), authController.registerStudentDevice);
+
+// --- Class Portal Management Routes (Super Admin) ---
+router.get('/admin/portals', verifyToken, requireRole('admin'), portalController.getAllPortals);
+router.post('/admin/portals', verifyToken, requireRole('admin'), portalController.createPortal);
+router.put('/admin/portals/:id', verifyToken, requireRole('admin'), portalController.updatePortal);
+router.delete('/admin/portals/:id', verifyToken, requireRole('admin'), portalController.deletePortal);
 
 // --- Faculty Ecosystem Routes ---
 router.get('/faculty/dashboard', facultyController.getFacultyDashboard);

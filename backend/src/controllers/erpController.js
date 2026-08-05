@@ -1,18 +1,33 @@
 const { v4: uuidv4 } = require('uuid');
 const { db } = require('../database/db');
 
-// --- Class Details (AI&DS III-A Single Class Focus) ---
+// --- Dynamic Class Details ---
 function getClassDetails(req, res) {
+  if (req.user && (req.user.role === 'class_portal' || req.user.class_portal_id)) {
+    return res.json({
+      details: {
+        department: req.user.department_name || 'Artificial Intelligence & Data Science',
+        year: req.user.year ? `${req.user.year} Year` : 'III Year',
+        section: req.user.section || 'A',
+        semester: 'V',
+        room: 'F305',
+        class_advisor: req.user.advisor_name || 'Class Advisor',
+        academic_year: '2026-2027 (ODD)',
+        batch: '2024-2028'
+      }
+    });
+  }
+
   db.get('SELECT * FROM class_details WHERE id = 1', [], (err, details) => {
     if (err || !details) {
       return res.json({
         details: {
-          department: 'AI & DS',
+          department: 'Artificial Intelligence & Data Science',
           year: 'III Year',
           section: 'A',
           semester: 'V',
           room: 'F305',
-          class_advisor: 'Mrs Vasanthapriya M J T',
+          class_advisor: 'Class Advisor',
           academic_year: '2026-2027 (ODD)',
           batch: '2024-2028'
         }
